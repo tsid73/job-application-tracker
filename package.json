@@ -1,0 +1,27 @@
+{
+  "name": "job-application-tracker",
+  "version": "1.0.0",
+  "description": "Self-hostable job application tracking web app with PostgreSQL, native Node HTTP, vanilla JS, and local file storage.",
+  "type": "module",
+  "main": "server/index.js",
+  "scripts": {
+    "start": "node server/index.js",
+    "dev": "node --watch server/index.js",
+    "migrate": "node server/db/migrate.js",
+    "seed": "node server/db/seed.js",
+    "check": "node --check server/index.js && node --check server/db/migrate.js && node --check server/db/seed.js"
+  },
+  "dependencies": {
+    "@electric-sql/pglite": "^0.4.5",
+    "jszip": "^3.10.1",
+    "pdf-parse": "^2.4.5",
+    "pg": "8.16.3"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "license": "MIT",
+  "devDependencies": {
+    "@playwright/test": "^1.59.1"
+  }
+}
