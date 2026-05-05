@@ -13,6 +13,7 @@
     "db:backup": "bash scripts/db-backup.sh",
     "db:restore": "bash scripts/db-restore.sh",
     "cleanup:generated": "node scripts/cleanup-generated-files.mjs",
+    "verify:backup-restore": "node scripts/verify-backup-restore.mjs",
     "test:e2e": "playwright test"
   },
   "dependencies": {

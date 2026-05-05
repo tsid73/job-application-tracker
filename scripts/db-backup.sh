@@ -5,8 +5,14 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ENV_FILE="$ROOT_DIR/.env"
 
 if [[ -f "$ENV_FILE" ]]; then
-  # shellcheck disable=SC1090
-  source "$ENV_FILE"
+  while IFS= read -r line; do
+    [[ -z "$line" || "$line" =~ ^# || "$line" != *=* ]] && continue
+    key="${line%%=*}"
+    value="${line#*=}"
+    if [[ -z "${!key+x}" ]]; then
+      export "$key=$value"
+    fi
+  done < "$ENV_FILE"
 fi
 
 DB_CLIENT="${DB_CLIENT:-pglite}"
@@ -33,11 +39,12 @@ else
     exit 1
   fi
 
-  SNAPSHOT_DIR="$OUTPUT_DIR/.pglite-snapshot"
-  mkdir -p "$SNAPSHOT_DIR"
-  cp -a "$SOURCE_DIR"/. "$SNAPSHOT_DIR"/
-  tar -C "$SNAPSHOT_DIR" -czf "$OUTPUT_DIR/database-pglite.tar.gz" .
-  rm -rf "$SNAPSHOT_DIR"
+  if [[ -f "$SOURCE_DIR/postmaster.pid" ]]; then
+    echo "PGlite backup requires the app to be stopped first: $SOURCE_DIR/postmaster.pid is present" >&2
+    exit 1
+  fi
+
+  node "$ROOT_DIR/scripts/pglite-backup.mjs" "$OUTPUT_DIR/database-pglite.tar.gz" "$SOURCE_DIR"
 fi
 
 if [[ -d "$UPLOAD_SOURCE_DIR" ]]; then

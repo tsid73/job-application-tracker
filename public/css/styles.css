@@ -1,16 +1,22 @@
 :root {
   color-scheme: light;
-  --bg: #f7f8fa;
-  --panel: #ffffff;
-  --text: #111827;
-  --muted: #657085;
-  --line: #d7dce3;
-  --accent: #116466;
-  --accent-dark: #0b4f50;
-  --warn-bg: #fff7e6;
-  --warn-line: #e6b94f;
-  --danger: #9f1239;
-  --focus: #2563eb;
+  --bg: #f2efe8;
+  --bg-deep: #e5decc;
+  --panel: rgba(255, 255, 255, 0.84);
+  --panel-strong: #fffdf8;
+  --text: #13212d;
+  --muted: #60707f;
+  --line: rgba(79, 98, 118, 0.18);
+  --accent: #144a66;
+  --accent-dark: #0f3850;
+  --accent-soft: #d8ecf6;
+  --warn-bg: #fff4dc;
+  --warn-line: #d9aa38;
+  --danger: #9b2345;
+  --danger-soft: #fff0f4;
+  --focus: #2e73a8;
+  --shadow-lg: 0 30px 80px rgba(19, 33, 45, 0.12);
+  --shadow-md: 0 18px 42px rgba(19, 33, 45, 0.09);
 }
 
 * {
@@ -21,8 +27,11 @@ body {
   margin: 0;
   background: var(--bg);
   color: var(--text);
-  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-family: "Aptos", "Segoe UI Variable", "Segoe UI", "Helvetica Neue", sans-serif;
   font-size: 14px;
+  min-height: 100vh;
+  position: relative;
+  overflow-x: hidden;
 }
 
 button,
@@ -33,12 +42,13 @@ textarea {
 }
 
 button {
-  border: 1px solid var(--accent);
-  background: var(--accent);
+  border: 1px solid rgba(20, 74, 102, 0.28);
+  background: linear-gradient(180deg, #1b6185, var(--accent));
   color: white;
-  padding: 9px 13px;
-  border-radius: 6px;
+  padding: 10px 14px;
+  border-radius: 14px;
   cursor: pointer;
+  box-shadow: 0 10px 18px rgba(20, 74, 102, 0.18);
 }
 
 button:hover {
@@ -52,9 +62,10 @@ button:disabled {
 
 button.secondary,
 button.icon-button {
-  background: white;
+  background: rgba(255, 255, 255, 0.84);
   color: var(--text);
   border-color: var(--line);
+  box-shadow: none;
 }
 
 button.secondary:hover,
@@ -67,9 +78,15 @@ button.icon-button:hover {
   align-items: center;
   justify-content: space-between;
   gap: 20px;
-  padding: 22px 28px;
-  background: var(--panel);
-  border-bottom: 1px solid var(--line);
+  padding: 28px 32px;
+  background:
+    linear-gradient(135deg, rgba(20, 74, 102, 0.96), rgba(11, 48, 70, 0.86)),
+    radial-gradient(circle at top left, rgba(255, 255, 255, 0.12), transparent 40%);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 28px;
+  color: white;
+  box-shadow: var(--shadow-lg);
+  backdrop-filter: blur(18px);
 }
 
 h1,
@@ -95,25 +112,82 @@ h3 {
 
 .topbar p {
   margin-top: 5px;
-  color: var(--muted);
+  color: rgba(240, 246, 251, 0.78);
 }
 
 .topbar-actions {
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
+  align-items: flex-start;
+}
+
+.topbar-copy {
+  max-width: 680px;
+}
+
+.eyebrow {
+  display: inline-flex;
+  margin-bottom: 12px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.14);
+  color: rgba(255, 255, 255, 0.86);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.hero-copy {
+  max-width: 56ch;
+  font-size: 15px;
+  line-height: 1.55;
+}
+
+.app-shell {
+  position: relative;
+  z-index: 1;
+  width: min(1440px, calc(100vw - 32px));
+  margin: 24px auto 40px;
+}
+
+.ambient {
+  position: fixed;
+  border-radius: 999px;
+  filter: blur(10px);
+  pointer-events: none;
+  opacity: 0.7;
+}
+
+.ambient-one {
+  top: -90px;
+  right: -60px;
+  width: 340px;
+  height: 340px;
+  background: radial-gradient(circle, rgba(44, 113, 156, 0.26), transparent 68%);
+}
+
+.ambient-two {
+  left: -80px;
+  bottom: 40px;
+  width: 300px;
+  height: 300px;
+  background: radial-gradient(circle, rgba(220, 178, 85, 0.18), transparent 70%);
 }
 
 main {
-  padding: 22px 28px 40px;
+  padding: 20px 4px 12px;
 }
 
 .notifications-panel {
-  margin-bottom: 16px;
-  padding: 14px;
-  border: 1px solid #f0d08a;
-  border-radius: 8px;
-  background: #fffbef;
+  margin-bottom: 18px;
+  padding: 16px;
+  border: 1px solid rgba(217, 170, 56, 0.28);
+  border-radius: 24px;
+  background: linear-gradient(180deg, rgba(255, 249, 234, 0.95), rgba(255, 255, 255, 0.88));
+  box-shadow: var(--shadow-md);
+  backdrop-filter: blur(16px);
 }
 
 .notifications-header {
@@ -139,15 +213,15 @@ main {
   align-items: center;
   justify-content: space-between;
   gap: 14px;
-  padding: 12px;
-  border: 1px solid #f2dfac;
-  border-radius: 8px;
-  background: white;
+  padding: 14px 16px;
+  border: 1px solid rgba(217, 170, 56, 0.2);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.86);
 }
 
 .notification-card.follow-up {
-  border-color: #d6c3ff;
-  background: #fbf8ff;
+  border-color: rgba(118, 88, 181, 0.2);
+  background: rgba(248, 245, 255, 0.9);
 }
 
 .notification-card > div:first-child {
@@ -170,13 +244,29 @@ main {
 .view-tabs {
   display: flex;
   gap: 8px;
-  margin-bottom: 16px;
+  margin-bottom: 18px;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.58);
+  backdrop-filter: blur(14px);
+  box-shadow: 0 10px 24px rgba(19, 33, 45, 0.06);
 }
 
 .view-tabs button.is-active {
   background: var(--accent);
   color: white;
   border-color: var(--accent);
+  box-shadow: inset 0 -1px 0 rgba(255, 255, 255, 0.16);
+}
+
+.surface-panel {
+  padding: 18px;
+  border: 1px solid var(--line);
+  border-radius: 28px;
+  background: rgba(255, 255, 255, 0.74);
+  box-shadow: var(--shadow-md);
+  backdrop-filter: blur(18px);
 }
 
 .toolbar {
@@ -218,10 +308,10 @@ select,
 textarea {
   width: 100%;
   border: 1px solid var(--line);
-  border-radius: 6px;
+  border-radius: 14px;
   color: var(--text);
-  background: white;
-  padding: 9px 10px;
+  background: rgba(255, 255, 255, 0.92);
+  padding: 10px 12px;
 }
 
 textarea {
@@ -239,9 +329,9 @@ button:focus {
 .table-shell {
   position: relative;
   overflow-x: auto;
-  background: var(--panel);
+  background: rgba(255, 255, 255, 0.9);
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: 22px;
 }
 
 table {
@@ -262,7 +352,7 @@ th {
   color: var(--muted);
   font-size: 12px;
   text-transform: uppercase;
-  background: #f1f4f7;
+  background: rgba(216, 236, 246, 0.48);
 }
 
 td select,
@@ -272,7 +362,7 @@ td input[type="date"] {
 
 tr.archived {
   color: var(--muted);
-  background: #f3f4f6;
+  background: rgba(236, 238, 241, 0.72);
 }
 
 tr:last-child td {
@@ -300,11 +390,11 @@ tr:last-child td {
 }
 
 .tag {
-  border: 1px solid #bdd3d1;
-  background: #edf7f6;
-  color: #174f4f;
+  border: 1px solid rgba(20, 74, 102, 0.16);
+  background: var(--accent-soft);
+  color: #103e55;
   border-radius: 999px;
-  padding: 2px 7px;
+  padding: 4px 9px;
   font-size: 12px;
 }
 
@@ -318,13 +408,13 @@ tr:last-child td {
   font-size: 12px;
   font-weight: 700;
   border: 1px solid var(--line);
-  background: #f8fafc;
+  background: rgba(248, 250, 252, 0.88);
 }
 
 .active-state {
-  border-color: #bdd3d1;
-  color: #174f4f;
-  background: #edf7f6;
+  border-color: rgba(20, 74, 102, 0.18);
+  color: #103e55;
+  background: var(--accent-soft);
 }
 
 .archived-state {
@@ -347,7 +437,7 @@ tr:last-child td {
 .days-badge.urgent,
 .days-badge.overdue {
   border-color: #f3a6ba;
-  background: #fff1f4;
+  background: var(--danger-soft);
   color: var(--danger);
 }
 
@@ -374,10 +464,12 @@ tr:last-child td {
 }
 
 .view-panel {
-  background: var(--panel);
+  background: rgba(255, 255, 255, 0.74);
   border: 1px solid var(--line);
-  border-radius: 8px;
-  padding: 16px;
+  border-radius: 28px;
+  padding: 18px;
+  box-shadow: var(--shadow-md);
+  backdrop-filter: blur(18px);
 }
 
 .panel-grid,
@@ -398,9 +490,9 @@ tr:last-child td {
 .report-panel,
 .kanban-card {
   border: 1px solid var(--line);
-  border-radius: 8px;
-  background: white;
-  padding: 12px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.88);
+  padding: 14px;
 }
 
 .reminder-card {
@@ -443,13 +535,13 @@ tr:last-child td {
   display: grid;
   grid-template-columns: repeat(7, minmax(120px, 1fr));
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: 18px;
   overflow: hidden;
-  background: white;
+  background: rgba(255, 255, 255, 0.9);
 }
 
 .calendar-weekday {
-  background: #f1f4f7;
+  background: rgba(216, 236, 246, 0.48);
   color: var(--muted);
   font-size: 12px;
   font-weight: 700;
@@ -467,7 +559,7 @@ tr:last-child td {
   padding: 8px;
   border-top: 1px solid var(--line);
   border-right: 1px solid var(--line);
-  background: white;
+  background: rgba(255, 255, 255, 0.82);
 }
 
 .calendar-day:nth-child(7n) {
@@ -479,7 +571,7 @@ tr:last-child td {
 }
 
 .calendar-day.is-today {
-  box-shadow: inset 0 0 0 2px var(--accent);
+  box-shadow: inset 0 0 0 2px var(--accent), inset 0 0 40px rgba(20, 74, 102, 0.04);
 }
 
 .calendar-date {
@@ -502,9 +594,9 @@ tr:last-child td {
   display: grid;
   gap: 5px;
   padding: 7px;
-  border: 1px solid #bdd3d1;
-  border-radius: 6px;
-  background: #edf7f6;
+  border: 1px solid rgba(20, 74, 102, 0.16);
+  border-radius: 12px;
+  background: rgba(216, 236, 246, 0.62);
 }
 
 .calendar-event.warning {
@@ -515,7 +607,7 @@ tr:last-child td {
 .calendar-event.urgent,
 .calendar-event.overdue {
   border-color: #f3a6ba;
-  background: #fff1f4;
+  background: var(--danger-soft);
 }
 
 .calendar-event .days-badge {
@@ -547,10 +639,10 @@ tr:last-child td {
 
 .kanban-column {
   min-height: 240px;
-  background: #f8fafc;
+  background: rgba(248, 250, 252, 0.8);
   border: 1px solid var(--line);
-  border-radius: 8px;
-  padding: 10px;
+  border-radius: 20px;
+  padding: 12px;
 }
 
 .kanban-column h3 {
@@ -600,9 +692,9 @@ tr:last-child td {
   display: grid;
   gap: 5px;
   padding: 10px;
-  border: 1px solid #bdd3d1;
-  border-radius: 8px;
-  background: #edf7f6;
+  border: 1px solid rgba(20, 74, 102, 0.16);
+  border-radius: 16px;
+  background: rgba(216, 236, 246, 0.62);
 }
 
 .upcoming-card.warning {
@@ -613,7 +705,7 @@ tr:last-child td {
 .upcoming-card.urgent,
 .upcoming-card.overdue {
   border-color: #f3a6ba;
-  background: #fff1f4;
+  background: var(--danger-soft);
 }
 
 .upcoming-card .days-badge {
@@ -636,9 +728,9 @@ dialog {
   width: min(920px, calc(100vw - 28px));
   max-height: calc(100vh - 40px);
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: 24px;
   padding: 0;
-  box-shadow: 0 20px 70px rgba(17, 24, 39, 0.24);
+  box-shadow: 0 32px 90px rgba(17, 24, 39, 0.24);
 }
 
 dialog::backdrop {
@@ -716,9 +808,9 @@ dialog::backdrop {
 
 .detail-section {
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: 18px;
   padding: 14px;
-  background: white;
+  background: rgba(255, 255, 255, 0.92);
 }
 
 .detail-section + .detail-section {
@@ -751,8 +843,9 @@ dialog::backdrop {
 .note-item,
 .cv-item {
   border: 1px solid var(--line);
-  border-radius: 6px;
+  border-radius: 12px;
   padding: 10px;
+  background: rgba(255, 255, 255, 0.82);
 }
 
 .note-form {
@@ -775,8 +868,9 @@ dialog::backdrop {
   display: grid;
   gap: 4px;
   border: 1px solid var(--line);
-  border-radius: 6px;
+  border-radius: 12px;
   padding: 10px;
+  background: rgba(255, 255, 255, 0.82);
 }
 
 .doc-item a {
@@ -810,14 +904,19 @@ dialog::backdrop {
 }
 
 @media (max-width: 760px) {
+  .app-shell {
+    width: calc(100vw - 18px);
+    margin: 10px auto 24px;
+  }
+
   .topbar {
     align-items: flex-start;
     flex-direction: column;
-    padding: 18px;
+    padding: 20px;
   }
 
   main {
-    padding: 16px;
+    padding: 14px 2px 6px;
   }
 
   .toolbar,

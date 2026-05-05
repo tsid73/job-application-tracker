@@ -46,6 +46,254 @@ job-application-tracker/
   data/              Local PGlite data
 ```
 
+## Architecture Diagram
+
+```mermaid
+flowchart LR
+  User["User Browser"] --> UI["Vanilla UI<br/>public/index.html<br/>public/js/*"]
+  UI --> Server["Node.js HTTP Server<br/>server/index.js"]
+  Server --> ReadApi["Read API / Route Layer<br/>server/routes.js<br/>server/services/readApi.js"]
+  Server --> AppServices["Application Services<br/>validation, AI input, audit, retention"]
+  Server --> Storage["Local File Storage<br/>uploads/cv<br/>uploads/ai"]
+  Server --> DB["Database Layer<br/>PGlite or PostgreSQL"]
+  AppServices --> AI["AI Provider Adapter<br/>mock / Gemini / OpenAI-compatible"]
+  AppServices --> Storage
+  AppServices --> DB
+  ReadApi --> DB
+  Scripts["Ops Scripts<br/>backup / restore / cleanup / verify"] --> DB
+  Scripts --> Storage
+```
+
+## UML Component View
+
+```mermaid
+classDiagram
+  class BrowserUI {
+    +loadApplications()
+    +loadNotifications()
+    +openDetail()
+    +runAI()
+  }
+
+  class ApiRouter {
+    +routeApi(req,res,url)
+  }
+
+  class ReadApi {
+    +getApplications()
+    +getApplication()
+    +getReports()
+    +getActivity()
+    +getAudit()
+  }
+
+  class RequestGuards {
+    +enforceRequestGuards(req,url)
+  }
+
+  class ApplicationHelpers {
+    +normalizeApplicationInput()
+    +resolveApplicationCV()
+    +replaceTags()
+    +logActivity()
+  }
+
+  class AIDocuments {
+    +readAIInput()
+    +saveAIDocument()
+  }
+
+  class AuditService {
+    +log()
+    +list()
+  }
+
+  class RetentionService {
+    +cleanupGeneratedAssets()
+  }
+
+  class LocalFileStorage {
+    +saveCV()
+    +saveGeneratedDocx()
+    +open()
+    +remove()
+    +resolveSafe()
+  }
+
+  class AIProvider {
+    +generateCV()
+    +generateCoverLetter()
+    +scoreRoleFit()
+    +checkATS()
+    +generateFollowUpEmail()
+  }
+
+  BrowserUI --> ApiRouter
+  ApiRouter --> RequestGuards
+  ApiRouter --> ReadApi
+  ApiRouter --> ApplicationHelpers
+  ApiRouter --> AIDocuments
+  ApiRouter --> AuditService
+  ApiRouter --> RetentionService
+  ApplicationHelpers --> LocalFileStorage
+  AIDocuments --> LocalFileStorage
+  AIDocuments --> AIProvider
+```
+
+## Entity Relationship Diagram
+
+```mermaid
+erDiagram
+  APPLICATIONS ||--o{ APPLICATION_CVS : uses
+  CV_VERSIONS ||--o{ APPLICATION_CVS : linked_to
+  APPLICATIONS ||--o{ STATUS_HISTORY : has
+  APPLICATIONS ||--o{ APPLICATION_NOTES : has
+  APPLICATIONS ||--o{ APPLICATION_TAGS : tagged_with
+  TAGS ||--o{ APPLICATION_TAGS : maps
+  APPLICATIONS ||--o{ AI_DOCUMENTS : generates
+  CV_VERSIONS ||--o{ AI_DOCUMENTS : source_cv
+  APPLICATIONS ||--o{ ACTIVITY_LOGS : records
+  APPLICATIONS ||--o{ AUDIT_EVENTS : audits
+
+  APPLICATIONS {
+    bigint id PK
+    text company_name
+    text job_link
+    text job_description
+    application_status status
+    date applied_date
+    date interview_date
+    text salary
+    text location
+    text recruiter
+    text contact_person
+    text notes
+    timestamptz archived_at
+    timestamptz created_at
+    timestamptz updated_at
+  }
+
+  CV_VERSIONS {
+    bigint id PK
+    text file_path
+    text original_name
+    text mime_type
+    bigint file_size
+    text version_label
+    boolean is_latest
+    text extracted_text
+    text file_hash
+    timestamptz deleted_at
+    timestamptz created_at
+  }
+
+  APPLICATION_CVS {
+    bigint application_id FK
+    bigint cv_id FK
+    timestamptz linked_at
+  }
+
+  STATUS_HISTORY {
+    bigint id PK
+    bigint application_id FK
+    application_status from_status
+    application_status to_status
+    timestamptz changed_at
+  }
+
+  APPLICATION_NOTES {
+    bigint id PK
+    bigint application_id FK
+    text body
+    timestamptz created_at
+  }
+
+  TAGS {
+    bigint id PK
+    text name
+  }
+
+  APPLICATION_TAGS {
+    bigint application_id FK
+    bigint tag_id FK
+  }
+
+  AI_DOCUMENTS {
+    bigint id PK
+    bigint application_id FK
+    bigint cv_id FK
+    text document_type
+    text title
+    text content
+    text file_path
+    text provider_name
+    text model_name
+    text prompt_excerpt
+    text source_context
+    timestamptz created_at
+  }
+
+  ACTIVITY_LOGS {
+    bigint id PK
+    bigint application_id FK
+    text action
+    text details
+    timestamptz created_at
+  }
+
+  AUDIT_EVENTS {
+    bigint id PK
+    bigint application_id FK
+    text target_type
+    text target_id
+    text action
+    text details
+    text actor_ip
+    text actor_user_agent
+    timestamptz created_at
+  }
+
+  SAVED_FILTERS {
+    bigint id PK
+    text name
+    text search
+    application_status status
+    text tag
+    text archived
+    timestamptz created_at
+    timestamptz updated_at
+  }
+```
+
+## Request Lifecycle
+
+```mermaid
+sequenceDiagram
+  participant User
+  participant UI as Browser UI
+  participant API as Node HTTP Server
+  participant Guard as Request Guards
+  participant Service as Domain Services
+  participant DB as DB
+  participant FS as File Storage
+  participant AI as AI Provider
+
+  User->>UI: Submit application / request action
+  UI->>API: HTTP request
+  API->>Guard: body + rate-limit checks
+  Guard-->>API: allowed
+  API->>Service: validate and execute use case
+  Service->>DB: read/write records
+  Service->>FS: save/read CV or generated doc
+  opt AI feature
+    Service->>AI: send CV text + job description
+    AI-->>Service: generated content
+  end
+  Service-->>API: response payload
+  API-->>UI: JSON / file download
+  UI-->>User: updated screen
+```
+
 ## Local Setup
 
 Requirements:

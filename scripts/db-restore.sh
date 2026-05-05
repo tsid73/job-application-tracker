@@ -10,8 +10,14 @@ if [[ $# -lt 1 ]]; then
 fi
 
 if [[ -f "$ENV_FILE" ]]; then
-  # shellcheck disable=SC1090
-  source "$ENV_FILE"
+  while IFS= read -r line; do
+    [[ -z "$line" || "$line" =~ ^# || "$line" != *=* ]] && continue
+    key="${line%%=*}"
+    value="${line#*=}"
+    if [[ -z "${!key+x}" ]]; then
+      export "$key=$value"
+    fi
+  done < "$ENV_FILE"
 fi
 
 DB_CLIENT="${DB_CLIENT:-pglite}"
@@ -57,9 +63,7 @@ if [[ "$DB_CLIENT" == "postgres" ]]; then
   psql "$DATABASE_URL" -f "$BACKUP_DIR/database.sql"
 else
   TARGET_DIR="$ROOT_DIR/$PGLITE_DATA_DIR"
-  mkdir -p "$TARGET_DIR"
-  find "$TARGET_DIR" -mindepth 1 -maxdepth 1 -exec rm -rf {} +
-  tar -C "$TARGET_DIR" -xzf "$BACKUP_DIR/database-pglite.tar.gz"
+  node "$ROOT_DIR/scripts/pglite-restore.mjs" "$BACKUP_DIR/database-pglite.tar.gz" "$TARGET_DIR"
 fi
 
 mkdir -p "$UPLOAD_TARGET_DIR"
