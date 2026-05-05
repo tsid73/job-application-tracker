@@ -60,3 +60,36 @@ export function parseTags(value) {
   const source = Array.isArray(value) ? value.join(',') : String(value);
   return [...new Set(source.split(',').map((tag) => tag.trim()).filter(Boolean))].slice(0, 12);
 }
+
+export function parseInteger(value, fieldName) {
+  if (value === undefined || value === null || value === '') return null;
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed < 0) {
+    const error = new Error(`${fieldName} must be a non-negative integer`);
+    error.statusCode = 400;
+    throw error;
+  }
+  return parsed;
+}
+
+export function parseBoolean(value, fieldName) {
+  if (typeof value === 'boolean') return value;
+  const cleaned = cleanString(value);
+  if (cleaned === null) return null;
+  if (cleaned === 'true') return true;
+  if (cleaned === 'false') return false;
+  const error = new Error(`${fieldName} must be true or false`);
+  error.statusCode = 400;
+  throw error;
+}
+
+export function validateFeedbackSource(value) {
+  const cleaned = cleanString(value) || 'self_note';
+  const allowed = new Set(['recruiter', 'interviewer', 'hiring_manager', 'self_note']);
+  if (!allowed.has(cleaned)) {
+    const error = new Error(`Invalid feedback source: ${cleaned}`);
+    error.statusCode = 400;
+    throw error;
+  }
+  return cleaned;
+}

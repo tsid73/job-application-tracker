@@ -10,8 +10,10 @@ import {
   renderCalendar,
   renderKanban,
   renderNotifications,
+  renderJobBoards,
   renderReports,
-  renderSavedFilters
+  renderSavedFilters,
+  renderToolkit
 } from './render.js';
 
 document.querySelector('#newApplicationButton').addEventListener('click', openApplicationDialog);
@@ -80,6 +82,8 @@ els.activityPagination.addEventListener('click', async (event) => {
 
 els.applicationForm.addEventListener('submit', submitApplicationForm);
 els.cvForm.addEventListener('submit', submitCvForm);
+els.jobBoardForm.addEventListener('submit', submitJobBoardForm);
+els.jobBoardResetButton.addEventListener('click', resetJobBoardForm);
 
 els.table.addEventListener('change', updateInlineStatus);
 els.table.addEventListener('click', async (event) => {
@@ -115,11 +119,15 @@ async function switchView(view) {
   els.kanbanView.hidden = view !== 'kanban';
   els.reportsView.hidden = view !== 'reports';
   els.activityView.hidden = view !== 'activity';
+  els.boardsView.hidden = view !== 'boards';
+  els.toolkitView.hidden = view !== 'toolkit';
 
   if (view === 'reminders') await loadReminders();
   if (view === 'kanban') renderKanban(els, state.applications, statusLabels);
   if (view === 'reports') await loadReports();
   if (view === 'activity') await loadActivity();
+  if (view === 'boards') await loadJobBoards();
+  if (view === 'toolkit') renderToolkit(els);
 }
 
 async function loadApplications() {
@@ -147,6 +155,13 @@ async function loadSavedFilters() {
   const payload = await api('/api/saved-filters');
   state.savedFilters = payload.filters;
   renderSavedFilters(els, state.savedFilters);
+}
+
+async function loadJobBoards() {
+  const payload = await api('/api/job-boards');
+  state.jobBoards = payload.job_boards;
+  renderJobBoards(els, state.jobBoards);
+  bindJobBoardActions();
 }
 
 async function loadReminders() {
@@ -229,6 +244,32 @@ async function submitCvForm(event) {
   }
 }
 
+async function submitJobBoardForm(event) {
+  event.preventDefault();
+  setError(els.jobBoardError, '');
+  const form = new FormData(els.jobBoardForm);
+  const id = form.get('id');
+  const payload = {
+    name: form.get('name'),
+    url: form.get('url'),
+    notes: form.get('notes'),
+    last_checked_date: form.get('last_checked_date'),
+    is_active: els.jobBoardForm.elements.is_active.checked
+  };
+
+  try {
+    await api(id ? `/api/job-boards/${id}` : '/api/job-boards', {
+      method: id ? 'PUT' : 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    resetJobBoardForm();
+    await loadJobBoards();
+  } catch (error) {
+    setError(els.jobBoardError, error.message);
+  }
+}
+
 async function updateInlineStatus(event) {
   const row = event.target.closest('tr[data-id]');
   if (!row || !event.target.matches('[data-field]')) return;
@@ -287,6 +328,51 @@ function bindNotificationActions() {
   });
 }
 
+function bindJobBoardActions() {
+  els.jobBoardsList.querySelectorAll('[data-job-board-edit]').forEach((button) => {
+    button.addEventListener('click', () => {
+      const board = state.jobBoards.find((item) => item.id === Number(button.dataset.jobBoardEdit));
+      if (!board) return;
+      els.jobBoardForm.elements.id.value = board.id;
+      els.jobBoardForm.elements.name.value = board.name || '';
+      els.jobBoardForm.elements.url.value = board.url || '';
+      els.jobBoardForm.elements.notes.value = board.notes || '';
+      els.jobBoardForm.elements.last_checked_date.value = board.last_checked_date || '';
+      els.jobBoardForm.elements.is_active.checked = Boolean(board.is_active);
+      setError(els.jobBoardError, '');
+      els.jobBoardForm.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  });
+
+  els.jobBoardsList.querySelectorAll('[data-job-board-toggle]').forEach((button) => {
+    button.addEventListener('click', async () => {
+      const board = state.jobBoards.find((item) => item.id === Number(button.dataset.jobBoardToggle));
+      if (!board) return;
+      await api(`/api/job-boards/${board.id}`, {
+        method: 'PUT',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ ...board, is_active: !board.is_active })
+      });
+      await loadJobBoards();
+    });
+  });
+
+  els.jobBoardsList.querySelectorAll('[data-job-board-delete]').forEach((button) => {
+    button.addEventListener('click', async () => {
+      if (!confirm('Delete this job board?')) return;
+      await api(`/api/job-boards/${button.dataset.jobBoardDelete}`, { method: 'DELETE' });
+      await loadJobBoards();
+    });
+  });
+}
+
+function resetJobBoardForm() {
+  els.jobBoardForm.reset();
+  els.jobBoardForm.elements.id.value = '';
+  els.jobBoardForm.elements.is_active.checked = true;
+  setError(els.jobBoardError, '');
+}
+
 async function openApplicationDialog() {
   await loadCVs();
   els.applicationForm.reset();
@@ -304,7 +390,20 @@ async function openCVDialog() {
 
 async function openDetail(id) {
   const payload = await api(`/api/applications/${id}`);
-  const { application, cvs, status_history: history, notes, tags, activity, ai_documents: docs, audit_events: auditEvents } = payload;
+  const {
+    application,
+    cvs,
+    status_history: history,
+    notes,
+    tags,
+    activity,
+    ai_documents: docs,
+    audit_events: auditEvents,
+    preparation,
+    recruiter_questions: recruiterQuestions,
+    feedback_entries: feedbackEntries,
+    todos
+  } = payload;
   els.detailTitle.textContent = application.company_name;
   els.detailContent.innerHTML = buildDetailContent({
     application,
@@ -315,7 +414,11 @@ async function openDetail(id) {
     activity,
     docs,
     auditEvents,
-    statusLabels
+    statusLabels,
+    preparation,
+    recruiterQuestions,
+    feedbackEntries,
+    todos
   });
 
   els.detailContent.querySelector('[data-note-form]').addEventListener('submit', async (event) => {
@@ -335,6 +438,65 @@ async function openDetail(id) {
     button.addEventListener('click', () => runAI(button, application));
   });
 
+  els.detailContent.querySelector('[data-preparation-form]').addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const form = new FormData(event.target);
+    await api(`/api/applications/${application.id}/preparation`, {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        about_company: form.get('about_company'),
+        company_values: form.get('company_values'),
+        application_notes: form.get('application_notes')
+      })
+    });
+    await openDetail(application.id);
+  });
+
+  els.detailContent.querySelector('[data-question-form]').addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const question = event.target.elements.question.value.trim();
+    if (!question) return;
+    await api(`/api/applications/${application.id}/recruiter-questions`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ question })
+    });
+    await openDetail(application.id);
+  });
+
+  els.detailContent.querySelector('[data-feedback-form]').addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const body = event.target.elements.body.value.trim();
+    if (!body) return;
+    await api(`/api/applications/${application.id}/feedback`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        source_type: event.target.elements.source_type.value,
+        body
+      })
+    });
+    await openDetail(application.id);
+  });
+
+  els.detailContent.querySelector('[data-todo-form]').addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const body = event.target.elements.body.value.trim();
+    if (!body) return;
+    await api(`/api/applications/${application.id}/todos`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        body,
+        due_date: event.target.elements.due_date.value || null
+      })
+    });
+    await Promise.all([loadNotifications(), openDetail(application.id)]);
+  });
+
+  bindPreparationActions(application, recruiterQuestions, todos);
+
   els.detailContent.querySelector('[data-delete-id]').addEventListener('click', async (event) => {
     if (!confirm('Delete this application permanently? This cannot be undone.')) return;
     await api(`/api/applications/${event.target.dataset.deleteId}`, { method: 'DELETE' });
@@ -343,6 +505,97 @@ async function openDetail(id) {
   });
 
   if (!els.detailDialog.open) els.detailDialog.showModal();
+}
+
+function bindPreparationActions(application, recruiterQuestions, todos) {
+  els.detailContent.querySelectorAll('[data-question-edit]').forEach((button) => {
+    button.addEventListener('click', async () => {
+      const current = recruiterQuestions.find((item) => item.id === Number(button.dataset.questionEdit));
+      if (!current) return;
+      const next = prompt('Edit recruiter question', current.question);
+      if (next === null) return;
+      await api(`/api/recruiter-questions/${current.id}`, {
+        method: 'PUT',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ question: next })
+      });
+      await openDetail(application.id);
+    });
+  });
+
+  els.detailContent.querySelectorAll('[data-question-delete]').forEach((button) => {
+    button.addEventListener('click', async () => {
+      await api(`/api/recruiter-questions/${button.dataset.questionDelete}`, { method: 'DELETE' });
+      await openDetail(application.id);
+    });
+  });
+
+  els.detailContent.querySelectorAll('[data-question-move]').forEach((button) => {
+    button.addEventListener('click', async () => {
+      const currentIndex = recruiterQuestions.findIndex((item) => item.id === Number(button.dataset.questionMove));
+      if (currentIndex === -1) return;
+      const offset = button.dataset.direction === 'up' ? -1 : 1;
+      const swapIndex = currentIndex + offset;
+      if (swapIndex < 0 || swapIndex >= recruiterQuestions.length) return;
+      const current = recruiterQuestions[currentIndex];
+      const swapped = recruiterQuestions[swapIndex];
+      await Promise.all([
+        api(`/api/recruiter-questions/${current.id}`, {
+          method: 'PUT',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ sort_order: swapped.sort_order, question: current.question })
+        }),
+        api(`/api/recruiter-questions/${swapped.id}`, {
+          method: 'PUT',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ sort_order: current.sort_order, question: swapped.question })
+        })
+      ]);
+      await openDetail(application.id);
+    });
+  });
+
+  els.detailContent.querySelectorAll('[data-feedback-delete]').forEach((button) => {
+    button.addEventListener('click', async () => {
+      await api(`/api/feedback/${button.dataset.feedbackDelete}`, { method: 'DELETE' });
+      await openDetail(application.id);
+    });
+  });
+
+  els.detailContent.querySelectorAll('[data-todo-toggle]').forEach((input) => {
+    input.addEventListener('change', async () => {
+      const todo = todos.find((item) => item.id === Number(input.dataset.todoToggle));
+      if (!todo) return;
+      await api(`/api/todos/${todo.id}`, {
+        method: 'PUT',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ body: todo.body, due_date: todo.due_date, completed: input.checked })
+      });
+      await Promise.all([loadNotifications(), openDetail(application.id)]);
+    });
+  });
+
+  els.detailContent.querySelectorAll('[data-todo-edit]').forEach((button) => {
+    button.addEventListener('click', async () => {
+      const todo = todos.find((item) => item.id === Number(button.dataset.todoEdit));
+      if (!todo) return;
+      const next = prompt('Edit to-do', todo.body);
+      if (next === null) return;
+      await api(`/api/todos/${todo.id}`, {
+        method: 'PUT',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ body: next, due_date: todo.due_date, completed: todo.completed })
+      });
+      await openDetail(application.id);
+    });
+  });
+
+  els.detailContent.querySelectorAll('[data-todo-delete]').forEach((button) => {
+    button.addEventListener('click', async () => {
+      await api(`/api/todos/${button.dataset.todoDelete}`, { method: 'DELETE' });
+      await Promise.all([loadNotifications(), openDetail(application.id)]);
+    });
+  });
 }
 
 async function runAI(button, application) {
@@ -454,6 +707,8 @@ function shiftCalendar(action) {
   state.calendarDate = new Date(current.getFullYear(), current.getMonth() + offset, 1);
 }
 
-Promise.all([loadApplications(), loadCVs(), loadSavedFilters(), loadReminders(), loadNotifications()]).catch((error) => {
+Promise.all([loadApplications(), loadCVs(), loadSavedFilters(), loadReminders(), loadNotifications(), loadJobBoards()]).catch((error) => {
   els.summary.textContent = error.message;
 });
+
+renderToolkit(els);

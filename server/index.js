@@ -4,7 +4,7 @@ import { statSync } from 'node:fs';
 import { config } from './config.js';
 import { pool } from './db/pool.js';
 import { sendError, sendJson, readJson, readMultipart, serveStatic } from './utils/http.js';
-import { cleanString, validateStatus } from './utils/validation.js';
+import { cleanString, parseBoolean, parseDate, parseInteger, validateFeedbackSource, validateStatus, validateUrl } from './utils/validation.js';
 import { createRequestGuard } from './utils/requestGuards.js';
 import { csvEscape, parseCsv, changedApplicationFields, dateForLog } from './utils/text.js';
 import { LocalFileStorage } from './storage/localFileStorage.js';
@@ -14,6 +14,7 @@ import { normalizeApplicationInput, resolveApplicationCV, replaceTags, logActivi
 import { readAIInput, saveAIDocument } from './services/aiDocuments.js';
 import { createReadApi } from './services/readApi.js';
 import { createApiRouter } from './routes.js';
+import { extractCVText } from './services/cvTextExtractor.js';
 
 const publicDir = join(process.cwd(), 'public');
 const storage = new LocalFileStorage();
@@ -50,8 +51,12 @@ const routeApi = createApiRouter({
   getActivity: async (req, res, url) => sendJson(res, 200, await readApi.getActivity(url)),
   getAudit: async (req, res, url) => sendJson(res, 200, await readApi.getAudit(url)),
   getSavedFilters: async (req, res) => sendJson(res, 200, await readApi.getSavedFilters()),
+  getJobBoards: async (req, res) => sendJson(res, 200, await readApi.getJobBoards()),
   createSavedFilter,
   deleteSavedFilter,
+  createJobBoard,
+  updateJobBoard,
+  deleteJobBoard,
   exportApplicationsCsv,
   importApplicationsCsv,
   getApplications: async (req, res, url) => sendJson(res, 200, await readApi.getApplications(url)),
@@ -62,6 +67,15 @@ const routeApi = createApiRouter({
   archiveApplication,
   restoreApplication,
   createNote,
+  updatePreparation,
+  createRecruiterQuestion,
+  updateRecruiterQuestion,
+  deleteRecruiterQuestion,
+  createFeedbackEntry,
+  deleteFeedbackEntry,
+  createTodo,
+  updateTodo,
+  deleteTodo,
   getCVs: async (req, res) => sendJson(res, 200, await readApi.getCVs()),
   createCV,
   deleteCV,
@@ -110,6 +124,84 @@ async function deleteSavedFilter(req, res, id) {
   const result = await pool.query('DELETE FROM saved_filters WHERE id = $1 RETURNING id', [id]);
   if (!result.rowCount) return sendError(res, 404, 'Saved filter not found');
   sendJson(res, 200, { ok: true });
+}
+
+async function createJobBoard(req, res) {
+  const body = await readJson(req, 64 * 1024);
+  const data = normalizeJobBoardInput(body);
+  const result = await pool.query(
+    `
+      INSERT INTO job_boards (name, url, notes, last_checked_date, is_active)
+      VALUES ($1, $2, $3, $4, $5)
+      RETURNING id, name, url, notes, to_char(last_checked_date, 'YYYY-MM-DD') AS last_checked_date, is_active, created_at, updated_at
+    `,
+    [data.name, data.url, data.notes, data.last_checked_date, data.is_active]
+  );
+  await logActivity(pool, null, 'job_board_added', result.rows[0].name);
+  sendJson(res, 201, { job_board: result.rows[0] });
+}
+
+async function updateJobBoard(req, res, id) {
+  const existing = await pool.query('SELECT id, name FROM job_boards WHERE id = $1', [id]);
+  if (!existing.rowCount) return sendError(res, 404, 'Job board not found');
+
+  const body = await readJson(req, 64 * 1024);
+  const data = normalizeJobBoardInput({ ...existing.rows[0], ...body });
+  const result = await pool.query(
+    `
+      UPDATE job_boards
+      SET name = $1,
+          url = $2,
+          notes = $3,
+          last_checked_date = $4,
+          is_active = $5
+      WHERE id = $6
+      RETURNING id, name, url, notes, to_char(last_checked_date, 'YYYY-MM-DD') AS last_checked_date, is_active, created_at, updated_at
+    `,
+    [data.name, data.url, data.notes, data.last_checked_date, data.is_active, id]
+  );
+  await logActivity(pool, null, 'job_board_updated', result.rows[0].name);
+  sendJson(res, 200, { job_board: result.rows[0] });
+}
+
+async function deleteJobBoard(req, res, id) {
+  const result = await pool.query('DELETE FROM job_boards WHERE id = $1 RETURNING id, name', [id]);
+  if (!result.rowCount) return sendError(res, 404, 'Job board not found');
+  await logActivity(pool, null, 'job_board_deleted', result.rows[0].name);
+  await audit.log(req, {
+    targetType: 'job_board',
+    targetId: id,
+    action: 'delete',
+    details: `Deleted job board ${result.rows[0].name}`
+  });
+  sendJson(res, 200, { ok: true });
+}
+
+function normalizeJobBoardInput(body) {
+  const name = cleanString(body.name);
+  if (!name) {
+    const error = new Error('Job board name is required');
+    error.statusCode = 400;
+    throw error;
+  }
+
+  return {
+    name,
+    url: validateUrl(body.url),
+    notes: cleanString(body.notes),
+    last_checked_date: parseDate(body.last_checked_date, 'last_checked_date'),
+    is_active: parseBoolean(body.is_active, 'is_active') ?? true
+  };
+}
+
+async function ensureApplicationExists(applicationId) {
+  const result = await pool.query('SELECT id, company_name FROM applications WHERE id = $1', [applicationId]);
+  if (!result.rowCount) {
+    const error = new Error('Application not found');
+    error.statusCode = 404;
+    throw error;
+  }
+  return result.rows[0];
 }
 
 
@@ -425,6 +517,160 @@ async function createNote(req, res, applicationId) {
   );
   await pool.query('INSERT INTO activity_logs (application_id, action, details) VALUES ($1, $2, $3)', [applicationId, 'note_added', note.slice(0, 500)]);
   sendJson(res, 201, { note: result.rows[0] });
+}
+
+async function updatePreparation(req, res, applicationId) {
+  const application = await ensureApplicationExists(applicationId);
+  const body = await readJson(req, 96 * 1024);
+  const aboutCompany = cleanString(body.about_company);
+  const companyValues = cleanString(body.company_values);
+  const applicationNotes = cleanString(body.application_notes);
+
+  const result = await pool.query(
+    `
+      INSERT INTO application_preparation (application_id, about_company, company_values, application_notes)
+      VALUES ($1, $2, $3, $4)
+      ON CONFLICT (application_id)
+      DO UPDATE SET
+        about_company = EXCLUDED.about_company,
+        company_values = EXCLUDED.company_values,
+        application_notes = EXCLUDED.application_notes
+      RETURNING application_id, about_company, company_values, application_notes, created_at, updated_at
+    `,
+    [applicationId, aboutCompany, companyValues, applicationNotes]
+  );
+
+  await logActivity(pool, applicationId, 'preparation_updated', `${application.company_name}: preparation workspace updated`);
+  sendJson(res, 200, { preparation: result.rows[0] });
+}
+
+async function createRecruiterQuestion(req, res, applicationId) {
+  const application = await ensureApplicationExists(applicationId);
+  const body = await readJson(req, 32 * 1024);
+  const question = cleanString(body.question);
+  if (!question) return sendError(res, 400, 'Question is required');
+
+  const sortOrderResult = await pool.query(
+    'SELECT COALESCE(max(sort_order), -1) + 1 AS next_order FROM recruiter_questions WHERE application_id = $1',
+    [applicationId]
+  );
+  const result = await pool.query(
+    `
+      INSERT INTO recruiter_questions (application_id, question, sort_order)
+      VALUES ($1, $2, $3)
+      RETURNING id, question, sort_order, created_at, updated_at
+    `,
+    [applicationId, question, Number(sortOrderResult.rows[0].next_order)]
+  );
+  await logActivity(pool, applicationId, 'recruiter_question_added', `${application.company_name}: ${question.slice(0, 120)}`);
+  sendJson(res, 201, { recruiter_question: result.rows[0] });
+}
+
+async function updateRecruiterQuestion(req, res, id) {
+  const existing = await pool.query('SELECT id, application_id, question, sort_order FROM recruiter_questions WHERE id = $1', [id]);
+  if (!existing.rowCount) return sendError(res, 404, 'Recruiter question not found');
+
+  const body = await readJson(req, 32 * 1024);
+  const nextQuestion = body.question === undefined ? existing.rows[0].question : cleanString(body.question);
+  if (!nextQuestion) return sendError(res, 400, 'Question is required');
+  const nextOrder = body.sort_order === undefined ? existing.rows[0].sort_order : parseInteger(body.sort_order, 'sort_order');
+
+  const result = await pool.query(
+    `
+      UPDATE recruiter_questions
+      SET question = $1,
+          sort_order = $2
+      WHERE id = $3
+      RETURNING id, application_id, question, sort_order, created_at, updated_at
+    `,
+    [nextQuestion, nextOrder, id]
+  );
+  await logActivity(pool, result.rows[0].application_id, 'recruiter_question_updated', nextQuestion.slice(0, 120));
+  sendJson(res, 200, { recruiter_question: result.rows[0] });
+}
+
+async function deleteRecruiterQuestion(req, res, id) {
+  const result = await pool.query('DELETE FROM recruiter_questions WHERE id = $1 RETURNING id, application_id, question', [id]);
+  if (!result.rowCount) return sendError(res, 404, 'Recruiter question not found');
+  await logActivity(pool, result.rows[0].application_id, 'recruiter_question_deleted', result.rows[0].question.slice(0, 120));
+  sendJson(res, 200, { ok: true });
+}
+
+async function createFeedbackEntry(req, res, applicationId) {
+  const application = await ensureApplicationExists(applicationId);
+  const body = await readJson(req, 48 * 1024);
+  const feedback = cleanString(body.body);
+  if (!feedback) return sendError(res, 400, 'Feedback text is required');
+
+  const sourceType = validateFeedbackSource(body.source_type);
+  const result = await pool.query(
+    `
+      INSERT INTO hiring_feedback (application_id, source_type, body)
+      VALUES ($1, $2, $3)
+      RETURNING id, application_id, source_type, body, created_at
+    `,
+    [applicationId, sourceType, feedback]
+  );
+  await logActivity(pool, applicationId, 'feedback_added', `${application.company_name}: ${sourceType}`);
+  sendJson(res, 201, { feedback_entry: result.rows[0] });
+}
+
+async function deleteFeedbackEntry(req, res, id) {
+  const result = await pool.query('DELETE FROM hiring_feedback WHERE id = $1 RETURNING id, application_id, source_type', [id]);
+  if (!result.rowCount) return sendError(res, 404, 'Feedback entry not found');
+  await logActivity(pool, result.rows[0].application_id, 'feedback_deleted', result.rows[0].source_type);
+  sendJson(res, 200, { ok: true });
+}
+
+async function createTodo(req, res, applicationId) {
+  const application = await ensureApplicationExists(applicationId);
+  const body = await readJson(req, 32 * 1024);
+  const todoBody = cleanString(body.body);
+  if (!todoBody) return sendError(res, 400, 'To-do text is required');
+
+  const result = await pool.query(
+    `
+      INSERT INTO application_todos (application_id, body, completed, due_date)
+      VALUES ($1, $2, COALESCE($3, FALSE), $4)
+      RETURNING id, application_id, body, completed, to_char(due_date, 'YYYY-MM-DD') AS due_date, created_at, updated_at
+    `,
+    [applicationId, todoBody, parseBoolean(body.completed, 'completed'), parseDate(body.due_date, 'due_date')]
+  );
+  await logActivity(pool, applicationId, 'todo_added', `${application.company_name}: ${todoBody.slice(0, 120)}`);
+  sendJson(res, 201, { todo: result.rows[0] });
+}
+
+async function updateTodo(req, res, id) {
+  const existing = await pool.query('SELECT id, application_id, body, completed, due_date FROM application_todos WHERE id = $1', [id]);
+  if (!existing.rowCount) return sendError(res, 404, 'To-do not found');
+
+  const body = await readJson(req, 32 * 1024);
+  const nextText = body.body === undefined ? existing.rows[0].body : cleanString(body.body);
+  if (!nextText) return sendError(res, 400, 'To-do text is required');
+  const nextCompleted = body.completed === undefined ? existing.rows[0].completed : parseBoolean(body.completed, 'completed');
+  const nextDueDate = body.due_date === undefined ? existing.rows[0].due_date : parseDate(body.due_date, 'due_date');
+
+  const result = await pool.query(
+    `
+      UPDATE application_todos
+      SET body = $1,
+          completed = $2,
+          due_date = $3
+      WHERE id = $4
+      RETURNING id, application_id, body, completed, to_char(due_date, 'YYYY-MM-DD') AS due_date, created_at, updated_at
+    `,
+    [nextText, nextCompleted, nextDueDate, id]
+  );
+  const action = nextCompleted ? 'todo_completed' : 'todo_updated';
+  await logActivity(pool, result.rows[0].application_id, action, nextText.slice(0, 120));
+  sendJson(res, 200, { todo: result.rows[0] });
+}
+
+async function deleteTodo(req, res, id) {
+  const result = await pool.query('DELETE FROM application_todos WHERE id = $1 RETURNING id, application_id, body', [id]);
+  if (!result.rowCount) return sendError(res, 404, 'To-do not found');
+  await logActivity(pool, result.rows[0].application_id, 'todo_deleted', result.rows[0].body.slice(0, 120));
+  sendJson(res, 200, { ok: true });
 }
 
 

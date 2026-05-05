@@ -23,7 +23,7 @@ export function createReadApi({ pool, audit }) {
     },
 
     async getNotifications() {
-      const [upcomingInterviews, followUps] = await Promise.all([
+      const [upcomingInterviews, followUps, upcomingTodos] = await Promise.all([
         pool.query(
           `
             SELECT
@@ -67,11 +67,31 @@ export function createReadApi({ pool, audit }) {
             ORDER BY applied_date ASC
             LIMIT 6
           `
+        ),
+        pool.query(
+          `
+            SELECT
+              a.id,
+              a.company_name,
+              a.status,
+              to_char(t.due_date, 'YYYY-MM-DD') AS due_date,
+              t.due_date - CURRENT_DATE AS days_remaining,
+              'todo' AS type,
+              'Preparation task due soon' AS message
+            FROM application_todos t
+            JOIN applications a ON a.id = t.application_id
+            WHERE a.archived_at IS NULL
+              AND t.completed = FALSE
+              AND t.due_date IS NOT NULL
+              AND t.due_date <= CURRENT_DATE + INTERVAL '3 days'
+            ORDER BY t.due_date ASC, t.id ASC
+            LIMIT 6
+          `
         )
       ]);
 
       return {
-        notifications: [...upcomingInterviews.rows, ...followUps.rows]
+        notifications: [...upcomingInterviews.rows, ...followUps.rows, ...upcomingTodos.rows]
           .sort((left, right) => String(left.due_date || '').localeCompare(String(right.due_date || '')))
           .slice(0, 8)
       };
@@ -194,6 +214,25 @@ export function createReadApi({ pool, audit }) {
       return { filters: result.rows };
     },
 
+    async getJobBoards() {
+      const result = await pool.query(
+        `
+          SELECT
+            id,
+            name,
+            url,
+            notes,
+            to_char(last_checked_date, 'YYYY-MM-DD') AS last_checked_date,
+            is_active,
+            created_at,
+            updated_at
+          FROM job_boards
+          ORDER BY is_active DESC, lower(name) ASC, id ASC
+        `
+      );
+      return { job_boards: result.rows };
+    },
+
     async getApplications(url) {
       const search = cleanString(url.searchParams.get('search')) || '';
       const status = cleanString(url.searchParams.get('status')) || '';
@@ -286,7 +325,7 @@ export function createReadApi({ pool, audit }) {
         throw error;
       }
 
-      const [cvs, history, notes, tags, activity, aiDocuments, auditEventsResult] = await Promise.all([
+      const [cvs, history, notes, tags, activity, aiDocuments, auditEventsResult, preparation, recruiterQuestions, feedbackEntries, todos] = await Promise.all([
         executor.query(
           `
             SELECT c.id, c.original_name, c.version_label, c.file_size, c.created_at, ac.linked_at, length(c.extracted_text) AS extracted_text_length
@@ -361,6 +400,53 @@ export function createReadApi({ pool, audit }) {
             LIMIT 20
           `,
           [id]
+        ),
+        executor.query(
+          `
+            SELECT
+              application_id,
+              about_company,
+              company_values,
+              application_notes,
+              created_at,
+              updated_at
+            FROM application_preparation
+            WHERE application_id = $1
+          `,
+          [id]
+        ),
+        executor.query(
+          `
+            SELECT id, question, sort_order, created_at, updated_at
+            FROM recruiter_questions
+            WHERE application_id = $1
+            ORDER BY sort_order ASC, id ASC
+          `,
+          [id]
+        ),
+        executor.query(
+          `
+            SELECT id, source_type, body, created_at
+            FROM hiring_feedback
+            WHERE application_id = $1
+            ORDER BY created_at DESC, id DESC
+          `,
+          [id]
+        ),
+        executor.query(
+          `
+            SELECT
+              id,
+              body,
+              completed,
+              to_char(due_date, 'YYYY-MM-DD') AS due_date,
+              created_at,
+              updated_at
+            FROM application_todos
+            WHERE application_id = $1
+            ORDER BY completed ASC, due_date ASC NULLS LAST, created_at ASC, id ASC
+          `,
+          [id]
         )
       ]);
 
@@ -372,7 +458,11 @@ export function createReadApi({ pool, audit }) {
         activity: activity.rows,
         ai_documents: aiDocuments.rows,
         audit_events: auditEventsResult.rows,
-        tags: tags.rows.map((row) => row.name)
+        tags: tags.rows.map((row) => row.name),
+        preparation: preparation.rows[0] || null,
+        recruiter_questions: recruiterQuestions.rows,
+        feedback_entries: feedbackEntries.rows,
+        todos: todos.rows
       };
     },
 

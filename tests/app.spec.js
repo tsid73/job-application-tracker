@@ -45,3 +45,48 @@ test('export CSV and save a reusable filter', async ({ page }) => {
   const download = await downloadPromise;
   expect(download.suggestedFilename()).toBe('job-applications.csv');
 });
+
+test('manage preparation workspace and job boards', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'New Application' }).click();
+  await page.getByLabel('Company Name').fill('Northstar Systems');
+  await page.getByLabel('Job Description').fill('Platform engineering role focused on APIs, observability, and delivery systems.');
+  await page.getByLabel('Upload CV').setInputFiles(sampleCvPath);
+  await page.getByRole('button', { name: 'Save' }).click();
+
+  await page.getByRole('button', { name: 'Open' }).first().click();
+
+  await page.getByLabel('About The Company').fill('B2B infrastructure platform with a strong enterprise focus.');
+  await page.getByLabel('Company Values').fill('Ownership, clarity, and steady execution.');
+  await page.getByLabel('Application Notes').fill('Prepare migration story and incident response example.');
+  await page.getByRole('button', { name: 'Save Preparation' }).click();
+
+  await page.locator('[data-question-form] textarea[name="question"]').fill('How does the team define success in the first 90 days?');
+  await page.getByRole('button', { name: 'Add Question' }).click();
+  await expect(page.getByText('How does the team define success in the first 90 days?')).toBeVisible();
+
+  await page.getByLabel('Source').selectOption('recruiter');
+  await page.locator('[data-feedback-form] textarea[name="body"]').fill('Recruiter said the team values strong ownership and concise communication.');
+  await page.getByRole('button', { name: 'Add Feedback' }).click();
+  await expect(page.getByText('Recruiter said the team values strong ownership and concise communication.')).toBeVisible();
+
+  await page.locator('[data-todo-form] textarea[name="body"]').fill('Prepare 3 recruiter questions');
+  await page.locator('[data-todo-form] input[name="due_date"]').fill('2026-05-08');
+  await page.getByRole('button', { name: 'Add To-do' }).click();
+  await expect(page.getByText('Prepare 3 recruiter questions')).toBeVisible();
+  await page.locator('[data-todo-toggle]').check();
+
+  await page.getByRole('button', { name: 'Close' }).first().click();
+
+  await page.getByRole('button', { name: 'Job Boards' }).click();
+  await page.getByLabel('Board Name').fill('LinkedIn Jobs');
+  await page.getByLabel('URL').fill('https://www.linkedin.com/jobs/');
+  await page.getByLabel('Last Checked').fill('2026-05-05');
+  await page.getByLabel('Notes').fill('Use saved search for platform and backend roles.');
+  await page.getByRole('button', { name: 'Save Board' }).click();
+
+  await expect(page.getByText('LinkedIn Jobs')).toBeVisible();
+  await page.getByRole('button', { name: 'Mark inactive' }).click();
+  await expect(page.getByText('Inactive')).toBeVisible();
+});

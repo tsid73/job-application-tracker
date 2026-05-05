@@ -19,22 +19,26 @@ import {
 
 export function renderReports(els, report, statusLabels) {
   els.reportsContent.innerHTML = `
-    <section class="report-panel">
+    <section class="report-panel report-panel-status">
+      <div class="panel-kicker">Snapshot</div>
       <h3>Status</h3>
       ${report.status_counts.map((row) => reportRow(statusLabels[row.status] || row.status, Number(row.count), maxCount(report.status_counts))).join('') || '<p>No status data.</p>'}
     </section>
-    <section class="report-panel">
+    <section class="report-panel report-panel-lifecycle">
+      <div class="panel-kicker">Portfolio</div>
       <h3>Lifecycle</h3>
       ${[
         { label: 'Active', count: Number(report.lifecycle_counts.active || 0) },
         { label: 'Archived', count: Number(report.lifecycle_counts.archived || 0) }
       ].map((row) => reportRow(row.label, row.count, Number(report.lifecycle_counts.total || 1))).join('')}
     </section>
-    <section class="report-panel">
+    <section class="report-panel report-panel-monthly">
+      <div class="panel-kicker">Velocity</div>
       <h3>Monthly Applications</h3>
       ${report.monthly_counts.map((row) => reportRow(formatMonthLabel(row.month), Number(row.count), maxCount(report.monthly_counts))).join('') || '<p>No monthly data.</p>'}
     </section>
-    <section class="report-panel">
+    <section class="report-panel report-panel-upcoming">
+      <div class="panel-kicker">Watchlist</div>
       <h3>Upcoming Interviews</h3>
       <div class="upcoming-list">
         ${report.upcoming_interviews.map((item) => `
@@ -127,14 +131,18 @@ export function renderNotifications(els, notifications) {
     </div>
     <div class="notifications-grid">
       ${notifications.map((item) => `
-        <article class="notification-card ${item.type === 'follow_up' ? 'follow-up' : 'interview'}">
+        <article class="notification-card ${item.type === 'follow_up' ? 'follow-up' : item.type === 'todo' ? 'todo' : 'interview'}">
           <div>
             <strong>${escapeHtml(item.company_name)}</strong>
             <span>${escapeHtml(item.message)}</span>
           </div>
           <div class="notification-meta">
             <span>${item.due_date ? formatDate(item.due_date) : 'No due date'}</span>
-            ${item.type === 'interview' ? renderDays(item.days_remaining) : `<span class="days-badge warning">${Number(item.days_remaining)} days since apply</span>`}
+            ${item.type === 'interview'
+              ? renderDays(item.days_remaining)
+              : item.type === 'todo'
+                ? renderDays(item.days_remaining)
+                : `<span class="days-badge warning">${Number(item.days_remaining)} days since apply</span>`}
             <button class="secondary" type="button" data-notification-detail="${item.id}">Open</button>
           </div>
         </article>
@@ -163,7 +171,13 @@ export function renderKanban(els, applications, statusLabels) {
 
   els.kanbanBoard.innerHTML = groups.map((group) => `
     <section class="kanban-column">
-      <h3>${statusLabels[group.status]} <span>${group.items.length}</span></h3>
+      <div class="kanban-column-head">
+        <div>
+          <span class="panel-kicker">Stage</span>
+          <h3>${statusLabels[group.status]}</h3>
+        </div>
+        <span class="kanban-count">${group.items.length}</span>
+      </div>
       ${group.items.map((item) => `
         <article class="kanban-card">
           <strong>${escapeHtml(item.company_name)}</strong>
@@ -197,15 +211,250 @@ export function renderCVs(els, cvs) {
   `).join('') || '<p class="empty">No CVs uploaded.</p>';
 }
 
-export function buildDetailContent({ application, cvs, history, notes, activity, docs, tags, auditEvents, statusLabels }) {
+export function renderJobBoards(els, jobBoards) {
+  els.jobBoardsList.innerHTML = jobBoards.map((board) => `
+    <article class="board-card ${board.is_active ? '' : 'is-inactive'} ${jobBoardFreshnessClass(board)}">
+      <div class="board-card-top">
+        <div>
+          <strong>${escapeHtml(board.name)}</strong>
+          <span>${board.url ? `<a href="${escapeAttribute(board.url)}" target="_blank" rel="noreferrer">Open board</a>` : 'No link saved'}</span>
+        </div>
+        <span class="state ${board.is_active ? 'active-state' : 'archived-state'}">${board.is_active ? 'Active' : 'Inactive'}</span>
+      </div>
+      <div class="board-status-row">
+        <span class="board-freshness ${jobBoardFreshnessClass(board)}">${jobBoardFreshnessLabel(board)}</span>
+      </div>
+      <p>${escapeHtml(board.notes || 'No notes yet.')}</p>
+      <div class="board-meta">
+        <span>Last checked: ${board.last_checked_date ? formatDate(board.last_checked_date) : 'Never'}</span>
+        <span>Updated: ${formatDateTime(board.updated_at)}</span>
+      </div>
+      <div class="row-actions">
+        <button class="secondary" type="button" data-job-board-edit="${board.id}">Edit</button>
+        <button class="secondary" type="button" data-job-board-toggle="${board.id}" data-job-board-active="${board.is_active ? 'true' : 'false'}">${board.is_active ? 'Mark inactive' : 'Activate'}</button>
+        <button class="secondary" type="button" data-job-board-delete="${board.id}">Delete</button>
+      </div>
+    </article>
+  `).join('') || '<p class="empty">No job boards saved yet.</p>';
+}
+
+export function renderToolkit(els) {
+  els.toolkitContent.innerHTML = [
+    {
+      title: 'Resume Checklist',
+      items: ['Tailor headline and summary to the role', 'Mirror core keywords from the description', 'Keep impact bullets measurable and short']
+    },
+    {
+      title: 'Interview Prep',
+      items: ['Review product, customers, and competitors', 'Prepare two project stories with outcomes', 'Map likely system or behavioral questions']
+    },
+    {
+      title: 'Follow-up Rhythm',
+      items: ['Send thank-you notes within 24 hours', 'Follow up after 5 to 7 business days', 'Log every recruiter update in the detail view']
+    },
+    {
+      title: 'Research Prompts',
+      items: ['What problem does this company solve best?', 'How does this team measure success?', 'Which values match your working style?']
+    }
+  ].map((section) => `
+    <section class="toolkit-card">
+      <div class="panel-kicker">Playbook</div>
+      <h3>${escapeHtml(section.title)}</h3>
+      <ul class="toolkit-list">
+        ${section.items.map((item) => `<li>${escapeHtml(item)}</li>`).join('')}
+      </ul>
+    </section>
+  `).join('');
+}
+
+export function buildDetailContent({ application, cvs, history, notes, activity, docs, tags, auditEvents, statusLabels, preparation, recruiterQuestions, feedbackEntries, todos }) {
   const primaryCv = cvs[0];
+  const feedbackSourceLabels = {
+    recruiter: 'Recruiter',
+    interviewer: 'Interviewer',
+    hiring_manager: 'Hiring Manager',
+    self_note: 'Self Note'
+  };
+  const prepChecks = [
+    Boolean(preparation?.about_company),
+    Boolean(preparation?.company_values),
+    Boolean(preparation?.application_notes),
+    recruiterQuestions.length > 0,
+    feedbackEntries.length > 0,
+    todos.some((item) => !item.completed)
+  ];
+  const prepCompleted = prepChecks.filter(Boolean).length;
+  const prepTotal = prepChecks.length;
+  const activeTodos = todos.filter((item) => !item.completed);
+  const nextTodo = activeTodos.find((item) => item.due_date) || activeTodos[0] || null;
   return `
     <div>
       <section class="detail-section">
+        <div class="panel-kicker">Role Context</div>
         <h3>Job Description</h3>
         <p class="description">${escapeHtml(application.job_description || 'No job description saved.')}</p>
       </section>
+      <section class="detail-section prep-section">
+        <div class="section-heading">
+          <div>
+            <div class="panel-kicker">Workflow</div>
+            <h3>Preparation</h3>
+            <p class="section-help">Capture research, recruiter questions, feedback, and next steps for this role.</p>
+          </div>
+          <div class="prep-progress">
+            <strong>${prepCompleted} of ${prepTotal}</strong>
+            <span>prep blocks active</span>
+            <div class="progress-bar"><i style="width:${Math.round((prepCompleted / prepTotal) * 100)}%"></i></div>
+          </div>
+        </div>
+        <div class="prep-layout">
+          <div class="prep-primary">
+            <form class="prep-form prep-research-form" data-preparation-form="${application.id}">
+              <div class="prep-card prep-card-research">
+                <div class="section-heading">
+                  <div>
+                    <div class="panel-kicker">Research</div>
+                    <h3>Company Research</h3>
+                  </div>
+                </div>
+                <label>
+                  <span>About The Company</span>
+                  <textarea name="about_company" rows="4" placeholder="Products, market, history, competitors, customers, funding, leadership">${escapeHtml(preparation?.about_company || '')}</textarea>
+                </label>
+                <label>
+                  <span>Company Values</span>
+                  <textarea name="company_values" rows="4" placeholder="Document stated values, culture signals, and where your own work style aligns">${escapeHtml(preparation?.company_values || '')}</textarea>
+                </label>
+                <label>
+                  <span>Application Notes</span>
+                  <textarea name="application_notes" rows="4" placeholder="Interview strategy, risks, project stories, role-specific observations">${escapeHtml(preparation?.application_notes || '')}</textarea>
+                </label>
+                <div class="inline-actions">
+                  <button type="submit">Save Preparation</button>
+                </div>
+              </div>
+            </form>
+            <div class="prep-grid">
+              <section class="prep-card prep-card-questions">
+            <div class="section-heading">
+              <div>
+                <div class="panel-kicker">Ask</div>
+                <h3>Questions For Recruiter</h3>
+                <p class="section-help">Keep short, direct questions ready before the next call.</p>
+              </div>
+            </div>
+            <form class="stack-form" data-question-form="${application.id}">
+              <textarea name="question" rows="2" placeholder="Ask about team structure, interview stages, success metrics, or expectations"></textarea>
+              <button type="submit">Add Question</button>
+            </form>
+            <div class="stack-list">
+              ${recruiterQuestions.map((item, index) => `
+                <article class="stack-item">
+                  <div>
+                    <strong>Q${index + 1}</strong>
+                    <p>${escapeHtml(item.question)}</p>
+                  </div>
+                  <div class="row-actions">
+                    <button class="secondary" type="button" data-question-move="${item.id}" data-direction="up" ${index === 0 ? 'disabled' : ''}>Up</button>
+                    <button class="secondary" type="button" data-question-move="${item.id}" data-direction="down" ${index === recruiterQuestions.length - 1 ? 'disabled' : ''}>Down</button>
+                    <button class="secondary" type="button" data-question-edit="${item.id}">Edit</button>
+                    <button class="secondary" type="button" data-question-delete="${item.id}">Delete</button>
+                  </div>
+                </article>
+              `).join('') || '<p class="empty small">No recruiter questions yet.</p>'}
+            </div>
+          </section>
+          <section class="prep-card prep-card-feedback">
+            <div class="section-heading">
+              <div>
+                <div class="panel-kicker">Signal</div>
+                <h3>Feedback From Hiring Team</h3>
+                <p class="section-help">Log signal from recruiters, interviewers, and your own post-interview notes.</p>
+              </div>
+            </div>
+            <form class="stack-form" data-feedback-form="${application.id}">
+              <label>
+                <span>Source</span>
+                <select name="source_type">
+                  <option value="recruiter">Recruiter</option>
+                  <option value="interviewer">Interviewer</option>
+                  <option value="hiring_manager">Hiring Manager</option>
+                  <option value="self_note">Self Note</option>
+                </select>
+              </label>
+              <textarea name="body" rows="3" placeholder="Write down feedback, concerns, strengths, or next signals from the hiring process"></textarea>
+              <button type="submit">Add Feedback</button>
+            </form>
+            <div class="stack-list">
+              ${feedbackEntries.map((item) => `
+                <article class="stack-item">
+                  <div class="item-meta">
+                    <span class="tag">${escapeHtml(feedbackSourceLabels[item.source_type] || item.source_type)}</span>
+                    <span>${formatDateTime(item.created_at)}</span>
+                  </div>
+                  <p>${escapeHtml(item.body)}</p>
+                  <div class="row-actions">
+                    <button class="secondary" type="button" data-feedback-delete="${item.id}">Delete</button>
+                  </div>
+                </article>
+              `).join('') || '<p class="empty small">No feedback recorded.</p>'}
+            </div>
+          </section>
+            </div>
+          </div>
+          <aside class="prep-sidebar">
+            <section class="prep-card prep-card-todo">
+            <div class="section-heading">
+              <div>
+                <div class="panel-kicker">Act</div>
+                <h3>Next Steps</h3>
+                <p class="section-help">Keep tasks visible so follow-ups do not disappear between applications.</p>
+              </div>
+            </div>
+            <div class="signal-stack">
+              <div class="signal-card">
+                <span class="signal-label">Open tasks</span>
+                <strong>${activeTodos.length}</strong>
+              </div>
+              <div class="signal-card">
+                <span class="signal-label">Next due</span>
+                <strong>${nextTodo?.due_date ? formatDate(nextTodo.due_date) : 'None'}</strong>
+              </div>
+            </div>
+            <form class="todo-form" data-todo-form="${application.id}">
+              <textarea name="body" rows="2" placeholder="Research the team, prepare story on incident response, send follow-up note"></textarea>
+              <label>
+                <span>Due Date</span>
+                <input name="due_date" type="date">
+              </label>
+              <button type="submit">Add To-do</button>
+            </form>
+            <div class="stack-list">
+              ${todos.map((item) => `
+                <article class="stack-item todo-item ${item.completed ? 'is-complete' : ''}">
+                  <div class="todo-main">
+                    <label class="todo-check">
+                      <input type="checkbox" data-todo-toggle="${item.id}" ${item.completed ? 'checked' : ''}>
+                      <span>${escapeHtml(item.body)}</span>
+                    </label>
+                    <div class="item-meta">
+                      <span>${item.due_date ? `Due ${formatDate(item.due_date)}` : 'No due date'}</span>
+                      <span>${formatDateTime(item.created_at)}</span>
+                    </div>
+                  </div>
+                  <div class="row-actions">
+                    <button class="secondary" type="button" data-todo-edit="${item.id}">Edit</button>
+                    <button class="secondary" type="button" data-todo-delete="${item.id}">Delete</button>
+                  </div>
+                </article>
+              `).join('') || '<p class="empty small">No to-dos yet.</p>'}
+            </div>
+          </section>
+          </aside>
+        </div>
+      </section>
       <section class="detail-section">
+        <div class="panel-kicker">Journal</div>
         <h3>Notes</h3>
         <div class="notes-list">
           ${application.notes ? `<div class="note-item">${escapeHtml(application.notes)}</div>` : ''}
@@ -217,6 +466,7 @@ export function buildDetailContent({ application, cvs, history, notes, activity,
         </form>
       </section>
       <section class="detail-section">
+        <div class="panel-kicker">Timeline</div>
         <h3>Activity</h3>
         <div class="history-list">
           ${activity.map((item) => `<div class="history-item">${escapeHtml(formatAction(item.action))}<br><small>${escapeHtml(item.details || '')} · ${formatDateTime(item.created_at)}</small></div>`).join('') || '<p>No activity.</p>'}
@@ -224,7 +474,17 @@ export function buildDetailContent({ application, cvs, history, notes, activity,
       </section>
     </div>
     <aside>
+      <section class="detail-section details-hero">
+        <div class="panel-kicker">Focus</div>
+        <h3>${statusLabels[application.status]}</h3>
+        <p class="section-help">${application.archived_at ? 'This application is archived.' : 'This application is active and ready for follow-up work.'}</p>
+        <div class="detail-highlight-row">
+          <span class="state ${application.archived_at ? 'archived-state' : 'active-state'}">${application.archived_at ? 'Archived' : 'Active'}</span>
+          <span class="detail-mini">${application.interview_date ? `Interview ${formatDate(application.interview_date)}` : 'No interview booked'}</span>
+        </div>
+      </section>
       <section class="detail-section">
+        <div class="panel-kicker">Metadata</div>
         <h3>Details</h3>
         <div class="meta-list">
           <p>Status: ${statusLabels[application.status]}</p>
@@ -240,6 +500,7 @@ export function buildDetailContent({ application, cvs, history, notes, activity,
         </div>
       </section>
       <section class="detail-section">
+        <div class="panel-kicker">Documents</div>
         <h3>CV Used</h3>
         ${cvs.map((cv) => `
           <div class="cv-item">
@@ -250,18 +511,21 @@ export function buildDetailContent({ application, cvs, history, notes, activity,
         `).join('')}
       </section>
       <section class="detail-section">
+        <div class="panel-kicker">Changes</div>
         <h3>Status History</h3>
         <div class="history-list">
           ${history.map((item) => `<div class="history-item">${item.from_status ? statusLabels[item.from_status] : 'Created'} to ${statusLabels[item.to_status]}<br><small>${formatDateTime(item.changed_at)}</small></div>`).join('')}
         </div>
       </section>
       <section class="detail-section">
+        <div class="panel-kicker">Protection</div>
         <h3>Audit</h3>
         <div class="history-list">
           ${auditEvents.map((item) => `<div class="history-item">${escapeHtml(formatAction(item.action))}<br><small>${escapeHtml(item.details || '')} · ${escapeHtml(item.actor_ip || 'local')} · ${formatDateTime(item.created_at)}</small></div>`).join('') || '<p>No audit events.</p>'}
         </div>
       </section>
       <section class="detail-section">
+        <div class="panel-kicker">Assistant</div>
         <h3>AI</h3>
         <div class="ai-actions">
           <button type="button" data-ai="cv" data-app-id="${application.id}" data-cv-id="${primaryCv?.id || ''}">Tailor CV</button>
@@ -288,6 +552,32 @@ export function buildDetailContent({ application, cvs, history, notes, activity,
       <div><button class="danger" type="button" data-delete-id="${application.id}">Delete Permanently</button></div>
     </div>
   `;
+}
+
+function jobBoardFreshnessLabel(board) {
+  if (!board.is_active) return 'Inactive source';
+  if (!board.last_checked_date) return 'Never checked';
+  const diff = dayDiffFromToday(board.last_checked_date);
+  if (diff <= 1) return 'Checked recently';
+  if (diff <= 7) return 'Fresh this week';
+  return 'Needs review';
+}
+
+function jobBoardFreshnessClass(board) {
+  if (!board.is_active) return 'freshness-inactive';
+  if (!board.last_checked_date) return 'freshness-stale';
+  const diff = dayDiffFromToday(board.last_checked_date);
+  if (diff <= 1) return 'freshness-fresh';
+  if (diff <= 7) return 'freshness-warm';
+  return 'freshness-stale';
+}
+
+function dayDiffFromToday(value) {
+  if (!value) return Number.POSITIVE_INFINITY;
+  const target = new Date(`${String(value).slice(0, 10)}T00:00:00`);
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  return Math.abs(Math.round((today.getTime() - target.getTime()) / 86400000));
 }
 
 export function renderCalendar(els, calendarDate, reminders) {

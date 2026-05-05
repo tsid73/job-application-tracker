@@ -35,6 +35,8 @@
           <button class="secondary" type="button" data-view="kanban">Kanban</button>
           <button class="secondary" type="button" data-view="reports">Reports</button>
           <button class="secondary" type="button" data-view="activity">Activity</button>
+          <button class="secondary" type="button" data-view="boards">Job Boards</button>
+          <button class="secondary" type="button" data-view="toolkit">Toolkit</button>
         </nav>
 
         <section id="listView" class="surface-panel">
@@ -138,6 +140,60 @@
             <div id="activityEmptyState" class="empty" hidden>No activity found.</div>
           </section>
           <div class="pagination" id="activityPagination"></div>
+        </section>
+
+        <section id="boardsView" class="view-panel" hidden>
+          <section class="boards-layout">
+            <form id="jobBoardForm" class="detail-section">
+              <div class="section-heading">
+                <div>
+                  <h3>Track Job Boards</h3>
+                  <p class="section-help">Save sources you check regularly and keep a last-checked trail.</p>
+                </div>
+              </div>
+              <input name="id" type="hidden">
+              <div class="form-grid compact-grid">
+                <label>
+                  <span>Board Name</span>
+                  <input name="name" required placeholder="LinkedIn Jobs">
+                </label>
+                <label>
+                  <span>URL</span>
+                  <input name="url" type="url" placeholder="https://www.linkedin.com/jobs/">
+                </label>
+                <label>
+                  <span>Last Checked</span>
+                  <input name="last_checked_date" type="date">
+                </label>
+                <label class="checkbox inline-checkbox">
+                  <input name="is_active" type="checkbox" checked>
+                  <span>Active source</span>
+                </label>
+                <label class="wide">
+                  <span>Notes</span>
+                  <textarea name="notes" rows="3" placeholder="Target roles, filters, alerts, or specific search URLs"></textarea>
+                </label>
+              </div>
+              <p class="form-error" id="jobBoardError" hidden></p>
+              <div class="inline-actions">
+                <button type="submit">Save Board</button>
+                <button id="jobBoardResetButton" class="secondary" type="button">Clear</button>
+              </div>
+            </form>
+            <section class="detail-section">
+              <div class="section-heading">
+                <div>
+                  <h3>Saved Sources</h3>
+                  <p class="section-help">Use this as a lightweight sourcing dashboard.</p>
+                </div>
+              </div>
+              <div id="jobBoardsList" class="board-list"></div>
+            </section>
+          </section>
+        </section>
+
+        <section id="toolkitView" class="view-panel toolkit-view" hidden>
+          <div id="toolkitContent" class="toolkit-grid"></div>
         </section>
       </main>
     </div>

@@ -1,6 +1,7 @@
 export const state = {
   applications: [],
   cvs: [],
+  jobBoards: [],
   savedFilters: [],
   view: 'list',
   filters: {
