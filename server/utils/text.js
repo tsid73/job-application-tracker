@@ -1,7 +1,12 @@
 export function csvEscape(value) {
-  const text = value === null || value === undefined ? '' : String(value);
+  const text = neutralizeSpreadsheetFormula(value === null || value === undefined ? '' : String(value));
   if (/[",\n\r]/.test(text)) return `"${text.replaceAll('"', '""')}"`;
   return text;
+}
+
+function neutralizeSpreadsheetFormula(text) {
+  if (!text) return text;
+  return /^[=+\-@]/.test(text) ? `'${text}` : text;
 }
 
 export function parseCsv(text) {
