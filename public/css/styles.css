@@ -108,6 +108,65 @@ main {
   padding: 22px 28px 40px;
 }
 
+.notifications-panel {
+  margin-bottom: 16px;
+  padding: 14px;
+  border: 1px solid #f0d08a;
+  border-radius: 8px;
+  background: #fffbef;
+}
+
+.notifications-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.notifications-header p {
+  margin-top: 4px;
+  color: var(--muted);
+}
+
+.notifications-grid {
+  display: grid;
+  gap: 10px;
+}
+
+.notification-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 12px;
+  border: 1px solid #f2dfac;
+  border-radius: 8px;
+  background: white;
+}
+
+.notification-card.follow-up {
+  border-color: #d6c3ff;
+  background: #fbf8ff;
+}
+
+.notification-card > div:first-child {
+  display: grid;
+  gap: 4px;
+}
+
+.notification-card span {
+  color: var(--muted);
+}
+
+.notification-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
 .view-tabs {
   display: flex;
   gap: 8px;
@@ -134,6 +193,12 @@ main {
 
 .toolbar label:first-child {
   width: 240px;
+}
+
+.toolbar-actions {
+  display: flex;
+  align-items: end;
+  gap: 8px;
 }
 
 label {
@@ -706,6 +771,25 @@ dialog::backdrop {
   margin-top: 10px;
 }
 
+.doc-item {
+  display: grid;
+  gap: 4px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 10px;
+}
+
+.doc-item a {
+  color: var(--accent-dark);
+  font-weight: 700;
+}
+
+.doc-item span {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
 .cv-form {
   display: grid;
   grid-template-columns: 1fr 1fr auto auto;
@@ -783,5 +867,15 @@ dialog::backdrop {
   .reminder-card {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .notification-card {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .notification-meta,
+  .toolbar-actions {
+    justify-content: flex-start;
   }
 }

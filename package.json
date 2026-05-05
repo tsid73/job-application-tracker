@@ -9,7 +9,11 @@
     "dev": "node --watch server/index.js",
     "migrate": "node server/db/migrate.js",
     "seed": "node server/db/seed.js",
-    "check": "node --check server/index.js && node --check server/db/migrate.js && node --check server/db/seed.js"
+    "check": "node --check server/index.js && node --check server/db/migrate.js && node --check server/db/seed.js",
+    "db:backup": "bash scripts/db-backup.sh",
+    "db:restore": "bash scripts/db-restore.sh",
+    "cleanup:generated": "node scripts/cleanup-generated-files.mjs",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
     "@electric-sql/pglite": "^0.4.5",

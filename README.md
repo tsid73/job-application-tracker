@@ -8,9 +8,11 @@ Self-hostable job application tracking app with a small dependency surface.
 - Upload and manage CV versions.
 - Preserve the exact CV used for each application, even if newer CVs are uploaded later.
 - Archive, restore, delete, and view archived entries.
-- View reminders in a full month calendar.
+- View reminders in a full month calendar and surface in-app interview and follow-up notifications.
 - Use Kanban, reports, CSV import/export, and a searchable activity log.
-- Generate AI-assisted tailored CV drafts, cover letters, role-fit analysis, and follow-up emails.
+- Save reusable filter presets for repeated searches.
+- Generate AI-assisted tailored CV drafts, cover letters, role-fit analysis, ATS checks, and follow-up emails with stored trace metadata.
+- Keep destructive actions in a dedicated audit trail separate from the general activity log.
 
 ## Tech Stack
 
@@ -146,6 +148,36 @@ Run syntax checks:
 npm run check
 ```
 
+Run Playwright end to end tests:
+
+```bash
+npm run test:e2e
+```
+
+Create a backup:
+
+```bash
+npm run db:backup
+```
+
+Restore from a backup bundle directory:
+
+```bash
+npm run db:restore -- /absolute/path/to/backup-directory
+```
+
+Preview generated-file cleanup without deleting anything:
+
+```bash
+npm run cleanup:generated
+```
+
+Apply the cleanup policy:
+
+```bash
+npm run cleanup:generated -- --apply
+```
+
 ### PostgreSQL Local Mode
 
 Start PostgreSQL with Docker:
@@ -192,6 +224,16 @@ PGLITE_DATA_DIR=data/pglite
 DATABASE_URL=postgres://postgres:postgres@localhost:5432/job_tracker
 UPLOAD_DIR=uploads
 MAX_UPLOAD_BYTES=5242880
+MAX_JSON_BYTES=262144
+MAX_AI_BYTES=131072
+GENERAL_RATE_LIMIT_WINDOW_MS=60000
+GENERAL_RATE_LIMIT_MAX=120
+AI_RATE_LIMIT_WINDOW_MS=60000
+AI_RATE_LIMIT_MAX=12
+UPLOAD_RATE_LIMIT_WINDOW_MS=60000
+UPLOAD_RATE_LIMIT_MAX=10
+AI_DOCUMENT_RETENTION_DAYS=60
+KEEP_LATEST_AI_DOCUMENTS_PER_APPLICATION=5
 AI_PROVIDER=mock
 AI_API_BASE_URL=http://localhost:11434/v1
 AI_API_KEY=
@@ -216,6 +258,15 @@ AI_API_BASE_URL=http://localhost:11434/v1
 AI_API_KEY=
 AI_MODEL=your-local-model
 ```
+
+Notes:
+
+- CV uploads are limited to verified `PDF` and `DOCX` files and duplicate uploads are rejected by content hash.
+- AI routes and upload routes are rate-limited separately from general API traffic.
+- AI-generated documents now store provider, model, prompt excerpt, and source context for traceability.
+- Backup bundles now include both the database and the `uploads/` tree, so restores recover CVs and generated documents together.
+- Destructive actions such as archive, restore, and permanent deletion are written to `audit_events` with actor IP and user agent.
+- Generated AI documents can be pruned with the retention script, which also removes orphaned files from `uploads/ai`.
 
 Do not commit `.env`.
 

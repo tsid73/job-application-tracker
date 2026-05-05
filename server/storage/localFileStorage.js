@@ -2,6 +2,7 @@ import { createReadStream } from 'node:fs';
 import { mkdir, unlink, writeFile } from 'node:fs/promises';
 import { basename, extname, join, resolve } from 'node:path';
 import { randomUUID } from 'node:crypto';
+import { createHash } from 'node:crypto';
 import { config } from '../config.js';
 
 const allowedExtensions = new Set(['.pdf', '.docx']);
@@ -13,6 +14,7 @@ const allowedMimeTypes = new Set([
 
 export class LocalFileStorage {
   constructor(baseDir = config.uploadDir) {
+    this.configUploadDir = config.uploadDir;
     this.baseDir = resolve(process.cwd(), baseDir);
     this.cvDir = join(this.baseDir, 'cv');
     this.aiDir = join(this.baseDir, 'ai');
@@ -22,8 +24,9 @@ export class LocalFileStorage {
     validateCVFile(file);
     await mkdir(this.cvDir, { recursive: true });
 
-    const extension = extname(file.filename).toLowerCase();
-    const safeBaseName = basename(file.filename, extension)
+    const originalName = sanitizeOriginalName(file.filename);
+    const extension = extname(originalName).toLowerCase();
+    const safeBaseName = basename(originalName, extension)
       .replace(/[^a-z0-9_-]+/gi, '-')
       .replace(/^-+|-+$/g, '')
       .slice(0, 80) || 'cv';
@@ -33,9 +36,10 @@ export class LocalFileStorage {
 
     return {
       relativePath: join(config.uploadDir, 'cv', storedName).replace(/\\/g, '/'),
-      originalName: basename(file.filename),
+      originalName,
       mimeType: normalizeMimeType(file),
-      fileSize: file.size
+      fileSize: file.size,
+      fileHash: createHash('sha256').update(file.buffer).digest('hex')
     };
   }
 
@@ -65,8 +69,8 @@ export class LocalFileStorage {
 
   resolveSafe(relativePath) {
     const absolutePath = resolve(process.cwd(), relativePath);
-    const allowedRoot = resolve(process.cwd());
-    if (!absolutePath.startsWith(allowedRoot)) {
+    const allowedRoot = this.baseDir;
+    if (absolutePath !== allowedRoot && !absolutePath.startsWith(`${allowedRoot}/`) && !absolutePath.startsWith(`${allowedRoot}\\`)) {
       const error = new Error('Invalid file path');
       error.statusCode = 400;
       throw error;
@@ -88,7 +92,8 @@ function validateCVFile(file) {
     throw error;
   }
 
-  const extension = extname(file.filename).toLowerCase();
+  const originalName = sanitizeOriginalName(file.filename);
+  const extension = extname(originalName).toLowerCase();
   if (!allowedExtensions.has(extension) || !allowedMimeTypes.has(file.mimeType)) {
     const error = new Error('CV must be a PDF or DOCX file');
     error.statusCode = 400;
@@ -105,7 +110,22 @@ function validateCVFile(file) {
 }
 
 function normalizeMimeType(file) {
-  const extension = extname(file.filename).toLowerCase();
+  const extension = extname(sanitizeOriginalName(file.filename)).toLowerCase();
   if (extension === '.pdf') return 'application/pdf';
   return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+}
+
+function sanitizeOriginalName(filename) {
+  const cleaned = basename(String(filename || ''))
+    .replace(/[\u0000-\u001f\u007f]+/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  if (!cleaned || cleaned === '.' || cleaned === '..') {
+    const error = new Error('Invalid CV filename');
+    error.statusCode = 400;
+    throw error;
+  }
+
+  return cleaned.slice(0, 160);
 }

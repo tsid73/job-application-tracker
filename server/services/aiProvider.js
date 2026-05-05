@@ -16,12 +16,17 @@ export class AIProvider {
   async generateFollowUpEmail() {
     throw new Error('generateFollowUpEmail is not implemented');
   }
+
+  async checkATS() {
+    throw new Error('checkATS is not implemented');
+  }
 }
 
 class MockAIProvider extends AIProvider {
   async generateCV({ jobDescription, cv }) {
     return {
       provider: 'mock',
+      model: 'mock-local-model',
       content: [
         'Tailored CV draft',
         '',
@@ -39,6 +44,7 @@ class MockAIProvider extends AIProvider {
   async generateCoverLetter({ jobDescription, cv }) {
     return {
       provider: 'mock',
+      model: 'mock-local-model',
       content: [
         'Dear hiring team,',
         '',
@@ -57,6 +63,7 @@ class MockAIProvider extends AIProvider {
   async scoreRoleFit({ jobDescription, cv }) {
     return {
       provider: 'mock',
+      model: 'mock-local-model',
       content: [
         'Role fit score: 72/100',
         '',
@@ -79,6 +86,7 @@ class MockAIProvider extends AIProvider {
   async generateFollowUpEmail({ jobDescription, cv }) {
     return {
       provider: 'mock',
+      model: 'mock-local-model',
       content: [
         'Subject: Follow-up on my application',
         '',
@@ -90,6 +98,35 @@ class MockAIProvider extends AIProvider {
         '',
         'Thank you for your time,',
         '[Your Name]'
+      ].join('\n')
+    };
+  }
+
+  async checkATS({ jobDescription, cv }) {
+    return {
+      provider: 'mock',
+      model: 'mock-local-model',
+      content: [
+        'ATS score: 78/100',
+        '',
+        'Match summary:',
+        '- Core backend and API terms overlap with the role.',
+        '- Quantified outcomes are limited and should be expanded.',
+        '- Several exact keywords from the posting are missing.',
+        '',
+        'Missing keywords:',
+        '- REST APIs',
+        '- CI/CD',
+        '- monitoring',
+        '- TypeScript',
+        '',
+        'Suggested CV changes:',
+        '- Add an exact skills section using the job description language.',
+        '- Add 3 to 5 measurable impact bullets.',
+        '- Move the most relevant stack terms into the top third of the CV.',
+        '',
+        'Basis:',
+        summarize(`${jobDescription}\n\n${cv.extracted_text || ''}`)
       ].join('\n')
     };
   }
@@ -132,6 +169,17 @@ class OpenAICompatibleProvider extends AIProvider {
     ].join('\n\n'));
   }
 
+  async checkATS({ jobDescription, cv }) {
+    return this.chat([
+      'Act as an ATS reviewer. Score this CV for the target role from 0 to 100.',
+      'Then return these sections in plain text: ATS score, match summary, missing keywords, matched keywords, weak areas, and specific CV rewrite suggestions.',
+      'Keep it concise, practical, and editable.',
+      `CV file selected: ${cv.original_name}`,
+      `Extracted CV text:\n${cv.extracted_text || 'No extracted CV text available.'}`,
+      `Job description:\n${jobDescription}`
+    ].join('\n\n'));
+  }
+
   async chat(prompt) {
     const response = await fetch(`${config.aiApiBaseUrl.replace(/\/$/, '')}/chat/completions`, {
       method: 'POST',
@@ -155,6 +203,7 @@ class OpenAICompatibleProvider extends AIProvider {
     const payload = await response.json();
     return {
       provider: 'openai-compatible',
+      model: config.aiModel,
       content: payload.choices?.[0]?.message?.content || ''
     };
   }

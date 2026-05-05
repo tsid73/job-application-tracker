@@ -1,23 +1,28 @@
 import http from 'node:http';
 import { join } from 'node:path';
 import { statSync } from 'node:fs';
-import { readFile } from 'node:fs/promises';
 import { config } from './config.js';
 import { pool } from './db/pool.js';
 import { sendError, sendJson, readJson, readMultipart, serveStatic } from './utils/http.js';
-import { cleanString, parseDate, parseTags, validateStatus, validateUrl } from './utils/validation.js';
+import { cleanString, validateStatus } from './utils/validation.js';
+import { createRequestGuard } from './utils/requestGuards.js';
+import { csvEscape, parseCsv, changedApplicationFields, dateForLog } from './utils/text.js';
 import { LocalFileStorage } from './storage/localFileStorage.js';
 import { createAIProvider } from './services/aiProvider.js';
-import { extractCVText } from './services/cvTextExtractor.js';
-import { createDocxBuffer } from './services/docx.js';
+import { createAuditLogger } from './services/audit.js';
+import { normalizeApplicationInput, resolveApplicationCV, replaceTags, logActivity, ensureUniqueCVUpload } from './services/applicationHelpers.js';
+import { readAIInput, saveAIDocument } from './services/aiDocuments.js';
 
 const publicDir = join(process.cwd(), 'public');
 const storage = new LocalFileStorage();
 const aiProvider = createAIProvider();
+const enforceRequestGuards = createRequestGuard({ config });
+const audit = createAuditLogger(pool);
 
 const server = http.createServer(async (req, res) => {
   try {
     const url = new URL(req.url, `http://${req.headers.host}`);
+    enforceRequestGuards(req, url);
 
     if (url.pathname.startsWith('/api/')) {
       await routeApi(req, res, url);
@@ -40,8 +45,13 @@ async function routeApi(req, res, url) {
 
   if (method === 'GET' && path === '/api/health') return sendJson(res, 200, { ok: true });
   if (method === 'GET' && path === '/api/reminders') return getReminders(req, res);
+  if (method === 'GET' && path === '/api/notifications') return getNotifications(req, res);
   if (method === 'GET' && path === '/api/reports') return getReports(req, res);
   if (method === 'GET' && path === '/api/activity') return getActivity(req, res, url);
+  if (method === 'GET' && path === '/api/audit') return getAudit(req, res, url);
+  if (method === 'GET' && path === '/api/saved-filters') return getSavedFilters(req, res);
+  if (method === 'POST' && path === '/api/saved-filters') return createSavedFilter(req, res);
+  if (method === 'DELETE' && /^\/api\/saved-filters\/\d+$/.test(path)) return deleteSavedFilter(req, res, pathId(path));
   if (method === 'GET' && path === '/api/export/applications.csv') return exportApplicationsCsv(req, res);
   if (method === 'POST' && path === '/api/import/applications') return importApplicationsCsv(req, res);
   if (method === 'GET' && path === '/api/applications') return getApplications(req, res, url);
@@ -61,6 +71,7 @@ async function routeApi(req, res, url) {
   if (method === 'POST' && path === '/api/ai/generate-cv') return generateCV(req, res);
   if (method === 'POST' && path === '/api/ai/generate-cover-letter') return generateCoverLetter(req, res);
   if (method === 'POST' && path === '/api/ai/role-fit') return scoreRoleFit(req, res);
+  if (method === 'POST' && path === '/api/ai/ats-check') return checkATS(req, res);
   if (method === 'POST' && path === '/api/ai/follow-up-email') return generateFollowUpEmail(req, res);
   if (method === 'GET' && /^\/api\/ai\/documents\/\d+\/download$/.test(path)) return downloadAIDocument(req, res, pathId(path));
 
@@ -90,6 +101,109 @@ async function getReminders(req, res) {
     `
   );
   sendJson(res, 200, { reminders: result.rows });
+}
+
+async function getNotifications(req, res) {
+  const [upcomingInterviews, followUps] = await Promise.all([
+    pool.query(
+      `
+        SELECT
+          id,
+          company_name,
+          status,
+          to_char(interview_date, 'YYYY-MM-DD') AS due_date,
+          interview_date - CURRENT_DATE AS days_remaining,
+          'interview' AS type,
+          'Upcoming interview scheduled' AS message
+        FROM applications
+        WHERE archived_at IS NULL
+          AND status = 'interview_scheduled'
+          AND interview_date IS NOT NULL
+          AND interview_date <= CURRENT_DATE + INTERVAL '7 days'
+        ORDER BY interview_date ASC
+        LIMIT 6
+      `
+    ),
+    pool.query(
+      `
+        SELECT
+          id,
+          company_name,
+          status,
+          to_char(applied_date + INTERVAL '7 days', 'YYYY-MM-DD') AS due_date,
+          CURRENT_DATE - applied_date AS days_remaining,
+          'follow_up' AS type,
+          'No recent update. Consider a follow-up.' AS message
+        FROM applications
+        WHERE archived_at IS NULL
+          AND status IN ('applied', 'ghosted')
+          AND applied_date <= CURRENT_DATE - INTERVAL '7 days'
+          AND NOT EXISTS (
+            SELECT 1
+            FROM activity_logs al
+            WHERE al.application_id = applications.id
+              AND al.created_at >= now() - INTERVAL '7 days'
+              AND al.action IN ('note_added', 'status_changed', 'interview_date_changed', 'details_updated', 'ai_follow_up_email')
+          )
+        ORDER BY applied_date ASC
+        LIMIT 6
+      `
+    )
+  ]);
+
+  sendJson(res, 200, {
+    notifications: [...upcomingInterviews.rows, ...followUps.rows]
+      .sort((left, right) => String(left.due_date || '').localeCompare(String(right.due_date || '')))
+      .slice(0, 8)
+  });
+}
+
+async function getSavedFilters(req, res) {
+  const result = await pool.query(
+    `
+      SELECT id, name, search, status, tag, archived, created_at, updated_at
+      FROM saved_filters
+      ORDER BY lower(name) ASC, id ASC
+    `
+  );
+  sendJson(res, 200, { filters: result.rows });
+}
+
+async function createSavedFilter(req, res) {
+  const body = await readJson(req, 32 * 1024);
+  const name = cleanString(body.name);
+  if (!name) return sendError(res, 400, 'Filter name is required');
+
+  const search = cleanString(body.search);
+  const status = cleanString(body.status);
+  const tag = cleanString(body.tag);
+  const archived = cleanString(body.archived) || 'false';
+
+  if (status) validateStatus(status);
+  if (!['false', 'true', 'all'].includes(archived)) return sendError(res, 400, 'archived must be false, true, or all');
+
+  const result = await pool.query(
+    `
+      INSERT INTO saved_filters (name, search, status, tag, archived)
+      VALUES ($1, $2, $3, $4, $5)
+      ON CONFLICT (name)
+      DO UPDATE SET
+        search = EXCLUDED.search,
+        status = EXCLUDED.status,
+        tag = EXCLUDED.tag,
+        archived = EXCLUDED.archived
+      RETURNING id, name, search, status, tag, archived, created_at, updated_at
+    `,
+    [name, search, status, tag, archived]
+  );
+
+  sendJson(res, 201, { filter: result.rows[0] });
+}
+
+async function deleteSavedFilter(req, res, id) {
+  const result = await pool.query('DELETE FROM saved_filters WHERE id = $1 RETURNING id', [id]);
+  if (!result.rowCount) return sendError(res, 404, 'Saved filter not found');
+  sendJson(res, 200, { ok: true });
 }
 
 async function getReports(req, res) {
@@ -186,6 +300,16 @@ async function getActivity(req, res, url) {
     limit,
     total: result.rows[0]?.total || 0
   });
+}
+
+async function getAudit(req, res, url) {
+  const applicationId = Number(url.searchParams.get('application_id'));
+  const limit = Math.min(100, Math.max(5, Number(url.searchParams.get('limit')) || 25));
+  const events = await audit.list({
+    applicationId: Number.isInteger(applicationId) ? applicationId : null,
+    limit
+  });
+  sendJson(res, 200, { audit: events });
 }
 
 async function exportApplicationsCsv(req, res) {
@@ -354,7 +478,7 @@ async function getApplication(req, res, id) {
 
   if (!application.rowCount) return sendError(res, 404, 'Application not found');
 
-  const [cvs, history, notes, tags, activity, aiDocuments] = await Promise.all([
+  const [cvs, history, notes, tags, activity, aiDocuments, auditEvents] = await Promise.all([
     pool.query(
       `
         SELECT c.id, c.original_name, c.version_label, c.file_size, c.created_at, ac.linked_at, length(c.extracted_text) AS extracted_text_length
@@ -404,13 +528,23 @@ async function getApplication(req, res, id) {
     ),
     pool.query(
       `
-        SELECT id, document_type, title, created_at, file_path IS NOT NULL AS has_file
+        SELECT
+          id,
+          document_type,
+          title,
+          created_at,
+          file_path IS NOT NULL AS has_file,
+          provider_name,
+          model_name,
+          prompt_excerpt,
+          source_context
         FROM ai_documents
         WHERE application_id = $1
         ORDER BY created_at DESC
       `,
       [id]
-    )
+    ),
+    audit.list({ applicationId: id, limit: 20 })
   ]);
 
   sendJson(res, 200, {
@@ -420,6 +554,7 @@ async function getApplication(req, res, id) {
     notes: notes.rows,
     activity: activity.rows,
     ai_documents: aiDocuments.rows,
+    audit_events: auditEvents,
     tags: tags.rows.map((row) => row.name)
   });
 }
@@ -430,12 +565,18 @@ async function createApplication(req, res) {
     ? await readApplicationMultipart(req)
     : { fields: await readJson(req, config.maxUploadBytes), file: null };
 
-  const data = normalizeApplicationInput(payload.fields, true);
+  const data = normalizeApplicationInput(payload.fields);
   const client = await pool.connect();
 
   try {
     await client.query('BEGIN');
-    const cvId = await resolveApplicationCV(client, payload.file, data.cv_id, data.cv_version_label);
+    const cvId = await resolveApplicationCV({
+      client,
+      storage,
+      file: payload.file,
+      selectedCvId: data.cv_id,
+      versionLabel: data.cv_version_label
+    });
 
     const created = await client.query(
       `
@@ -497,7 +638,7 @@ async function updateApplication(req, res, id) {
 
   const body = await readJson(req, 256 * 1024);
   const previous = current.rows[0];
-  const data = normalizeApplicationInput({ ...current.rows[0], ...body }, false);
+  const data = normalizeApplicationInput({ ...current.rows[0], ...body });
   const client = await pool.connect();
 
   try {
@@ -573,6 +714,13 @@ async function deleteApplication(req, res, id) {
     'INSERT INTO activity_logs (application_id, action, details) VALUES ($1, $2, $3)',
     [id, 'deleted', `Deleted application for ${existing.rows[0].company_name}`]
   );
+  await audit.log(req, {
+    applicationId: id,
+    targetType: 'application',
+    targetId: id,
+    action: 'delete',
+    details: `Deleted application for ${existing.rows[0].company_name}`
+  });
   await pool.query('DELETE FROM applications WHERE id = $1', [id]);
   sendJson(res, 200, { ok: true });
 }
@@ -589,6 +737,13 @@ async function archiveApplication(req, res, id) {
   );
   if (!result.rowCount) return sendError(res, 404, 'Application not found');
   await pool.query('INSERT INTO activity_logs (application_id, action, details) VALUES ($1, $2, $3)', [id, 'archived', `Archived application for ${result.rows[0].company_name}`]);
+  await audit.log(req, {
+    applicationId: id,
+    targetType: 'application',
+    targetId: id,
+    action: 'archive',
+    details: `Archived application for ${result.rows[0].company_name}`
+  });
   return getApplication(req, res, id);
 }
 
@@ -604,6 +759,13 @@ async function restoreApplication(req, res, id) {
   );
   if (!result.rowCount) return sendError(res, 404, 'Application not found');
   await pool.query('INSERT INTO activity_logs (application_id, action, details) VALUES ($1, $2, $3)', [id, 'restored', `Restored application for ${result.rows[0].company_name}`]);
+  await audit.log(req, {
+    applicationId: id,
+    targetType: 'application',
+    targetId: id,
+    action: 'restore',
+    details: `Restored application for ${result.rows[0].company_name}`
+  });
   return getApplication(req, res, id);
 }
 
@@ -649,22 +811,24 @@ async function createCV(req, res) {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
+    await ensureUniqueCVUpload(client, saved);
     const existingLatest = await client.query('SELECT 1 FROM cv_versions WHERE is_latest = TRUE LIMIT 1');
     const isLatest = makeLatest || !existingLatest.rowCount;
     if (isLatest) await client.query('UPDATE cv_versions SET is_latest = FALSE WHERE is_latest = TRUE');
 
     const result = await client.query(
       `
-        INSERT INTO cv_versions (file_path, original_name, mime_type, file_size, version_label, is_latest, extracted_text)
-        VALUES ($1, $2, $3, $4, $5, $6, $7)
+        INSERT INTO cv_versions (file_path, original_name, mime_type, file_size, version_label, is_latest, extracted_text, file_hash)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
         RETURNING id, original_name, version_label, file_size, is_latest, created_at
       `,
-      [saved.relativePath, saved.originalName, saved.mimeType, saved.fileSize, versionLabel, isLatest, extractedText]
+      [saved.relativePath, saved.originalName, saved.mimeType, saved.fileSize, versionLabel, isLatest, extractedText, saved.fileHash]
     );
     await client.query('COMMIT');
     sendJson(res, 201, { cv: result.rows[0] });
   } catch (error) {
     await client.query('ROLLBACK');
+    await storage.remove(saved.relativePath);
     throw error;
   } finally {
     client.release();
@@ -690,6 +854,12 @@ async function deleteCV(req, res, id) {
 
   await storage.remove(cv.rows[0].file_path);
   await pool.query('DELETE FROM cv_versions WHERE id = $1', [id]);
+  await audit.log(req, {
+    targetType: 'cv',
+    targetId: id,
+    action: 'delete',
+    details: `Deleted CV ${id}`
+  });
 
   if (cv.rows[0].is_latest) {
     await pool.query(
@@ -726,30 +896,37 @@ async function downloadCV(req, res, id) {
 }
 
 async function generateCV(req, res) {
-  const input = await readAIInput(req);
+  const input = await readAIRequest(req);
   const output = await aiProvider.generateCV(input);
-  const document = await saveAIDocument({ ...input, type: 'tailored_cv', title: `Tailored CV - ${input.application?.company_name || input.cv.original_name}`, content: output.content });
+  const document = await persistAIDocument({ ...input, type: 'tailored_cv', title: `Tailored CV - ${input.application?.company_name || input.cv.original_name}`, content: output.content, output });
   sendJson(res, 200, { ...output, document });
 }
 
 async function generateCoverLetter(req, res) {
-  const input = await readAIInput(req);
+  const input = await readAIRequest(req);
   const output = await aiProvider.generateCoverLetter(input);
-  const document = await saveAIDocument({ ...input, type: 'cover_letter', title: `Cover Letter - ${input.application?.company_name || input.cv.original_name}`, content: output.content });
+  const document = await persistAIDocument({ ...input, type: 'cover_letter', title: `Cover Letter - ${input.application?.company_name || input.cv.original_name}`, content: output.content, output });
   sendJson(res, 200, { ...output, document });
 }
 
 async function scoreRoleFit(req, res) {
-  const input = await readAIInput(req);
+  const input = await readAIRequest(req);
   const output = await aiProvider.scoreRoleFit(input);
-  const document = await saveAIDocument({ ...input, type: 'role_fit', title: `Role Fit - ${input.application?.company_name || input.cv.original_name}`, content: output.content });
+  const document = await persistAIDocument({ ...input, type: 'role_fit', title: `Role Fit - ${input.application?.company_name || input.cv.original_name}`, content: output.content, output });
+  sendJson(res, 200, { ...output, document });
+}
+
+async function checkATS(req, res) {
+  const input = await readAIRequest(req);
+  const output = await aiProvider.checkATS(input);
+  const document = await persistAIDocument({ ...input, type: 'ats_check', title: `ATS Check - ${input.application?.company_name || input.cv.original_name}`, content: output.content, output });
   sendJson(res, 200, { ...output, document });
 }
 
 async function generateFollowUpEmail(req, res) {
-  const input = await readAIInput(req);
+  const input = await readAIRequest(req);
   const output = await aiProvider.generateFollowUpEmail(input);
-  const document = await saveAIDocument({ ...input, type: 'follow_up_email', title: `Follow-up Email - ${input.application?.company_name || input.cv.original_name}`, content: output.content });
+  const document = await persistAIDocument({ ...input, type: 'follow_up_email', title: `Follow-up Email - ${input.application?.company_name || input.cv.original_name}`, content: output.content, output });
   sendJson(res, 200, { ...output, document });
 }
 
@@ -768,282 +945,24 @@ async function downloadAIDocument(req, res, id) {
   storage.open(doc.file_path).pipe(res);
 }
 
-async function readAIInput(req) {
-  const body = await readJson(req, 256 * 1024);
-  let jobDescription = cleanString(body.job_description);
-  let cvId = Number(body.cv_id);
-  const applicationId = Number(body.application_id);
-  let application = null;
-
-  if (Number.isInteger(applicationId)) {
-    const app = await pool.query(
-      `
-        SELECT id, company_name, job_description
-        FROM applications
-        WHERE id = $1
-      `,
-      [applicationId]
-    );
-    if (!app.rowCount) {
-      const error = new Error('Application not found');
-      error.statusCode = 404;
-      throw error;
-    }
-    application = app.rows[0];
-    jobDescription ||= cleanString(application.job_description);
-
-    if (!Number.isInteger(cvId)) {
-      const linkedCv = await pool.query(
-        `
-          SELECT cv_id
-          FROM application_cvs
-          WHERE application_id = $1
-          ORDER BY linked_at DESC
-          LIMIT 1
-        `,
-        [applicationId]
-      );
-      if (linkedCv.rowCount) cvId = Number(linkedCv.rows[0].cv_id);
-    }
-  }
-
-  if (!jobDescription) {
-    const error = new Error('Job description is required');
-    error.statusCode = 400;
-    throw error;
-  }
-  if (!Number.isInteger(cvId)) {
-    const error = new Error('cv_id is required');
-    error.statusCode = 400;
-    throw error;
-  }
-
-  const cv = await pool.query(
-    'SELECT id, original_name, version_label, extracted_text, file_path FROM cv_versions WHERE id = $1 AND deleted_at IS NULL',
-    [cvId]
-  );
-  if (!cv.rowCount) {
-    const error = new Error('CV not found');
-    error.statusCode = 404;
-    throw error;
-  }
-
-  const cvRow = cv.rows[0];
-  if (!cvRow.extracted_text) {
-    const buffer = await readFile(storage.resolveSafe(cvRow.file_path)).catch(() => null);
-    if (buffer) {
-      cvRow.extracted_text = await extractCVText({ filename: cvRow.original_name, buffer });
-      await pool.query('UPDATE cv_versions SET extracted_text = $1 WHERE id = $2', [cvRow.extracted_text, cvRow.id]);
-    }
-  }
-
-  return { jobDescription, cv: cvRow, application };
+async function readAIRequest(req) {
+  return readAIInput({ req, pool, storage, readJson, cleanString, config });
 }
 
-async function saveAIDocument({ application, cv, type, title, content }) {
-  const buffer = await createDocxBuffer(title, content);
-  const filePath = await storage.saveGeneratedDocx(buffer, title);
-  const result = await pool.query(
-    `
-      INSERT INTO ai_documents (application_id, cv_id, document_type, title, content, file_path)
-      VALUES ($1, $2, $3, $4, $5, $6)
-      RETURNING id, document_type, title, created_at
-    `,
-    [application?.id || null, cv.id, type, title, content, filePath]
-  );
-  if (application?.id) {
-    await pool.query('INSERT INTO activity_logs (application_id, action, details) VALUES ($1, $2, $3)', [application.id, `ai_${type}`, title]);
+async function persistAIDocument(payload) {
+  const document = await saveAIDocument({ pool, storage, config, ...payload });
+  if (payload.application?.id) {
+    await pool.query(
+      'INSERT INTO activity_logs (application_id, action, details) VALUES ($1, $2, $3)',
+      [payload.application.id, `ai_${payload.type}`, `${payload.title} via ${payload.output?.provider || config.aiProvider}/${payload.output?.model || config.aiModel}`]
+    );
   }
-  return { ...result.rows[0], download_url: `/api/ai/documents/${result.rows[0].id}/download` };
+  return document;
 }
 
 async function readApplicationMultipart(req) {
   const { fields, files } = await readMultipart(req, config.maxUploadBytes + 512 * 1024);
   return { fields, file: files.cv || null };
-}
-
-function normalizeApplicationInput(fields, isCreate) {
-  const companyName = cleanString(fields.company_name);
-  if (!companyName) {
-    const error = new Error('Company name is required');
-    error.statusCode = 400;
-    throw error;
-  }
-
-  const jobLink = validateUrl(fields.job_link);
-  const jobDescription = cleanString(fields.job_description);
-  if (!jobLink && !jobDescription) {
-    const error = new Error('At least one of job link or job description is required');
-    error.statusCode = 400;
-    throw error;
-  }
-
-  const status = validateStatus(fields.status);
-  const interviewDate = parseDate(fields.interview_date, 'interview_date');
-  if (status === 'interview_scheduled' && !interviewDate) {
-    const error = new Error('Interview date is required when status is interview_scheduled');
-    error.statusCode = 400;
-    throw error;
-  }
-  if (status !== 'interview_scheduled' && interviewDate) {
-    const error = new Error('Interview date is only allowed when status is interview_scheduled');
-    error.statusCode = 400;
-    throw error;
-  }
-
-  return {
-    company_name: companyName,
-    job_link: jobLink,
-    job_description: jobDescription,
-    status,
-    salary: cleanString(fields.salary),
-    location: cleanString(fields.location),
-    recruiter: cleanString(fields.recruiter),
-    contact_person: cleanString(fields.contact_person),
-    applied_date: parseDate(fields.applied_date, 'applied_date') || today(),
-    interview_date: status === 'interview_scheduled' ? interviewDate : null,
-    notes: cleanString(fields.notes),
-    cv_id: Number(fields.cv_id) || null,
-    cv_version_label: cleanString(fields.cv_version_label),
-    tags: parseTags(fields.tags),
-    isCreate
-  };
-}
-
-async function resolveApplicationCV(client, file, selectedCvId, versionLabel) {
-  if (file) {
-    const saved = await storage.saveCV(file);
-    const extractedText = await extractCVText(file);
-    await client.query('UPDATE cv_versions SET is_latest = FALSE WHERE is_latest = TRUE');
-    const inserted = await client.query(
-      `
-        INSERT INTO cv_versions (file_path, original_name, mime_type, file_size, version_label, is_latest, extracted_text)
-        VALUES ($1, $2, $3, $4, $5, TRUE, $6)
-        RETURNING id
-      `,
-      [saved.relativePath, saved.originalName, saved.mimeType, saved.fileSize, versionLabel, extractedText]
-    );
-    return inserted.rows[0].id;
-  }
-
-  if (selectedCvId) {
-    const selected = await client.query('SELECT id FROM cv_versions WHERE id = $1 AND deleted_at IS NULL', [selectedCvId]);
-    if (!selected.rowCount) {
-      const error = new Error('Selected CV not found');
-      error.statusCode = 400;
-      throw error;
-    }
-    return selectedCvId;
-  }
-
-  const latest = await client.query('SELECT id FROM cv_versions WHERE is_latest = TRUE AND deleted_at IS NULL LIMIT 1');
-  if (latest.rowCount) return latest.rows[0].id;
-
-  const error = new Error('Upload a CV or create a CV version before adding an application');
-  error.statusCode = 400;
-  throw error;
-}
-
-async function replaceTags(client, applicationId, tags) {
-  await client.query('DELETE FROM application_tags WHERE application_id = $1', [applicationId]);
-  for (const tag of tags) {
-    const tagResult = await client.query(
-      `
-        INSERT INTO tags (name)
-        VALUES ($1)
-        ON CONFLICT (name) DO UPDATE SET name = EXCLUDED.name
-        RETURNING id
-      `,
-      [tag]
-    );
-    await client.query(
-      'INSERT INTO application_tags (application_id, tag_id) VALUES ($1, $2) ON CONFLICT DO NOTHING',
-      [applicationId, tagResult.rows[0].id]
-    );
-  }
-}
-
-async function logActivity(client, applicationId, action, details) {
-  await client.query(
-    'INSERT INTO activity_logs (application_id, action, details) VALUES ($1, $2, $3)',
-    [applicationId, action, details]
-  );
-}
-
-function changedApplicationFields(previous, next) {
-  const fields = [
-    ['company_name', 'company'],
-    ['job_link', 'job link'],
-    ['job_description', 'job description'],
-    ['salary', 'salary'],
-    ['location', 'location'],
-    ['recruiter', 'recruiter'],
-    ['contact_person', 'contact person'],
-    ['applied_date', 'applied date'],
-    ['notes', 'notes']
-  ];
-
-  return fields
-    .filter(([key]) => normalizedForLog(previous[key]) !== normalizedForLog(next[key]))
-    .map(([, label]) => label);
-}
-
-function normalizedForLog(value) {
-  if (value === undefined || value === null || value === '') return '';
-  if (value instanceof Date) return value.toISOString().slice(0, 10);
-  return String(value).trim();
-}
-
-function dateForLog(value) {
-  return normalizedForLog(value) || 'none';
-}
-
-function csvEscape(value) {
-  const text = value === null || value === undefined ? '' : String(value);
-  if (/[",\n\r]/.test(text)) return `"${text.replaceAll('"', '""')}"`;
-  return text;
-}
-
-function parseCsv(text) {
-  const rows = [];
-  let row = [];
-  let value = '';
-  let inQuotes = false;
-
-  for (let index = 0; index < text.length; index += 1) {
-    const char = text[index];
-    const next = text[index + 1];
-
-    if (char === '"' && inQuotes && next === '"') {
-      value += '"';
-      index += 1;
-    } else if (char === '"') {
-      inQuotes = !inQuotes;
-    } else if (char === ',' && !inQuotes) {
-      row.push(value);
-      value = '';
-    } else if ((char === '\n' || char === '\r') && !inQuotes) {
-      if (char === '\r' && next === '\n') index += 1;
-      row.push(value);
-      if (row.some((cell) => cell.trim())) rows.push(row);
-      row = [];
-      value = '';
-    } else {
-      value += char;
-    }
-  }
-
-  row.push(value);
-  if (row.some((cell) => cell.trim())) rows.push(row);
-  return rows;
-}
-
-function today() {
-  const now = new Date();
-  const year = now.getFullYear();
-  const month = String(now.getMonth() + 1).padStart(2, '0');
-  const day = String(now.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
 }
 
 server.listen(config.port, () => {
