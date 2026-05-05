@@ -2,6 +2,16 @@
 
 Self-hostable job application tracking app with a small dependency surface.
 
+## Security Model
+
+This app is intentionally local-first and does not include authentication.
+
+Run it on `localhost` or behind your own trusted private network only. Do not expose it directly to the public internet unless you add authentication, authorization, rate limiting, and deployment hardening.
+
+Anyone who can access the running app can view, create, edit, delete, export, upload, and download all stored application data and CV files.
+
+AI features are optional. The default `AI_PROVIDER=mock` does not call an external model. If you configure Gemini, an OpenAI-compatible provider, Ollama, or another remote endpoint, the app may send CV text and job descriptions to that provider.
+
 ## What This App Does
 
 - Track job applications, status, interview dates, notes, tags, salary, location, recruiter, and contact person.
@@ -17,7 +27,7 @@ Self-hostable job application tracking app with a small dependency surface.
 ## Tech Stack
 
 - Backend: Node.js native HTTP server. No Express or heavy backend framework.
-- Database: PGlite by default for local use, PostgreSQL for production.
+- Database: PGlite by default for local use, PostgreSQL for private self-hosting.
 - Frontend: Vanilla HTML, CSS, and JavaScript. No frontend build step.
 - File storage: Local filesystem through a storage abstraction.
 - AI: Optional provider abstraction. Supports mock, OpenAI-compatible endpoints, and Gemini-compatible setup.
@@ -306,11 +316,13 @@ AI:
 - `POST /api/ai/role-fit`
 - `POST /api/ai/follow-up-email`
 
-## Production Deployment on VPS or AWS EC2
+## Private Self-Hosting on VPS or AWS EC2
 
-Use PostgreSQL for production. PGlite is useful for local use, but PostgreSQL is safer for server deployment, backups, and multi-process operation.
+This section is for private self-hosting only. The app has no built-in authentication. Do not expose it publicly unless you add authentication and harden the deployment.
 
-Recommended production pieces:
+Use PostgreSQL for private self-hosting. PGlite is useful for local use, but PostgreSQL is safer for server deployment, backups, and multi-process operation.
+
+Recommended private self-hosting pieces:
 
 - Ubuntu 22.04 or 24.04 VPS, AWS EC2, Lightsail, Hetzner, DigitalOcean, etc.
 - Node.js 20+
@@ -503,11 +515,11 @@ psql "$DATABASE_URL" < backup.sql
 
 ## AWS Notes
 
-Simple AWS setup:
+Simple private AWS setup:
 
 - EC2 Ubuntu instance for the Node app.
 - RDS PostgreSQL for the database.
-- Security group allows inbound `80` and `443`.
+- Security group allows inbound traffic only from trusted IPs, VPN, or a private reverse proxy.
 - EC2 can connect outbound to RDS on `5432`.
 - Store `.env` on the instance or use AWS Systems Manager Parameter Store.
 - Put uploads on the EC2 disk for simplest setup, or replace `LocalFileStorage` with S3 later.
@@ -558,9 +570,10 @@ AI_MODEL
 
 ## Security Notes
 
-- Add authentication before exposing the app publicly.
-- Use HTTPS.
+- Do not expose this app publicly without adding authentication. No auth is included by design.
+- Use HTTPS for any non-local deployment.
 - Keep `.env` private.
+- Treat uploaded CVs, generated documents, database files, and backups as sensitive personal data.
 - Back up PostgreSQL and uploads.
 - Limit upload size at both app and reverse proxy levels.
 - Run the app as a non-root user.
