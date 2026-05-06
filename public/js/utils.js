@@ -146,3 +146,46 @@ export function localToday() {
   const day = String(now.getDate()).padStart(2, '0');
   return `${year}-${month}-${day}`;
 }
+
+export function formatIsoDateForDisplay(value) {
+  if (!value) return '';
+  const match = String(value).match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return String(value);
+  return `${match[3]}-${match[2]}-${match[1]}`;
+}
+
+export function parseDisplayDateToIso(value) {
+  const digits = String(value || '').replace(/\D/g, '');
+  if (!digits) return '';
+  if (digits.length !== 8) return String(value || '').trim();
+
+  const day = digits.slice(0, 2);
+  const month = digits.slice(2, 4);
+  const year = digits.slice(4, 8);
+  const iso = `${year}-${month}-${day}`;
+  const date = new Date(`${iso}T00:00:00`);
+  if (Number.isNaN(date.getTime())) return String(value || '').trim();
+  if (date.getUTCFullYear() !== Number(year) || date.getUTCMonth() + 1 !== Number(month) || date.getUTCDate() !== Number(day)) {
+    return String(value || '').trim();
+  }
+  return iso;
+}
+
+export function attachDateMask(input) {
+  if (!input || input.dataset.dateMaskBound === 'true') return;
+  input.dataset.dateMaskBound = 'true';
+
+  const formatMaskedValue = () => {
+    const digits = input.value.replace(/\D/g, '').slice(0, 8);
+    const parts = [];
+    if (digits.length > 0) parts.push(digits.slice(0, 2));
+    if (digits.length > 2) parts.push(digits.slice(2, 4));
+    if (digits.length > 4) parts.push(digits.slice(4, 8));
+    input.value = parts.join('-');
+  };
+
+  input.addEventListener('input', formatMaskedValue);
+  input.addEventListener('paste', () => {
+    requestAnimationFrame(formatMaskedValue);
+  });
+}

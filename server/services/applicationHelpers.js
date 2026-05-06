@@ -33,6 +33,7 @@ export function normalizeApplicationInput(fields) {
 
   return {
     company_name: companyName,
+    role_title: cleanString(fields.role_title),
     job_link: jobLink,
     job_description: jobDescription,
     status,

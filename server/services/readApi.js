@@ -250,6 +250,7 @@ export function createReadApi({ pool, audit }) {
           SELECT
             a.id,
             a.company_name,
+            a.role_title,
             a.status,
             a.salary,
             a.location,
@@ -266,7 +267,7 @@ export function createReadApi({ pool, audit }) {
           LEFT JOIN tags t ON t.id = at.tag_id
           LEFT JOIN application_cvs ac ON ac.application_id = a.id
           LEFT JOIN cv_versions c ON c.id = ac.cv_id
-          WHERE ($1 = '' OR a.company_name ILIKE '%' || $1 || '%')
+          WHERE ($1 = '' OR a.company_name ILIKE '%' || $1 || '%' OR a.role_title ILIKE '%' || $1 || '%')
             AND ($2 = '' OR a.status = $2::application_status)
             AND ($3 = '' OR EXISTS (
               SELECT 1
@@ -300,6 +301,7 @@ export function createReadApi({ pool, audit }) {
           SELECT
             id,
             company_name,
+            role_title,
             job_link,
             job_description,
             status,

@@ -40,6 +40,57 @@ body {
   overflow-x: hidden;
 }
 
+@media (prefers-reduced-motion: no-preference) {
+  .surface-panel,
+  .view-panel,
+  .detail-section,
+  .prep-card,
+  .toolkit-card,
+  .board-card,
+  .notification-card,
+  .kanban-card,
+  .report-panel {
+    animation: rise-in 280ms ease both;
+  }
+
+  .view-tabs button,
+  button,
+  .board-card,
+  .prep-card,
+  .toolkit-card,
+  .notification-card,
+  .history-item,
+  .stack-item {
+    transition:
+      transform 160ms ease,
+      box-shadow 160ms ease,
+      background-color 160ms ease,
+      border-color 160ms ease,
+      opacity 160ms ease;
+  }
+
+  button:hover,
+  .board-card:hover,
+  .prep-card:hover,
+  .toolkit-card:hover,
+  .notification-card:hover,
+  .history-item:hover,
+  .stack-item:hover {
+    transform: translateY(-1px);
+  }
+}
+
+@keyframes rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 button,
 input,
 select,
@@ -83,13 +134,13 @@ button.icon-button:hover {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 20px;
-  padding: 28px 32px;
+  gap: 16px;
+  padding: 20px 24px;
   background:
     linear-gradient(135deg, rgba(20, 74, 102, 0.96), rgba(11, 48, 70, 0.86)),
     radial-gradient(circle at top left, rgba(255, 255, 255, 0.12), transparent 40%);
   border: 1px solid rgba(255, 255, 255, 0.18);
-  border-radius: 28px;
+  border-radius: 24px;
   color: white;
   box-shadow: var(--shadow-lg);
   backdrop-filter: blur(18px);
@@ -103,8 +154,8 @@ p {
 }
 
 h1 {
-  font-size: 32px;
-  line-height: 1.05;
+  font-size: 28px;
+  line-height: 1.02;
   letter-spacing: -0.03em;
 }
 
@@ -120,29 +171,29 @@ h3 {
 }
 
 .topbar p {
-  margin-top: 5px;
+  margin-top: 4px;
   color: rgba(240, 246, 251, 0.78);
 }
 
 .topbar-actions {
   display: flex;
   flex-wrap: wrap;
-  gap: 10px;
+  gap: 8px;
   align-items: flex-start;
 }
 
 .topbar-copy {
-  max-width: 680px;
+  max-width: 620px;
 }
 
 .eyebrow {
   display: inline-flex;
-  margin-bottom: 12px;
-  padding: 6px 12px;
+  margin-bottom: 8px;
+  padding: 5px 10px;
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.14);
   color: rgba(255, 255, 255, 0.86);
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 800;
   letter-spacing: 0.12em;
   text-transform: uppercase;
@@ -150,8 +201,8 @@ h3 {
 
 .hero-copy {
   max-width: 56ch;
-  font-size: 16px;
-  line-height: 1.6;
+  font-size: 14px;
+  line-height: 1.45;
 }
 
 .app-shell {
@@ -191,25 +242,72 @@ main {
 
 .notifications-panel {
   margin-bottom: 18px;
-  padding: 16px;
+  padding: 10px 12px;
   border: 1px solid rgba(217, 170, 56, 0.28);
-  border-radius: 24px;
+  border-radius: 20px;
   background: linear-gradient(180deg, rgba(255, 249, 234, 0.95), rgba(255, 255, 255, 0.88));
   box-shadow: var(--shadow-md);
   backdrop-filter: blur(16px);
 }
 
+.notifications-shell {
+  display: grid;
+  gap: 10px;
+}
+
 .notifications-header {
+  margin: 0;
+}
+
+.notifications-toggle {
+  width: 100%;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  margin-bottom: 12px;
+  padding: 10px 12px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.76);
+  color: var(--text);
+  border-color: rgba(217, 170, 56, 0.18);
+  box-shadow: none;
 }
 
-.notifications-header p {
-  margin-top: 4px;
+.notifications-toggle:hover {
+  background: rgba(255, 255, 255, 0.92);
+}
+
+.notifications-toggle-copy {
+  display: grid;
+  gap: 2px;
+  text-align: left;
+}
+
+.notifications-toggle-copy strong {
+  font-size: 14px;
+}
+
+.notifications-toggle-copy span {
   color: var(--muted);
+  font-size: 12px;
+}
+
+.notifications-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 32px;
+  height: 32px;
+  padding: 0 10px;
+  border-radius: 999px;
+  background: linear-gradient(180deg, #1c6788, var(--accent));
+  color: white;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.notifications-shell.is-closed .notifications-grid {
+  display: none;
 }
 
 .notifications-grid {
@@ -484,6 +582,72 @@ tr:last-child td {
 .empty.small {
   padding: 8px 0;
   font-size: 12px;
+}
+
+.empty-state,
+.empty-inline {
+  display: grid;
+  gap: 10px;
+  padding: 18px;
+  border: 1px dashed rgba(20, 74, 102, 0.22);
+  border-radius: 20px;
+  background: linear-gradient(180deg, rgba(250, 252, 253, 0.96), rgba(244, 247, 249, 0.9));
+}
+
+.empty-state {
+  grid-template-columns: auto 1fr;
+  align-items: start;
+}
+
+.empty-state-marker {
+  width: 38px;
+  height: 38px;
+  border-radius: 14px;
+  background:
+    linear-gradient(180deg, rgba(28, 103, 136, 0.18), rgba(22, 78, 103, 0.12));
+  border: 1px solid rgba(20, 74, 102, 0.14);
+  position: relative;
+}
+
+.empty-state-marker::before,
+.empty-state-marker::after {
+  content: "";
+  position: absolute;
+  left: 10px;
+  right: 10px;
+  height: 2px;
+  border-radius: 999px;
+  background: rgba(20, 74, 102, 0.42);
+}
+
+.empty-state-marker::before {
+  top: 13px;
+}
+
+.empty-state-marker::after {
+  top: 21px;
+}
+
+.empty-state-copy,
+.empty-inline {
+  color: var(--muted);
+}
+
+.empty-state-copy strong,
+.empty-inline strong {
+  color: var(--text);
+  font-size: 15px;
+}
+
+.empty-state-copy p,
+.empty-inline p {
+  line-height: 1.5;
+}
+
+.empty-state-copy span {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--accent-dark);
 }
 
 .view-panel {
@@ -886,6 +1050,8 @@ dialog::backdrop {
   grid-template-columns: minmax(0, 1.55fr) minmax(320px, 0.9fr);
   gap: 20px;
   overflow-y: auto;
+  align-content: start;
+  padding-bottom: 34px;
 }
 
 .detail-section {
@@ -928,6 +1094,13 @@ dialog::backdrop {
   align-items: center;
 }
 
+.detail-hero-company {
+  margin-bottom: 8px;
+  color: rgba(240, 246, 251, 0.88);
+  font-size: 13px;
+  font-weight: 700;
+}
+
 .detail-mini {
   color: rgba(240, 246, 251, 0.82);
   font-size: 13px;
@@ -950,6 +1123,21 @@ dialog::backdrop {
 
 .meta-list a {
   color: var(--accent-dark);
+}
+
+.detail-edit-form {
+  display: grid;
+  gap: 10px;
+}
+
+.detail-edit-meta {
+  display: grid;
+  gap: 6px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.72);
+  color: var(--muted);
 }
 
 .history-list,
@@ -1131,11 +1319,54 @@ dialog::backdrop {
 }
 
 .board-card.is-inactive {
-  opacity: 0.78;
+  opacity: 0.72;
+  filter: saturate(0.78);
+  border-style: dashed;
 }
 
 .board-status-row {
   margin-bottom: 10px;
+}
+
+.board-section + .board-section {
+  margin-top: 18px;
+}
+
+.board-section-head {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.board-section-head strong {
+  display: block;
+  font-size: 16px;
+  letter-spacing: -0.02em;
+}
+
+.board-section-head p {
+  margin-top: 4px;
+  color: var(--muted);
+}
+
+.board-section-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 34px;
+  height: 34px;
+  border-radius: 999px;
+  background: rgba(22, 78, 103, 0.1);
+  color: var(--accent-dark);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.board-section-grid {
+  display: grid;
+  gap: 10px;
 }
 
 .board-freshness {
@@ -1217,6 +1448,50 @@ dialog::backdrop {
   margin-bottom: 10px;
 }
 
+.toolkit-marker {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  margin-bottom: 10px;
+  border-radius: 14px;
+  background: linear-gradient(180deg, rgba(22, 78, 103, 0.14), rgba(70, 165, 127, 0.12));
+  border: 1px solid rgba(20, 74, 102, 0.12);
+  color: var(--accent-dark);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+}
+
+.toolkit-copy {
+  margin-bottom: 12px;
+  color: var(--muted);
+  line-height: 1.55;
+}
+
+.security-page {
+  width: min(900px, calc(100vw - 24px));
+  margin: 24px auto 40px;
+}
+
+.security-card {
+  padding: 24px;
+  border: 1px solid var(--line);
+  border-radius: 28px;
+  background: rgba(255, 255, 255, 0.88);
+  box-shadow: var(--shadow-md);
+}
+
+.security-card p + p {
+  margin-top: 12px;
+}
+
+.security-card a {
+  color: var(--accent-dark);
+  font-weight: 700;
+}
+
 .toolkit-list {
   margin: 0;
   padding-left: 18px;
@@ -1291,18 +1566,20 @@ dialog::backdrop {
 
 @media (max-width: 760px) {
   .app-shell {
-    width: calc(100vw - 18px);
-    margin: 10px auto 24px;
+    width: calc(100vw - 14px);
+    margin: 8px auto 18px;
   }
 
   .topbar {
     align-items: flex-start;
     flex-direction: column;
-    padding: 20px;
+    gap: 14px;
+    padding: 16px 14px;
+    border-radius: 22px;
   }
 
   main {
-    padding: 14px 2px 6px;
+    padding: 12px 1px 4px;
   }
 
   .toolbar,
@@ -1352,10 +1629,12 @@ dialog::backdrop {
 
   .topbar-actions {
     width: 100%;
+    gap: 8px;
   }
 
   .topbar-actions button {
     flex: 1;
+    min-width: calc(50% - 4px);
   }
 
   .reminder-card {
@@ -1366,10 +1645,55 @@ dialog::backdrop {
   .notification-card {
     align-items: flex-start;
     flex-direction: column;
+    padding: 12px;
+  }
+
+  .notifications-toggle {
+    padding: 10px;
   }
 
   .notification-meta,
   .toolbar-actions {
     justify-content: flex-start;
+  }
+
+  .view-tabs {
+    gap: 6px;
+    padding: 8px;
+    border-radius: 18px;
+  }
+
+  .view-tabs button {
+    padding: 10px 12px;
+    white-space: nowrap;
+  }
+
+  .surface-panel,
+  .view-panel,
+  .detail-section {
+    padding: 14px;
+    border-radius: 20px;
+  }
+
+  dialog {
+    width: calc(100vw - 10px);
+    max-height: calc(100vh - 12px);
+    border-radius: 18px;
+  }
+
+  .dialog-header,
+  .form-grid,
+  .detail-layout,
+  .cv-form,
+  .cv-list {
+    padding: 14px;
+  }
+
+  .detail-layout {
+    padding-bottom: 24px;
+  }
+
+  .empty-state {
+    grid-template-columns: 1fr;
   }
 }

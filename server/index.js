@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import { statSync } from 'node:fs';
 import { config } from './config.js';
 import { pool } from './db/pool.js';
-import { sendError, sendJson, readJson, readMultipart, serveStatic } from './utils/http.js';
+import { sendError, sendHtmlError, sendJson, readJson, readMultipart, serveStatic } from './utils/http.js';
 import { cleanString, parseBoolean, parseDate, parseInteger, validateFeedbackSource, validateStatus, validateUrl } from './utils/validation.js';
 import { createRequestGuard } from './utils/requestGuards.js';
 import { csvEscape, parseCsv, changedApplicationFields, dateForLog } from './utils/text.js';
@@ -15,6 +15,8 @@ import { readAIInput, saveAIDocument } from './services/aiDocuments.js';
 import { createReadApi } from './services/readApi.js';
 import { createApiRouter } from './routes.js';
 import { extractCVText } from './services/cvTextExtractor.js';
+import { applyMigrations } from './db/ensureSchema.js';
+import { explainConnectionError } from './db/connectionError.js';
 
 const publicDir = join(process.cwd(), 'public');
 const storage = new LocalFileStorage();
@@ -22,11 +24,20 @@ const aiProvider = createAIProvider();
 const enforceRequestGuards = createRequestGuard({ config });
 const audit = createAuditLogger(pool);
 const readApi = createReadApi({ pool, audit });
+let shuttingDown = false;
 
 const server = http.createServer(async (req, res) => {
   try {
+    if (shuttingDown) {
+      return respondError(req, res, 503, 'App is restarting', 'The app is shutting down after an internal failure. Wait a few seconds and refresh.');
+    }
+
     const url = new URL(req.url, `http://${req.headers.host}`);
     enforceRequestGuards(req, url);
+
+    if (serveSpecialPublicFiles(req, res, url)) {
+      return;
+    }
 
     if (url.pathname.startsWith('/api/')) {
       await routeApi(req, res, url);
@@ -34,12 +45,12 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (!serveStatic(req, res, publicDir)) {
-      sendError(res, 404, 'Not found');
+      respondError(req, res, 404, 'Page not found', 'The page you requested does not exist in this local app.');
     }
   } catch (error) {
     const statusCode = error.statusCode || 500;
     if (statusCode >= 500) console.error(error);
-    sendError(res, statusCode, error.message || 'Internal server error');
+    respondError(req, res, statusCode, error.message || 'Internal server error', statusCode >= 500 ? 'Refresh the page. If this keeps happening, check the server logs.' : '');
   }
 });
 
@@ -210,6 +221,7 @@ async function exportApplicationsCsv(req, res) {
     `
       SELECT
         a.company_name,
+        a.role_title,
         a.job_link,
         a.job_description,
         a.status,
@@ -230,7 +242,7 @@ async function exportApplicationsCsv(req, res) {
     `
   );
 
-  const headers = ['company_name', 'job_link', 'job_description', 'status', 'salary', 'location', 'recruiter', 'contact_person', 'applied_date', 'interview_date', 'notes', 'lifecycle', 'tags'];
+  const headers = ['company_name', 'role_title', 'job_link', 'job_description', 'status', 'salary', 'location', 'recruiter', 'contact_person', 'applied_date', 'interview_date', 'notes', 'lifecycle', 'tags'];
   const csv = [
     headers.join(','),
     ...result.rows.map((row) => headers.map((key) => csvEscape(row[key])).join(','))
@@ -264,11 +276,11 @@ async function importApplicationsCsv(req, res) {
       const data = normalizeApplicationInput({ ...fields, cv_id: latest.rows[0].id }, true);
       const created = await client.query(
         `
-          INSERT INTO applications (company_name, job_link, job_description, status, salary, location, recruiter, contact_person, applied_date, interview_date, notes, archived_at)
-          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, CASE WHEN $12 = 'archived' THEN now() ELSE NULL END)
+          INSERT INTO applications (company_name, role_title, job_link, job_description, status, salary, location, recruiter, contact_person, applied_date, interview_date, notes, archived_at)
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, CASE WHEN $13 = 'archived' THEN now() ELSE NULL END)
           RETURNING id
         `,
-        [data.company_name, data.job_link, data.job_description, data.status, data.salary, data.location, data.recruiter, data.contact_person, data.applied_date, data.interview_date, data.notes, cleanString(fields.lifecycle)]
+        [data.company_name, data.role_title, data.job_link, data.job_description, data.status, data.salary, data.location, data.recruiter, data.contact_person, data.applied_date, data.interview_date, data.notes, cleanString(fields.lifecycle)]
       );
       const applicationId = created.rows[0].id;
       await client.query('INSERT INTO application_cvs (application_id, cv_id) VALUES ($1, $2)', [applicationId, latest.rows[0].id]);
@@ -312,6 +324,7 @@ async function createApplication(req, res) {
       `
         INSERT INTO applications (
           company_name,
+          role_title,
           job_link,
           job_description,
           status,
@@ -323,11 +336,12 @@ async function createApplication(req, res) {
           interview_date,
           notes
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
         RETURNING id
       `,
       [
         data.company_name,
+        data.role_title,
         data.job_link,
         data.job_description,
         data.status,
@@ -377,20 +391,22 @@ async function updateApplication(req, res, id) {
       `
         UPDATE applications
         SET company_name = $1,
-            job_link = $2,
-            job_description = $3,
-            status = $4,
-            salary = $5,
-            location = $6,
-            recruiter = $7,
-            contact_person = $8,
-            applied_date = $9,
-            interview_date = $10,
-            notes = $11
-        WHERE id = $12
+            role_title = $2,
+            job_link = $3,
+            job_description = $4,
+            status = $5,
+            salary = $6,
+            location = $7,
+            recruiter = $8,
+            contact_person = $9,
+            applied_date = $10,
+            interview_date = $11,
+            notes = $12
+        WHERE id = $13
       `,
       [
         data.company_name,
+        data.role_title,
         data.job_link,
         data.job_description,
         data.status,
@@ -838,15 +854,107 @@ async function readApplicationMultipart(req) {
   return { fields, file: files.cv || null };
 }
 
-server.listen(config.port, () => {
-  console.log(`Job tracker running at http://localhost:${config.port}`);
-});
+startServer();
 
 process.on('SIGTERM', shutdown);
 process.on('SIGINT', shutdown);
 
+async function startServer() {
+  try {
+    await applyMigrations(pool);
+    server.listen(config.port, () => {
+      console.log(`Job tracker running at http://localhost:${config.port}`);
+    });
+  } catch (error) {
+    console.error(explainConnectionError(error).message);
+    await pool.end();
+    process.exit(1);
+  }
+}
+
 function shutdown() {
+  if (shuttingDown) return;
+  shuttingDown = true;
   server.close(() => {
     pool.end().finally(() => process.exit(0));
   });
+}
+
+process.on('uncaughtException', (error) => {
+  console.error('Uncaught exception');
+  console.error(explainConnectionError(error).message);
+  shutdown();
+});
+
+process.on('unhandledRejection', (reason) => {
+  console.error('Unhandled rejection');
+  const error = reason instanceof Error ? reason : new Error(String(reason));
+  console.error(explainConnectionError(error).message);
+  shutdown();
+});
+
+function serveSpecialPublicFiles(req, res, url) {
+  if (req.method !== 'GET' && req.method !== 'HEAD') return false;
+
+  if (url.pathname === '/robots.txt') {
+    const body = [
+      'User-agent: *',
+      'Disallow: /',
+      `Sitemap: ${originFor(url)}/sitemap.xml`
+    ].join('\n');
+    sendPlainText(res, 200, body, 'text/plain; charset=utf-8');
+    return true;
+  }
+
+  if (url.pathname === '/sitemap.xml') {
+    const origin = originFor(url);
+    const body = `<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url>
+    <loc>${origin}/</loc>
+  </url>
+  <url>
+    <loc>${origin}/security-contact.html</loc>
+  </url>
+</urlset>`;
+    sendPlainText(res, 200, body, 'application/xml; charset=utf-8');
+    return true;
+  }
+
+  if (url.pathname === '/.well-known/security.txt') {
+    const origin = originFor(url);
+    const body = [
+      `Contact: ${origin}/security-contact.html`,
+      `Policy: ${origin}/security-contact.html`,
+      'Preferred-Languages: en',
+      'Expires: 2027-05-06T00:00:00.000Z'
+    ].join('\n');
+    sendPlainText(res, 200, body, 'text/plain; charset=utf-8');
+    return true;
+  }
+
+  return false;
+}
+
+function sendPlainText(res, statusCode, body, contentType) {
+  res.writeHead(statusCode, {
+    'content-type': contentType,
+    'content-length': Buffer.byteLength(body),
+    'x-content-type-options': 'nosniff',
+    'x-robots-tag': 'noindex, nofollow, noarchive',
+    'cache-control': 'no-store'
+  });
+  res.end(body);
+}
+
+function originFor(url) {
+  return `${url.protocol}//${url.host}`;
+}
+
+function respondError(req, res, statusCode, message, hint = '') {
+  if ((req.headers.accept || '').includes('text/html') && !String(req.url || '').startsWith('/api/')) {
+    sendHtmlError(res, statusCode, message, message, hint);
+    return;
+  }
+  sendError(res, statusCode, message);
 }

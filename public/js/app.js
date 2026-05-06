@@ -1,6 +1,6 @@
 import { els } from './dom.js';
 import { state, statusLabels, statusOptions } from './state.js';
-import { api, debounce, localToday, renderDateInput, setError } from './utils.js';
+import { api, attachDateMask, debounce, formatIsoDateForDisplay, localToday, parseDisplayDateToIso, renderDateInput, setError } from './utils.js';
 import {
   buildDetailContent,
   renderActivity,
@@ -84,6 +84,7 @@ els.applicationForm.addEventListener('submit', submitApplicationForm);
 els.cvForm.addEventListener('submit', submitCvForm);
 els.jobBoardForm.addEventListener('submit', submitJobBoardForm);
 els.jobBoardResetButton.addEventListener('click', resetJobBoardForm);
+els.jobBoardForm.querySelectorAll('[data-date-input]').forEach(attachDateMask);
 
 els.table.addEventListener('change', updateInlineStatus);
 els.table.addEventListener('click', async (event) => {
@@ -106,6 +107,16 @@ els.remindersList.addEventListener('click', async (event) => {
   }
 
   if (detail) await openDetail(Number(detail.dataset.calendarDetail));
+});
+
+els.notificationsPanel.addEventListener('click', async (event) => {
+  const toggle = event.target.closest('[data-toggle-notifications]');
+
+  if (toggle) {
+    state.notificationsExpanded = !state.notificationsExpanded;
+    renderNotifications(els, state.notifications, state.notificationsExpanded);
+    bindNotificationActions();
+  }
 });
 
 async function switchView(view) {
@@ -172,7 +183,7 @@ async function loadReminders() {
 async function loadNotifications() {
   const payload = await api('/api/notifications');
   state.notifications = payload.notifications;
-  renderNotifications(els, state.notifications);
+  renderNotifications(els, state.notifications, state.notificationsExpanded);
   bindNotificationActions();
 }
 
@@ -253,7 +264,7 @@ async function submitJobBoardForm(event) {
     name: form.get('name'),
     url: form.get('url'),
     notes: form.get('notes'),
-    last_checked_date: form.get('last_checked_date'),
+    last_checked_date: parseDisplayDateToIso(form.get('last_checked_date')),
     is_active: els.jobBoardForm.elements.is_active.checked
   };
 
@@ -337,7 +348,7 @@ function bindJobBoardActions() {
       els.jobBoardForm.elements.name.value = board.name || '';
       els.jobBoardForm.elements.url.value = board.url || '';
       els.jobBoardForm.elements.notes.value = board.notes || '';
-      els.jobBoardForm.elements.last_checked_date.value = board.last_checked_date || '';
+      els.jobBoardForm.elements.last_checked_date.value = formatIsoDateForDisplay(board.last_checked_date || '');
       els.jobBoardForm.elements.is_active.checked = Boolean(board.is_active);
       setError(els.jobBoardError, '');
       els.jobBoardForm.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -348,20 +359,36 @@ function bindJobBoardActions() {
     button.addEventListener('click', async () => {
       const board = state.jobBoards.find((item) => item.id === Number(button.dataset.jobBoardToggle));
       if (!board) return;
-      await api(`/api/job-boards/${board.id}`, {
-        method: 'PUT',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ ...board, is_active: !board.is_active })
-      });
-      await loadJobBoards();
+      button.disabled = true;
+      try {
+        await api(`/api/job-boards/${board.id}`, {
+          method: 'PUT',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ ...board, is_active: !board.is_active })
+        });
+        await loadJobBoards();
+      } catch (error) {
+        setError(els.jobBoardError, error.message);
+      } finally {
+        button.disabled = false;
+      }
     });
   });
 
   els.jobBoardsList.querySelectorAll('[data-job-board-delete]').forEach((button) => {
     button.addEventListener('click', async () => {
       if (!confirm('Delete this job board?')) return;
-      await api(`/api/job-boards/${button.dataset.jobBoardDelete}`, { method: 'DELETE' });
-      await loadJobBoards();
+      button.disabled = true;
+      try {
+        await api(`/api/job-boards/${button.dataset.jobBoardDelete}`, { method: 'DELETE' });
+        state.jobBoards = state.jobBoards.filter((item) => item.id !== Number(button.dataset.jobBoardDelete));
+        renderJobBoards(els, state.jobBoards);
+        bindJobBoardActions();
+      } catch (error) {
+        setError(els.jobBoardError, error.message);
+      } finally {
+        button.disabled = false;
+      }
     });
   });
 }
@@ -370,6 +397,7 @@ function resetJobBoardForm() {
   els.jobBoardForm.reset();
   els.jobBoardForm.elements.id.value = '';
   els.jobBoardForm.elements.is_active.checked = true;
+  els.jobBoardForm.elements.last_checked_date.value = '';
   setError(els.jobBoardError, '');
 }
 
@@ -453,6 +481,32 @@ async function openDetail(id) {
     await openDetail(application.id);
   });
 
+  els.detailContent.querySelector('[data-detail-edit-form]').addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const form = new FormData(event.target);
+    await api(`/api/applications/${application.id}`, {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        company_name: form.get('company_name'),
+        role_title: form.get('role_title'),
+        status: form.get('status'),
+        applied_date: form.get('applied_date'),
+        interview_date: form.get('interview_date') || null,
+        salary: form.get('salary'),
+        location: form.get('location'),
+        recruiter: form.get('recruiter'),
+        contact_person: form.get('contact_person'),
+        job_link: form.get('job_link'),
+        job_description: application.job_description,
+        notes: application.notes,
+        tags
+      })
+    });
+    await Promise.all([loadApplications(), loadReminders(), loadNotifications()]);
+    await openDetail(application.id);
+  });
+
   els.detailContent.querySelector('[data-question-form]').addEventListener('submit', async (event) => {
     event.preventDefault();
     const question = event.target.elements.question.value.trim();
@@ -489,16 +543,17 @@ async function openDetail(id) {
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
         body,
-        due_date: event.target.elements.due_date.value || null
+        due_date: parseDisplayDateToIso(event.target.elements.due_date.value || '')
       })
     });
     await Promise.all([loadNotifications(), openDetail(application.id)]);
   });
 
   bindPreparationActions(application, recruiterQuestions, todos);
+  els.detailContent.querySelectorAll('[data-date-input]').forEach(attachDateMask);
 
   els.detailContent.querySelector('[data-delete-id]').addEventListener('click', async (event) => {
-    if (!confirm('Delete this application permanently? This cannot be undone.')) return;
+    if (!confirm('Are you sure you want to delete this application?')) return;
     await api(`/api/applications/${event.target.dataset.deleteId}`, { method: 'DELETE' });
     els.detailDialog.close();
     await Promise.all([loadApplications(), loadReminders(), loadNotifications()]);

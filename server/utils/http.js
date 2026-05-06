@@ -24,6 +24,92 @@ export function sendError(res, statusCode, message, details) {
   sendJson(res, statusCode, { error: message, details });
 }
 
+export function sendHtml(res, statusCode, html) {
+  res.writeHead(statusCode, {
+    'content-type': 'text/html; charset=utf-8',
+    'content-length': Buffer.byteLength(html),
+    'x-content-type-options': 'nosniff',
+    'x-robots-tag': 'noindex, nofollow, noarchive',
+    'cache-control': 'no-store'
+  });
+  res.end(html);
+}
+
+export function sendHtmlError(res, statusCode, title, message, hint = '') {
+  sendHtml(
+    res,
+    statusCode,
+    `<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="robots" content="noindex, nofollow, noarchive">
+    <title>${escapeHtml(title)}</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --bg: #f3efe6;
+        --panel: rgba(255,255,255,0.92);
+        --text: #13212d;
+        --muted: #61707c;
+        --line: rgba(79,98,118,0.16);
+        --accent: #164e67;
+        --shadow: 0 24px 60px rgba(19,33,45,0.12);
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        min-height: 100vh;
+        display: grid;
+        place-items: center;
+        padding: 20px;
+        background: radial-gradient(circle at top left, rgba(255,255,255,0.66), transparent 30%), linear-gradient(180deg, #f7f3ea 0%, var(--bg) 38%, #ece5d5 100%);
+        color: var(--text);
+        font: 14px/1.5 "Aptos", "Segoe UI", sans-serif;
+      }
+      .card {
+        width: min(720px, 100%);
+        padding: 28px;
+        border: 1px solid var(--line);
+        border-radius: 28px;
+        background: var(--panel);
+        box-shadow: var(--shadow);
+      }
+      .kicker {
+        display: inline-flex;
+        margin-bottom: 10px;
+        color: var(--accent);
+        font-size: 11px;
+        font-weight: 800;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+      }
+      h1 { margin: 0 0 10px; font-size: 28px; line-height: 1.05; }
+      p { margin: 0; color: var(--muted); }
+      p + p { margin-top: 12px; }
+      a { color: var(--accent); font-weight: 700; }
+      code {
+        padding: 2px 6px;
+        border-radius: 8px;
+        background: rgba(22,78,103,0.08);
+        color: var(--text);
+      }
+    </style>
+  </head>
+  <body>
+    <main class="card">
+      <div class="kicker">Application Error</div>
+      <h1>${escapeHtml(title)}</h1>
+      <p>${escapeHtml(message)}</p>
+      ${hint ? `<p>${escapeHtml(hint)}</p>` : ''}
+      <p><a href="/">Return to the app</a></p>
+    </main>
+  </body>
+</html>`
+  );
+}
+
 export async function readBody(req, maxBytes) {
   const chunks = [];
   let total = 0;
@@ -121,6 +207,15 @@ function readDispositionValue(disposition, key) {
   return match?.[1] || '';
 }
 
+function escapeHtml(value) {
+  return String(value ?? '')
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#039;');
+}
+
 export function serveStatic(req, res, publicDir) {
   const url = new URL(req.url, `http://${req.headers.host}`);
   const pathname = decodeURIComponent(url.pathname);
@@ -142,6 +237,7 @@ export function serveStatic(req, res, publicDir) {
       'content-type': contentType,
       'content-length': fileStat.size,
       'x-content-type-options': 'nosniff',
+      'x-robots-tag': 'noindex, nofollow, noarchive',
       'cache-control': 'no-store'
     });
     createReadStream(absolutePath).pipe(res);

@@ -11,6 +11,7 @@ export const state = {
     archived: 'false'
   },
   notifications: [],
+  notificationsExpanded: false,
   calendarDate: new Date(),
   activity: {
     search: '',

@@ -62,6 +62,7 @@ export function dateForLog(value) {
 export function changedApplicationFields(previous, next) {
   const fields = [
     ['company_name', 'company'],
+    ['role_title', 'role'],
     ['job_link', 'job link'],
     ['job_description', 'job description'],
     ['salary', 'salary'],

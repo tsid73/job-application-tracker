@@ -3,6 +3,7 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="robots" content="noindex, nofollow, noarchive">
     <title>Job Applications</title>
     <link rel="stylesheet" href="/css/styles.css">
   </head>
@@ -163,7 +164,7 @@
                 </label>
                 <label>
                   <span>Last Checked</span>
-                  <input name="last_checked_date" type="date">
+                  <input name="last_checked_date" type="text" inputmode="numeric" autocomplete="off" placeholder="DD-MM-YYYY" data-date-input>
                 </label>
                 <label class="checkbox inline-checkbox">
                   <input name="is_active" type="checkbox" checked>
@@ -208,6 +209,10 @@
           <label>
             <span>Company Name</span>
             <input name="company_name" required>
+          </label>
+          <label>
+            <span>Role</span>
+            <input name="role_title" placeholder="Frontend Developer">
           </label>
           <label>
             <span>Job Link</span>
