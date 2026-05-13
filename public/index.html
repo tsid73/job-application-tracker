@@ -28,6 +28,7 @@
       </header>
 
       <main>
+        <section id="appHome">
         <section id="notificationsPanel" class="notifications-panel" hidden></section>
 
         <nav class="view-tabs" aria-label="Views">
@@ -196,6 +197,15 @@
         <section id="toolkitView" class="view-panel toolkit-view" hidden>
           <div id="toolkitContent" class="toolkit-grid"></div>
         </section>
+        </section>
+
+        <section id="applicationPage" class="page-view" hidden>
+          <div id="applicationPageContent" class="page-shell"></div>
+        </section>
+
+        <section id="contentPage" class="page-view" hidden>
+          <div id="contentPageContent" class="page-shell"></div>
+        </section>
       </main>
     </div>
 
@@ -279,6 +289,78 @@
         <div class="dialog-actions">
           <button class="secondary" type="button" data-close-dialog>Cancel</button>
           <button type="submit">Save</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="applicationEditDialog">
+      <form id="applicationEditForm" method="dialog">
+        <div class="dialog-header">
+          <h2>Edit Application</h2>
+          <button class="icon-button" value="cancel" type="button" data-close-dialog>Close</button>
+        </div>
+        <div class="form-grid">
+          <input name="id" type="hidden">
+          <label>
+            <span>Company Name</span>
+            <input name="company_name" required>
+          </label>
+          <label>
+            <span>Role</span>
+            <input name="role_title" placeholder="Frontend Developer">
+          </label>
+          <label>
+            <span>Status</span>
+            <select name="status">
+              <option value="applied">Applied</option>
+              <option value="interview_scheduled">Interview Scheduled</option>
+              <option value="offer">Offer</option>
+              <option value="accepted">Accepted</option>
+              <option value="rejected">Rejected</option>
+              <option value="withdrawn">Withdrawn</option>
+              <option value="ghosted">Ghosted</option>
+            </select>
+          </label>
+          <label>
+            <span>Salary</span>
+            <input name="salary" placeholder="$120k, 18 LPA">
+          </label>
+          <label>
+            <span>Location</span>
+            <input name="location" placeholder="Remote, Bengaluru">
+          </label>
+          <label>
+            <span>Recruiter</span>
+            <input name="recruiter" placeholder="Recruiter name or email">
+          </label>
+          <label>
+            <span>Contact Person</span>
+            <input name="contact_person" placeholder="Hiring manager">
+          </label>
+          <label>
+            <span>Applied Date</span>
+            <input name="applied_date" type="date">
+          </label>
+          <label>
+            <span>Interview Date</span>
+            <input name="interview_date" type="date">
+          </label>
+          <label class="wide">
+            <span>Job Link</span>
+            <input name="job_link" type="url" placeholder="https://company.com/job">
+          </label>
+        </div>
+        <p class="form-error" id="applicationEditError" hidden></p>
+        <div class="split-actions">
+          <div>
+            <button class="secondary" type="button" data-archive-action>Archive</button>
+            <button class="secondary" type="button" data-restore-action hidden>Restore</button>
+            <button class="danger" type="button" data-delete-action>Delete</button>
+          </div>
+          <div>
+            <button class="secondary" type="button" data-close-dialog>Cancel</button>
+            <button type="submit">Save Changes</button>
+          </div>
         </div>
       </form>
     </dialog>

@@ -41,6 +41,11 @@ export function createApiRouter(handlers) {
     route('POST', '/api/ai/role-fit', handlers.scoreRoleFit),
     route('POST', '/api/ai/ats-check', handlers.checkATS),
     route('POST', '/api/ai/follow-up-email', handlers.generateFollowUpEmail),
+    route('GET', /^\/api\/applications\/\d+\/ai-documents$/, handlers.getApplicationAIDocuments, pathId),
+    route('GET', /^\/api\/ai\/documents\/\d+$/, handlers.getAIDocument, pathId),
+    route('DELETE', /^\/api\/ai\/documents\/\d+$/, handlers.deleteAIDocument, pathId),
+    route('POST', /^\/api\/ai\/documents\/\d+\/regenerate$/, handlers.regenerateAIDocument, pathId),
+    route('GET', /^\/api\/ai\/jobs\/\d+$/, handlers.getAIJob, pathId),
     route('GET', /^\/api\/ai\/documents\/\d+\/download$/, handlers.downloadAIDocument, pathId)
   ];
 

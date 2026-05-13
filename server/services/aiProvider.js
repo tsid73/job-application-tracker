@@ -134,50 +134,74 @@ class MockAIProvider extends AIProvider {
 
 class OpenAICompatibleProvider extends AIProvider {
   async generateCV({ jobDescription, cv }) {
-    return this.chat([
-      'Rewrite the CV for the target role. Return concise, editable plain text.',
-      `CV file selected: ${cv.original_name}`,
-      `Extracted CV text:\n${cv.extracted_text || 'No extracted CV text available.'}`,
-      `Job description:\n${jobDescription}`
-    ].join('\n\n'));
+    return this.chat(buildPrompt({
+      instruction: 'Rewrite the CV for the target role.',
+      format: [
+        'Return plain text only.',
+        'Use these sections in order: Headline, Summary, Core Skills, Experience Highlights, Suggested Keyword Additions.',
+        'Keep the wording editable and concise.',
+        'Do not invent employers or achievements.'
+      ],
+      cv,
+      jobDescription
+    }));
   }
 
   async generateCoverLetter({ jobDescription, cv }) {
-    return this.chat([
-      'Write a concise cover letter for the target role. Return plain text only.',
-      `CV file selected: ${cv.original_name}`,
-      `Extracted CV text:\n${cv.extracted_text || 'No extracted CV text available.'}`,
-      `Job description:\n${jobDescription}`
-    ].join('\n\n'));
+    return this.chat(buildPrompt({
+      instruction: 'Write a concise, strong cover letter for the target role.',
+      format: [
+        'Return plain text only.',
+        'Use these sections in order: Opening, Why I Fit, Evidence, Closing.',
+        'Keep it under 350 words.',
+        'Make the content specific to the role and resume details provided.',
+        'Do not use placeholders except [Your Name] if needed.'
+      ],
+      cv,
+      jobDescription
+    }));
   }
 
   async scoreRoleFit({ jobDescription, cv }) {
-    return this.chat([
-      'Score this candidate fit for the role from 0 to 100. Then list missing skills, keyword suggestions, and concrete CV improvements. Return concise plain text.',
-      `CV file selected: ${cv.original_name}`,
-      `Extracted CV text:\n${cv.extracted_text || 'No extracted CV text available.'}`,
-      `Job description:\n${jobDescription}`
-    ].join('\n\n'));
+    return this.chat(buildPrompt({
+      instruction: 'Evaluate the candidate fit for the role.',
+      format: [
+        'Return plain text only.',
+        'Use these sections in order: Score, Match Summary, Missing Skills, Keyword Suggestions, CV Improvements.',
+        'Score must be a number from 0 to 100.',
+        'Keep every section concise and actionable.'
+      ],
+      cv,
+      jobDescription
+    }));
   }
 
   async generateFollowUpEmail({ jobDescription, cv }) {
-    return this.chat([
-      'Write a concise follow-up email for this job application. Return subject and body as editable plain text.',
-      `CV file selected: ${cv.original_name}`,
-      `Extracted CV text:\n${cv.extracted_text || 'No extracted CV text available.'}`,
-      `Job description:\n${jobDescription}`
-    ].join('\n\n'));
+    return this.chat(buildPrompt({
+      instruction: 'Write a concise follow-up email for this job application.',
+      format: [
+        'Return plain text only.',
+        'Use these sections in order: Subject, Greeting, Follow-up Message, Close.',
+        'Keep it under 180 words.',
+        'Make it specific, professional, and easy to edit.'
+      ],
+      cv,
+      jobDescription
+    }));
   }
 
   async checkATS({ jobDescription, cv }) {
-    return this.chat([
-      'Act as an ATS reviewer. Score this CV for the target role from 0 to 100.',
-      'Then return these sections in plain text: ATS score, match summary, missing keywords, matched keywords, weak areas, and specific CV rewrite suggestions.',
-      'Keep it concise, practical, and editable.',
-      `CV file selected: ${cv.original_name}`,
-      `Extracted CV text:\n${cv.extracted_text || 'No extracted CV text available.'}`,
-      `Job description:\n${jobDescription}`
-    ].join('\n\n'));
+    return this.chat(buildPrompt({
+      instruction: 'Act as an ATS reviewer for the target role.',
+      format: [
+        'Return plain text only.',
+        'Use these sections in order: ATS Score, Match Summary, Missing Keywords, Matched Keywords, Weak Areas, Rewrite Suggestions.',
+        'Score must be a number from 0 to 100.',
+        'Keep the advice concrete and based only on the provided materials.'
+      ],
+      cv,
+      jobDescription
+    }));
   }
 
   async chat(prompt) {
@@ -209,8 +233,8 @@ class OpenAICompatibleProvider extends AIProvider {
   }
 }
 
-export function createAIProvider() {
-  if (config.aiProvider === 'openai-compatible' || config.aiProvider === 'gemini') return new OpenAICompatibleProvider();
+export function createAIProvider(providerName = config.aiProvider) {
+  if (providerName === 'openai-compatible' || providerName === 'gemini') return new OpenAICompatibleProvider();
   return new MockAIProvider();
 }
 
@@ -218,4 +242,14 @@ function summarize(text) {
   const cleaned = String(text || '').replace(/\s+/g, ' ').trim();
   if (!cleaned) return 'No job description was provided.';
   return cleaned.length > 900 ? `${cleaned.slice(0, 900)}...` : cleaned;
+}
+
+function buildPrompt({ instruction, format, cv, jobDescription }) {
+  return [
+    instruction,
+    ...format,
+    `CV file selected: ${cv.original_name}`,
+    `Extracted CV text:\n${cv.extracted_text || 'No extracted CV text available.'}`,
+    `Job description:\n${jobDescription}`
+  ].join('\n\n');
 }

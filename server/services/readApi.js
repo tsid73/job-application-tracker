@@ -327,10 +327,20 @@ export function createReadApi({ pool, audit }) {
         throw error;
       }
 
-      const [cvs, history, notes, tags, activity, aiDocuments, auditEventsResult, preparation, recruiterQuestions, feedbackEntries, todos] = await Promise.all([
+      const [cvs, history, notes, tags, activity, aiDocuments, aiJobs, auditEventsResult, preparation, recruiterQuestions, feedbackEntries, todos] = await Promise.all([
         executor.query(
           `
-            SELECT c.id, c.original_name, c.version_label, c.file_size, c.created_at, ac.linked_at, length(c.extracted_text) AS extracted_text_length
+            SELECT
+              c.id,
+              c.original_name,
+              c.version_label,
+              c.file_size,
+              c.created_at,
+              ac.linked_at,
+              length(c.extracted_text) AS extracted_text_length,
+              c.storage_kind,
+              c.s3_bucket,
+              c.s3_key
             FROM application_cvs ac
             JOIN cv_versions c ON c.id = ac.cv_id
             WHERE ac.application_id = $1
@@ -381,13 +391,41 @@ export function createReadApi({ pool, audit }) {
               id,
               document_type,
               title,
+              content,
               created_at,
               file_path IS NOT NULL AS has_file,
               provider_name,
+              provider_requested,
               model_name,
               prompt_excerpt,
-              source_context
+              source_context,
+              generation_status,
+              version_group_id,
+              storage_kind,
+              s3_bucket,
+              s3_key
             FROM ai_documents
+            WHERE application_id = $1
+              AND deleted_at IS NULL
+            ORDER BY created_at DESC
+          `,
+          [id]
+        ),
+        executor.query(
+          `
+            SELECT
+              id,
+              document_type,
+              provider_requested,
+              provider_used,
+              status,
+              title,
+              error_message,
+              retry_count,
+              document_id,
+              created_at,
+              completed_at
+            FROM ai_generation_jobs
             WHERE application_id = $1
             ORDER BY created_at DESC
           `,
@@ -459,6 +497,7 @@ export function createReadApi({ pool, audit }) {
         notes: notes.rows,
         activity: activity.rows,
         ai_documents: aiDocuments.rows,
+        ai_jobs: aiJobs.rows,
         audit_events: auditEventsResult.rows,
         tags: tags.rows.map((row) => row.name),
         preparation: preparation.rows[0] || null,
@@ -468,10 +507,154 @@ export function createReadApi({ pool, audit }) {
       };
     },
 
+    async getApplicationAIDocuments(applicationId) {
+      const [documents, jobs] = await Promise.all([
+        pool.query(
+          `
+            SELECT
+              id,
+              application_id,
+              cv_id,
+              document_type,
+              title,
+              content,
+              created_at,
+              provider_name,
+              provider_requested,
+              model_name,
+              prompt_excerpt,
+              source_context,
+              generation_status,
+              version_group_id,
+              storage_kind,
+              s3_bucket,
+              s3_key,
+              file_path IS NOT NULL AS has_file
+            FROM ai_documents
+            WHERE application_id = $1
+              AND deleted_at IS NULL
+            ORDER BY created_at DESC
+          `,
+          [applicationId]
+        ),
+        pool.query(
+          `
+            SELECT
+              id,
+              application_id,
+              cv_id,
+              document_type,
+              provider_requested,
+              provider_used,
+              status,
+              title,
+              error_message,
+              retry_count,
+              document_id,
+              created_at,
+              completed_at
+            FROM ai_generation_jobs
+            WHERE application_id = $1
+            ORDER BY created_at DESC
+          `,
+          [applicationId]
+        )
+      ]);
+
+      return {
+        documents: documents.rows.map((row) => ({
+          ...row,
+          download_url: `/api/ai/documents/${row.id}/download`
+        })),
+        jobs: jobs.rows
+      };
+    },
+
+    async getAIDocument(id) {
+      const result = await pool.query(
+        `
+          SELECT
+            id,
+            application_id,
+            cv_id,
+            document_type,
+            title,
+            content,
+            created_at,
+            provider_name,
+            provider_requested,
+            model_name,
+            prompt_excerpt,
+            source_context,
+            generation_status,
+            version_group_id,
+            storage_kind,
+            s3_bucket,
+            s3_key,
+            file_path IS NOT NULL AS has_file
+          FROM ai_documents
+          WHERE id = $1
+            AND deleted_at IS NULL
+        `,
+        [id]
+      );
+
+      if (!result.rowCount) {
+        const error = new Error('AI document not found');
+        error.statusCode = 404;
+        throw error;
+      }
+
+      return {
+        document: {
+          ...result.rows[0],
+          download_url: `/api/ai/documents/${id}/download`
+        }
+      };
+    },
+
+    async getAIJob(id) {
+      const result = await pool.query(
+        `
+          SELECT
+            id,
+            application_id,
+            cv_id,
+            document_type,
+            provider_requested,
+            provider_used,
+            status,
+            title,
+            request_manifest_path,
+            request_manifest_s3_key,
+            result_s3_key,
+            error_message,
+            retry_count,
+            prompt_excerpt,
+            source_context,
+            document_id,
+            created_at,
+            started_at,
+            completed_at
+          FROM ai_generation_jobs
+          WHERE id = $1
+        `,
+        [id]
+      );
+
+      if (!result.rowCount) {
+        const error = new Error('AI job not found');
+        error.statusCode = 404;
+        throw error;
+      }
+
+      return { job: result.rows[0] };
+    },
+
     async getCVs() {
       const result = await pool.query(
         `
-          SELECT id, original_name, version_label, file_size, is_latest, created_at, length(extracted_text) AS extracted_text_length
+          SELECT id, original_name, version_label, file_size, is_latest, created_at, length(extracted_text) AS extracted_text_length, storage_kind, s3_bucket, s3_key
           FROM cv_versions
           WHERE deleted_at IS NULL
           ORDER BY is_latest DESC, created_at DESC

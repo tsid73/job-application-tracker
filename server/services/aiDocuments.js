@@ -8,6 +8,7 @@ export async function readAIInput({ req, pool, storage, readJson, cleanString, c
   let jobDescription = cleanString(body.job_description);
   let cvId = Number(body.cv_id);
   const applicationId = Number(body.application_id);
+  const previousDocumentId = Number(body.previous_document_id);
   let application = null;
 
   if (Number.isInteger(applicationId)) {
@@ -76,6 +77,8 @@ export async function readAIInput({ req, pool, storage, readJson, cleanString, c
     jobDescription,
     cv: cvRow,
     application,
+    providerRequested: normalizeProvider(body.provider, config.defaultAiRequestProvider),
+    previousDocumentId: Number.isInteger(previousDocumentId) ? previousDocumentId : null,
     promptExcerpt: buildPromptExcerpt(jobDescription, cvRow),
     sourceContext: buildSourceContext(application, cvRow)
   };
@@ -83,7 +86,7 @@ export async function readAIInput({ req, pool, storage, readJson, cleanString, c
 
 export async function saveAIDocument({ pool, storage, config, application, cv, type, title, content, promptExcerpt, sourceContext, output }) {
   const buffer = await createDocxBuffer(title, content);
-  const filePath = await storage.saveGeneratedDocx(buffer, title);
+  const file = await storage.saveGeneratedDocx(buffer, title);
   const result = await pool.query(
     `
       INSERT INTO ai_documents (
@@ -93,13 +96,19 @@ export async function saveAIDocument({ pool, storage, config, application, cv, t
         title,
         content,
         file_path,
+        storage_kind,
+        s3_bucket,
+        s3_key,
         provider_name,
+        provider_requested,
         model_name,
         prompt_excerpt,
-        source_context
+        source_context,
+        version_group_id,
+        generation_status
       )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-      RETURNING id, document_type, title, created_at, provider_name, model_name, prompt_excerpt, source_context
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+      RETURNING id, document_type, title, created_at, provider_name, provider_requested, model_name, prompt_excerpt, source_context, generation_status
     `,
     [
       application?.id || null,
@@ -107,12 +116,29 @@ export async function saveAIDocument({ pool, storage, config, application, cv, t
       type,
       title,
       content,
-      filePath,
+      file.relativePath,
+      file.storageKind,
+      file.s3Bucket,
+      file.s3Key,
       output?.provider || config.aiProvider,
+      output?.providerRequested || output?.provider || config.defaultAiRequestProvider,
       output?.model || config.aiModel,
       promptExcerpt,
-      sourceContext
+      sourceContext,
+      output?.versionGroupId || null,
+      output?.generationStatus || 'completed'
     ]
   );
   return { ...result.rows[0], download_url: `/api/ai/documents/${result.rows[0].id}/download` };
+}
+
+function normalizeProvider(value, fallback) {
+  const provider = cleanProvider(value);
+  return provider || cleanProvider(fallback) || 'gemini';
+}
+
+function cleanProvider(value) {
+  const normalized = String(value || '').trim().toLowerCase();
+  if (normalized === 'aws' || normalized === 'gemini' || normalized === 'mock') return normalized;
+  return '';
 }

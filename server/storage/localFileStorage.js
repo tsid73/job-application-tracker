@@ -1,9 +1,10 @@
 import { createReadStream } from 'node:fs';
-import { mkdir, unlink, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, unlink, writeFile } from 'node:fs/promises';
 import { basename, extname, join, resolve } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { createHash } from 'node:crypto';
 import { config } from '../config.js';
+import { createAWSClients } from '../services/awsClients.js';
 
 const allowedExtensions = new Set(['.pdf', '.docx']);
 const allowedMimeTypes = new Set([
@@ -18,6 +19,7 @@ export class LocalFileStorage {
     this.baseDir = resolve(process.cwd(), baseDir);
     this.cvDir = join(this.baseDir, 'cv');
     this.aiDir = join(this.baseDir, 'ai');
+    this.aiJobsDir = join(this.baseDir, 'ai-jobs');
   }
 
   async saveCV(file) {
@@ -34,13 +36,26 @@ export class LocalFileStorage {
     const absolutePath = join(this.cvDir, storedName);
     await writeFile(absolutePath, file.buffer, { flag: 'wx' });
 
-    return {
+    const relativePath = join(config.uploadDir, 'cv', storedName).replace(/\\/g, '/');
+    const metadata = {
       relativePath: join(config.uploadDir, 'cv', storedName).replace(/\\/g, '/'),
       originalName,
       mimeType: normalizeMimeType(file),
       fileSize: file.size,
-      fileHash: createHash('sha256').update(file.buffer).digest('hex')
+      fileHash: createHash('sha256').update(file.buffer).digest('hex'),
+      storageKind: 'local',
+      s3Bucket: null,
+      s3Key: null
     };
+
+    await this.mirrorToS3({
+      relativePath,
+      body: file.buffer,
+      contentType: metadata.mimeType,
+      metadata
+    });
+
+    return metadata;
   }
 
   open(relativePath) {
@@ -57,7 +72,52 @@ export class LocalFileStorage {
     const storedName = `${Date.now()}-${randomUUID()}-${safeBaseName}.docx`;
     const absolutePath = join(this.aiDir, storedName);
     await writeFile(absolutePath, buffer, { flag: 'wx' });
-    return join(config.uploadDir, 'ai', storedName).replace(/\\/g, '/');
+    const relativePath = join(config.uploadDir, 'ai', storedName).replace(/\\/g, '/');
+    const metadata = {
+      relativePath,
+      storageKind: 'local',
+      s3Bucket: null,
+      s3Key: null
+    };
+    await this.mirrorToS3({
+      relativePath,
+      body: buffer,
+      contentType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      metadata
+    });
+    return metadata;
+  }
+
+  async saveJobManifest(manifest, filenameBase, subdir = 'requests') {
+    await mkdir(join(this.aiJobsDir, subdir), { recursive: true });
+    const safeBaseName = String(filenameBase || 'job')
+      .replace(/[^a-z0-9_-]+/gi, '-')
+      .replace(/^-+|-+$/g, '')
+      .slice(0, 80) || 'job';
+    const storedName = `${Date.now()}-${randomUUID()}-${safeBaseName}.json`;
+    const absolutePath = join(this.aiJobsDir, subdir, storedName);
+    const body = Buffer.from(JSON.stringify(manifest, null, 2), 'utf8');
+    await writeFile(absolutePath, body, { flag: 'wx' });
+    const relativePath = join(config.uploadDir, 'ai-jobs', subdir, storedName).replace(/\\/g, '/');
+    const metadata = {
+      relativePath,
+      storageKind: 'local',
+      s3Bucket: null,
+      s3Key: null
+    };
+    await this.mirrorToS3({
+      relativePath,
+      body,
+      contentType: 'application/json',
+      metadata,
+      force: true
+    });
+    return metadata;
+  }
+
+  async readText(relativePath) {
+    const absolutePath = this.resolveSafe(relativePath);
+    return readFile(absolutePath, 'utf8');
   }
 
   async remove(relativePath) {
@@ -77,6 +137,44 @@ export class LocalFileStorage {
     }
     return absolutePath;
   }
+
+  async mirrorToS3({ relativePath, body, contentType, metadata, force = false }) {
+    if (!force && config.fileStorageMode !== 'dual') return metadata;
+    if (!config.awsS3Bucket) {
+      if (config.awsStorageRequired) {
+        const error = new Error('FILE_STORAGE_MODE is dual but AWS_S3_BUCKET is not configured.');
+        error.statusCode = 500;
+        throw error;
+      }
+      return metadata;
+    }
+
+    try {
+      const { s3, PutObjectCommand } = await createAWSClients();
+      const objectKey = buildS3Key(relativePath);
+      await s3.send(new PutObjectCommand({
+        Bucket: config.awsS3Bucket,
+        Key: objectKey,
+        Body: body,
+        ContentType: contentType
+      }));
+      metadata.storageKind = 'dual';
+      metadata.s3Bucket = config.awsS3Bucket;
+      metadata.s3Key = objectKey;
+      return metadata;
+    } catch (error) {
+      if (config.awsStorageRequired) throw error;
+      console.error('S3 mirror failed. Continuing with local storage only.');
+      console.error(error);
+      return metadata;
+    }
+  }
+}
+
+function buildS3Key(relativePath) {
+  const prefix = String(config.awsS3Prefix || '').replace(/^\/+|\/+$/g, '');
+  const normalizedPath = String(relativePath || '').replace(/^\/+/, '').replace(/\\/g, '/');
+  return prefix ? `${prefix}/${normalizedPath}` : normalizedPath;
 }
 
 function validateCVFile(file) {

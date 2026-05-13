@@ -3,7 +3,22 @@ export const state = {
   cvs: [],
   jobBoards: [],
   savedFilters: [],
+  currentApplication: null,
+  currentApplicationDocuments: [],
+  currentApplicationJobs: [],
+  appConfig: {
+    defaultProvider: 'gemini',
+    awsEnabled: false
+  },
+  selectedAIProvider: 'gemini',
   view: 'list',
+  route: {
+    path: '/',
+    applicationId: null,
+    documentId: null,
+    page: 'home',
+    tab: 'overview'
+  },
   filters: {
     search: '',
     status: '',

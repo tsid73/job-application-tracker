@@ -1,6 +1,7 @@
 import http from 'node:http';
 import { join } from 'node:path';
 import { statSync } from 'node:fs';
+import { readFile } from 'node:fs/promises';
 import { config } from './config.js';
 import { pool } from './db/pool.js';
 import { sendError, sendHtmlError, sendJson, readJson, readMultipart, serveStatic } from './utils/http.js';
@@ -17,13 +18,14 @@ import { createApiRouter } from './routes.js';
 import { extractCVText } from './services/cvTextExtractor.js';
 import { applyMigrations } from './db/ensureSchema.js';
 import { explainConnectionError } from './db/connectionError.js';
+import { queueAWSGeneration, syncCompletedAWSJob } from './services/awsAiQueue.js';
 
 const publicDir = join(process.cwd(), 'public');
 const storage = new LocalFileStorage();
-const aiProvider = createAIProvider();
 const enforceRequestGuards = createRequestGuard({ config });
 const audit = createAuditLogger(pool);
 const readApi = createReadApi({ pool, audit });
+const spaIndexPath = join(publicDir, 'index.html');
 let shuttingDown = false;
 
 const server = http.createServer(async (req, res) => {
@@ -45,6 +47,9 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (!serveStatic(req, res, publicDir)) {
+      if (shouldServeAppShell(url.pathname)) {
+        return serveAppShell(res);
+      }
       respondError(req, res, 404, 'Page not found', 'The page you requested does not exist in this local app.');
     }
   } catch (error) {
@@ -55,7 +60,13 @@ const server = http.createServer(async (req, res) => {
 });
 
 const routeApi = createApiRouter({
-  health: async (req, res) => sendJson(res, 200, { ok: true }),
+  health: async (req, res) => sendJson(res, 200, {
+    ok: true,
+    ai: {
+      default_provider: config.defaultAiRequestProvider,
+      aws_enabled: config.awsAiEnabled
+    }
+  }),
   getReminders: async (req, res) => sendJson(res, 200, await readApi.getReminders()),
   getNotifications: async (req, res) => sendJson(res, 200, await readApi.getNotifications()),
   getReports: async (req, res) => sendJson(res, 200, await readApi.getReports()),
@@ -96,6 +107,11 @@ const routeApi = createApiRouter({
   scoreRoleFit,
   checkATS,
   generateFollowUpEmail,
+  getApplicationAIDocuments: async (req, res, id) => sendJson(res, 200, await readApi.getApplicationAIDocuments(id)),
+  getAIDocument: async (req, res, id) => sendJson(res, 200, await readApi.getAIDocument(id)),
+  deleteAIDocument,
+  regenerateAIDocument,
+  getAIJob,
   downloadAIDocument,
   notFound: (req, res) => sendError(res, 404, 'API route not found')
 });
@@ -707,11 +723,23 @@ async function createCV(req, res) {
 
     const result = await client.query(
       `
-        INSERT INTO cv_versions (file_path, original_name, mime_type, file_size, version_label, is_latest, extracted_text, file_hash)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+        INSERT INTO cv_versions (file_path, original_name, mime_type, file_size, version_label, is_latest, extracted_text, file_hash, storage_kind, s3_bucket, s3_key)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
         RETURNING id, original_name, version_label, file_size, is_latest, created_at
       `,
-      [saved.relativePath, saved.originalName, saved.mimeType, saved.fileSize, versionLabel, isLatest, extractedText, saved.fileHash]
+      [
+        saved.relativePath,
+        saved.originalName,
+        saved.mimeType,
+        saved.fileSize,
+        versionLabel,
+        isLatest,
+        extractedText,
+        saved.fileHash,
+        saved.storageKind,
+        saved.s3Bucket,
+        saved.s3Key
+      ]
     );
     await client.query('COMMIT');
     sendJson(res, 201, { cv: result.rows[0] });
@@ -785,42 +813,47 @@ async function downloadCV(req, res, id) {
 }
 
 async function generateCV(req, res) {
-  const input = await readAIRequest(req);
-  const output = await aiProvider.generateCV(input);
-  const document = await persistAIDocument({ ...input, type: 'tailored_cv', title: `Tailored CV - ${input.application?.company_name || input.cv.original_name}`, content: output.content, output });
-  sendJson(res, 200, { ...output, document });
+  await runAIGeneration(req, res, {
+    methodName: 'generateCV',
+    type: 'tailored_cv',
+    buildTitle: (input) => `Tailored CV - ${input.application?.company_name || input.cv.original_name}`
+  });
 }
 
 async function generateCoverLetter(req, res) {
-  const input = await readAIRequest(req);
-  const output = await aiProvider.generateCoverLetter(input);
-  const document = await persistAIDocument({ ...input, type: 'cover_letter', title: `Cover Letter - ${input.application?.company_name || input.cv.original_name}`, content: output.content, output });
-  sendJson(res, 200, { ...output, document });
+  await runAIGeneration(req, res, {
+    methodName: 'generateCoverLetter',
+    type: 'cover_letter',
+    buildTitle: (input) => `Cover Letter - ${input.application?.company_name || input.cv.original_name}`
+  });
 }
 
 async function scoreRoleFit(req, res) {
-  const input = await readAIRequest(req);
-  const output = await aiProvider.scoreRoleFit(input);
-  const document = await persistAIDocument({ ...input, type: 'role_fit', title: `Role Fit - ${input.application?.company_name || input.cv.original_name}`, content: output.content, output });
-  sendJson(res, 200, { ...output, document });
+  await runAIGeneration(req, res, {
+    methodName: 'scoreRoleFit',
+    type: 'role_fit',
+    buildTitle: (input) => `Role Fit - ${input.application?.company_name || input.cv.original_name}`
+  });
 }
 
 async function checkATS(req, res) {
-  const input = await readAIRequest(req);
-  const output = await aiProvider.checkATS(input);
-  const document = await persistAIDocument({ ...input, type: 'ats_check', title: `ATS Check - ${input.application?.company_name || input.cv.original_name}`, content: output.content, output });
-  sendJson(res, 200, { ...output, document });
+  await runAIGeneration(req, res, {
+    methodName: 'checkATS',
+    type: 'ats_check',
+    buildTitle: (input) => `ATS Check - ${input.application?.company_name || input.cv.original_name}`
+  });
 }
 
 async function generateFollowUpEmail(req, res) {
-  const input = await readAIRequest(req);
-  const output = await aiProvider.generateFollowUpEmail(input);
-  const document = await persistAIDocument({ ...input, type: 'follow_up_email', title: `Follow-up Email - ${input.application?.company_name || input.cv.original_name}`, content: output.content, output });
-  sendJson(res, 200, { ...output, document });
+  await runAIGeneration(req, res, {
+    methodName: 'generateFollowUpEmail',
+    type: 'follow_up_email',
+    buildTitle: (input) => `Follow-up Email - ${input.application?.company_name || input.cv.original_name}`
+  });
 }
 
 async function downloadAIDocument(req, res, id) {
-  const result = await pool.query('SELECT title, file_path FROM ai_documents WHERE id = $1 AND file_path IS NOT NULL', [id]);
+  const result = await pool.query('SELECT title, file_path FROM ai_documents WHERE id = $1 AND file_path IS NOT NULL AND deleted_at IS NULL', [id]);
   if (!result.rowCount) return sendError(res, 404, 'AI document not found');
 
   const doc = result.rows[0];
@@ -847,6 +880,146 @@ async function persistAIDocument(payload) {
     );
   }
   return document;
+}
+
+async function runAIGeneration(req, res, { methodName, type, buildTitle }) {
+  const input = await readAIRequest(req);
+  const title = buildTitle(input);
+
+  if (input.providerRequested === 'aws') {
+    const job = await queueAWSGeneration({ pool, storage, config, input, type, title });
+    if (input.application?.id) {
+      await pool.query(
+        'INSERT INTO activity_logs (application_id, action, details) VALUES ($1, $2, $3)',
+        [input.application.id, `ai_${type}_queued`, `${title} queued for AWS generation`]
+      );
+    }
+    return sendJson(res, 202, {
+      queued: true,
+      provider: 'aws',
+      job
+    });
+  }
+
+  const providerName = input.providerRequested === 'mock' ? 'mock' : 'gemini';
+  const provider = createAIProvider(providerName);
+
+  try {
+    const output = await provider[methodName](input);
+    const document = await persistAIDocument({
+      ...input,
+      type,
+      title,
+      content: output.content,
+      output: {
+        ...output,
+        providerRequested: input.providerRequested
+      }
+    });
+    return sendJson(res, 200, { ...output, provider_requested: input.providerRequested, document });
+  } catch (error) {
+    error.statusCode ||= 502;
+    throw normalizeAIError(error, input.providerRequested);
+  }
+}
+
+async function getAIJob(req, res, id) {
+  let payload = await readApi.getAIJob(id);
+  if (payload.job.provider_requested === 'aws' && payload.job.status !== 'completed' && payload.job.status !== 'failed') {
+    const previousDocumentId = payload.job.document_id;
+    const synced = await syncCompletedAWSJob({
+      pool,
+      storage,
+      config,
+      saveAIDocument,
+      job: payload.job
+    });
+    if (synced.document_id && synced.document_id !== previousDocumentId && synced.application_id) {
+      await pool.query(
+        'INSERT INTO activity_logs (application_id, action, details) VALUES ($1, $2, $3)',
+        [synced.application_id, `ai_${synced.document_type}`, `${synced.title} via ${synced.provider_used || 'aws'}`]
+      );
+    }
+    payload = { job: synced };
+  }
+
+  const document = payload.job.document_id ? await readApi.getAIDocument(payload.job.document_id).catch(() => null) : null;
+  sendJson(res, 200, { ...payload, ...(document ? document : {}) });
+}
+
+async function deleteAIDocument(req, res, id) {
+  const result = await pool.query(
+    `
+      UPDATE ai_documents
+      SET deleted_at = COALESCE(deleted_at, now())
+      WHERE id = $1
+        AND deleted_at IS NULL
+      RETURNING id, application_id, title
+    `,
+    [id]
+  );
+  if (!result.rowCount) return sendError(res, 404, 'AI document not found');
+  if (result.rows[0].application_id) {
+    await logActivity(pool, result.rows[0].application_id, 'ai_document_deleted', result.rows[0].title);
+  }
+  await audit.log(req, {
+    applicationId: result.rows[0].application_id,
+    targetType: 'ai_document',
+    targetId: id,
+    action: 'delete',
+    details: `Deleted generated document ${result.rows[0].title}`
+  });
+  sendJson(res, 200, { ok: true });
+}
+
+async function regenerateAIDocument(req, res, id) {
+  const existing = await pool.query(
+    `
+      SELECT id, application_id, cv_id, document_type, title
+      FROM ai_documents
+      WHERE id = $1
+        AND deleted_at IS NULL
+    `,
+    [id]
+  );
+  if (!existing.rowCount) return sendError(res, 404, 'AI document not found');
+
+  const body = await readJson(req, config.maxAiBytes);
+  const providerRequested = normalizeRequestedProvider(cleanString(body.provider) || config.defaultAiRequestProvider);
+  const record = existing.rows[0];
+  const input = await loadAIInputFromIds({
+    applicationId: record.application_id,
+    cvId: record.cv_id,
+    providerRequested
+  });
+  const title = record.title || buildAIDocumentTitle(record.document_type, input);
+
+  if (providerRequested === 'aws') {
+    const job = await queueAWSGeneration({
+      pool,
+      storage,
+      config,
+      input,
+      type: record.document_type,
+      title
+    });
+    return sendJson(res, 202, { queued: true, provider: 'aws', job });
+  }
+
+  const provider = createAIProvider(providerRequested === 'mock' ? 'mock' : 'gemini');
+  const methodName = documentTypeToMethod(record.document_type);
+  const output = await provider[methodName](input);
+  const document = await persistAIDocument({
+    ...input,
+    type: record.document_type,
+    title,
+    content: output.content,
+    output: {
+      ...output,
+      providerRequested
+    }
+  });
+  sendJson(res, 200, { ...output, provider_requested: providerRequested, document });
 }
 
 async function readApplicationMultipart(req) {
@@ -951,10 +1124,109 @@ function originFor(url) {
   return `${url.protocol}//${url.host}`;
 }
 
+function shouldServeAppShell(pathname) {
+  return pathname === '/' || pathname.startsWith('/applications/');
+}
+
+async function serveAppShell(res) {
+  const body = await readFile(spaIndexPath);
+  res.writeHead(200, {
+    'content-type': 'text/html; charset=utf-8',
+    'content-length': body.length,
+    'cache-control': 'no-store',
+    'x-content-type-options': 'nosniff'
+  });
+  res.end(body);
+}
+
 function respondError(req, res, statusCode, message, hint = '') {
   if ((req.headers.accept || '').includes('text/html') && !String(req.url || '').startsWith('/api/')) {
     sendHtmlError(res, statusCode, message, message, hint);
     return;
   }
   sendError(res, statusCode, message);
+}
+
+async function loadAIInputFromIds({ applicationId, cvId, providerRequested }) {
+  const applicationResult = applicationId
+    ? await pool.query('SELECT id, company_name, job_description FROM applications WHERE id = $1', [applicationId])
+    : { rowCount: 0, rows: [] };
+  const cvResult = await pool.query(
+    'SELECT id, original_name, version_label, extracted_text, file_path FROM cv_versions WHERE id = $1 AND deleted_at IS NULL',
+    [cvId]
+  );
+
+  if (!cvResult.rowCount) {
+    const error = new Error('CV not found');
+    error.statusCode = 404;
+    throw error;
+  }
+
+  const application = applicationResult.rowCount ? applicationResult.rows[0] : null;
+  const cv = cvResult.rows[0];
+  const jobDescription = cleanString(application?.job_description);
+  if (!jobDescription) {
+    const error = new Error('Job description is required');
+    error.statusCode = 400;
+    throw error;
+  }
+  if (!cv.extracted_text && cv.file_path) {
+    const buffer = await readFile(storage.resolveSafe(cv.file_path)).catch(() => null);
+    if (buffer) {
+      cv.extracted_text = await extractCVText({ filename: cv.original_name, buffer });
+      await pool.query('UPDATE cv_versions SET extracted_text = $1 WHERE id = $2', [cv.extracted_text, cv.id]);
+    }
+  }
+
+  return {
+    application,
+    cv,
+    jobDescription,
+    providerRequested,
+    previousDocumentId: null,
+    promptExcerpt: `${(application?.job_description || '').slice(0, 320)}${String(application?.job_description || '').length > 320 ? '...' : ''}`,
+    sourceContext: [application?.company_name, cv.original_name].filter(Boolean).join(' | ')
+  };
+}
+
+function documentTypeToMethod(type) {
+  const mapping = {
+    tailored_cv: 'generateCV',
+    cover_letter: 'generateCoverLetter',
+    role_fit: 'scoreRoleFit',
+    ats_check: 'checkATS',
+    follow_up_email: 'generateFollowUpEmail'
+  };
+  const methodName = mapping[type];
+  if (!methodName) {
+    const error = new Error(`Unsupported document type ${type}`);
+    error.statusCode = 400;
+    throw error;
+  }
+  return methodName;
+}
+
+function buildAIDocumentTitle(type, input) {
+  const target = input.application?.company_name || input.cv.original_name;
+  const mapping = {
+    tailored_cv: `Tailored CV - ${target}`,
+    cover_letter: `Cover Letter - ${target}`,
+    role_fit: `Role Fit - ${target}`,
+    ats_check: `ATS Check - ${target}`,
+    follow_up_email: `Follow-up Email - ${target}`
+  };
+  return mapping[type] || `Generated Document - ${target}`;
+}
+
+function normalizeAIError(error, provider) {
+  const wrapped = new Error(error.message || 'AI generation failed');
+  wrapped.statusCode = error.statusCode || 502;
+  wrapped.provider = provider;
+  return wrapped;
+}
+
+function normalizeRequestedProvider(value) {
+  const provider = String(value || '').trim().toLowerCase();
+  if (provider === 'aws' || provider === 'mock') return provider;
+  return 'gemini';
 }

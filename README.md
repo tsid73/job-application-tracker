@@ -493,9 +493,22 @@ UPLOAD_RATE_LIMIT_MAX=10
 AI_DOCUMENT_RETENTION_DAYS=60
 KEEP_LATEST_AI_DOCUMENTS_PER_APPLICATION=5
 AI_PROVIDER=mock
+DEFAULT_AI_REQUEST_PROVIDER=gemini
 AI_API_BASE_URL=http://localhost:11434/v1
 AI_API_KEY=
 AI_MODEL=local-model
+FILE_STORAGE_MODE=local
+AWS_REGION=your-aws-region
+AWS_ACCESS_KEY_ID=your-aws-access-key-id
+AWS_SECRET_ACCESS_KEY=your-aws-secret-access-key
+AWS_SESSION_TOKEN=
+AWS_S3_BUCKET=your-s3-bucket-name
+AWS_S3_PREFIX=job-tracker
+AWS_SQS_QUEUE_URL=https://sqs.your-region.amazonaws.com/123456789012/job-tracker-ai
+AWS_AI_ENABLED=false
+AWS_AI_DAILY_LIMIT=20
+AWS_AI_ALLOWED_DOC_TYPES=tailored_cv,cover_letter,role_fit,ats_check,follow_up_email
+AWS_STORAGE_REQUIRED=false
 ```
 
 Use `AI_PROVIDER=mock` if you do not want AI calls.
@@ -525,6 +538,7 @@ Notes:
 - Backup bundles now include both the database and the `uploads/` tree, so restores recover CVs and generated documents together.
 - Destructive actions such as archive, restore, and permanent deletion are written to `audit_events` with actor IP and user agent.
 - Generated AI documents can be pruned with the retention script, which also removes orphaned files from `uploads/ai`.
+- AWS setup steps and required placeholders are documented in [docs/AWS_SETUP.md](docs/AWS_SETUP.md).
 
 Do not commit `.env`.
 
