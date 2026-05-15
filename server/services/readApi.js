@@ -1,5 +1,22 @@
 import { cleanString, validateStatus } from '../utils/validation.js';
 
+const meaningfulActivityActions = [
+  'created',
+  'archived',
+  'restored',
+  'status_changed',
+  'interview_date_changed',
+  'note_added',
+  'preparation_updated',
+  'recruiter_question_added',
+  'feedback_added',
+  'todo_added',
+  'todo_completed',
+  'ai_document_deleted'
+];
+
+const meaningfulAiActivityPattern = '^ai_(?!.*_queued$).+';
+
 export function createReadApi({ pool, audit }) {
   return {
     async getReminders() {
@@ -152,7 +169,12 @@ export function createReadApi({ pool, audit }) {
       const limit = Math.min(50, Math.max(5, Number(url.searchParams.get('limit')) || 12));
       const offset = (page - 1) * limit;
       const params = [];
-      const conditions = [];
+      const conditions = [
+        'al.application_id IS NOT NULL',
+        `al.action NOT LIKE 'job_board_%'`,
+        `(al.action = ANY($1::text[]) OR al.action ~ $2)`
+      ];
+      params.push(meaningfulActivityActions, meaningfulAiActivityPattern);
 
       if (applicationIdParam && Number.isInteger(applicationId)) {
         params.push(applicationId);
@@ -164,7 +186,7 @@ export function createReadApi({ pool, audit }) {
         conditions.push(`(al.action ILIKE $${params.length} OR al.details ILIKE $${params.length} OR a.company_name ILIKE $${params.length})`);
       }
 
-      const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
+      const where = `WHERE ${conditions.join(' AND ')}`;
       const result = await pool.query(
         `
           SELECT
@@ -381,9 +403,10 @@ export function createReadApi({ pool, audit }) {
             SELECT id, action, details, created_at
             FROM activity_logs
             WHERE application_id = $1
+              AND (action = ANY($2::text[]) OR action ~ $3)
             ORDER BY created_at DESC
           `,
-          [id]
+          [id, meaningfulActivityActions, meaningfulAiActivityPattern]
         ),
         executor.query(
           `
@@ -496,7 +519,10 @@ export function createReadApi({ pool, audit }) {
         status_history: history.rows,
         notes: notes.rows,
         activity: activity.rows,
-        ai_documents: aiDocuments.rows,
+        ai_documents: aiDocuments.rows.map((row) => ({
+          ...row,
+          download_url: `/api/ai/documents/${row.id}/download`
+        })),
         ai_jobs: aiJobs.rows,
         audit_events: auditEventsResult.rows,
         tags: tags.rows.map((row) => row.name),

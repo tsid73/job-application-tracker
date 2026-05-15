@@ -33,7 +33,17 @@ export const state = {
     page: 1,
     limit: 12,
     total: 0
-  }
+  },
+  contentWorkspace: {
+    search: '',
+    provider: 'all',
+    type: 'all',
+    previewDocumentId: null,
+    recentDocumentId: null,
+    latestOnly: false,
+    sort: 'newest'
+  },
+  toasts: []
 };
 
 export const statusLabels = {

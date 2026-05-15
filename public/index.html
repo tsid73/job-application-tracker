@@ -19,193 +19,15 @@
           <p id="summary">Loading</p>
         </div>
         <div class="topbar-actions">
-          <button id="exportCsvButton" class="secondary" type="button">Export CSV</button>
-          <button id="importCsvButton" class="secondary" type="button">Import CSV</button>
           <input id="importCsvInput" type="file" accept=".csv,text/csv" hidden>
+          <input id="restoreBackupInput" type="file" accept=".json,application/json" hidden>
           <button id="cvManagerButton" class="secondary" type="button">CVs</button>
           <button id="newApplicationButton" type="button">New Application</button>
         </div>
       </header>
 
       <main>
-        <section id="appHome">
-        <section id="notificationsPanel" class="notifications-panel" hidden></section>
-
-        <nav class="view-tabs" aria-label="Views">
-          <button class="secondary is-active" type="button" data-view="list">List</button>
-          <button class="secondary" type="button" data-view="reminders">Reminders</button>
-          <button class="secondary" type="button" data-view="kanban">Kanban</button>
-          <button class="secondary" type="button" data-view="reports">Reports</button>
-          <button class="secondary" type="button" data-view="activity">Activity</button>
-          <button class="secondary" type="button" data-view="boards">Job Boards</button>
-          <button class="secondary" type="button" data-view="toolkit">Toolkit</button>
-        </nav>
-
-        <section id="listView" class="surface-panel">
-          <section class="toolbar" aria-label="Filters">
-        <label>
-          <span>Search</span>
-          <input id="searchInput" type="search" placeholder="Company">
-        </label>
-        <label>
-          <span>Status</span>
-          <select id="statusFilter">
-            <option value="">All</option>
-            <option value="applied">Applied</option>
-            <option value="interview_scheduled">Interview Scheduled</option>
-            <option value="offer">Offer</option>
-            <option value="accepted">Accepted</option>
-            <option value="rejected">Rejected</option>
-            <option value="withdrawn">Withdrawn</option>
-            <option value="ghosted">Ghosted</option>
-          </select>
-        </label>
-        <label>
-          <span>Tag</span>
-          <input id="tagFilter" type="search" placeholder="Remote">
-        </label>
-        <label>
-          <span>View</span>
-          <select id="archiveFilter">
-            <option value="false">Active</option>
-            <option value="true">Archived</option>
-            <option value="all">All</option>
-          </select>
-        </label>
-        <label>
-          <span>Saved Filter</span>
-          <select id="savedFilterSelect">
-            <option value="">Current filters</option>
-          </select>
-        </label>
-        <label>
-          <span>Save As</span>
-          <input id="savedFilterName" type="text" placeholder="Interview week">
-        </label>
-        <div class="toolbar-actions">
-          <button id="saveFilterButton" class="secondary" type="button">Save Filter</button>
-          <button id="deleteFilterButton" class="secondary" type="button">Delete Filter</button>
-        </div>
-          </section>
-
-          <section class="table-shell" aria-live="polite">
-            <table>
-              <thead>
-                <tr>
-                  <th>Company</th>
-                  <th>Applied</th>
-                  <th>Status</th>
-                  <th>State</th>
-                  <th>Interview</th>
-                  <th>Days</th>
-                  <th>Tags</th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
-              <tbody id="applicationsTable"></tbody>
-            </table>
-            <div id="emptyState" class="empty" hidden>No applications match the current filters.</div>
-          </section>
-        </section>
-
-        <section id="remindersView" class="view-panel" hidden>
-          <div id="remindersList" class="panel-grid"></div>
-        </section>
-
-        <section id="kanbanView" class="view-panel" hidden>
-          <div id="kanbanBoard" class="kanban-board"></div>
-        </section>
-
-        <section id="reportsView" class="view-panel" hidden>
-          <div id="reportsContent" class="reports-grid"></div>
-        </section>
-
-        <section id="activityView" class="surface-panel" hidden>
-          <section class="toolbar" aria-label="Activity filters">
-          <label>
-            <span>Search Activity</span>
-            <input id="activitySearchInput" type="search" placeholder="Company, action, detail">
-          </label>
-          </section>
-          <section class="table-shell" aria-live="polite">
-            <table>
-              <thead>
-                <tr>
-                  <th>When</th>
-                  <th>Application</th>
-                  <th>Action</th>
-                  <th>Details</th>
-                </tr>
-              </thead>
-              <tbody id="activityTable"></tbody>
-            </table>
-            <div id="activityEmptyState" class="empty" hidden>No activity found.</div>
-          </section>
-          <div class="pagination" id="activityPagination"></div>
-        </section>
-
-        <section id="boardsView" class="view-panel" hidden>
-          <section class="boards-layout">
-            <form id="jobBoardForm" class="detail-section">
-              <div class="section-heading">
-                <div>
-                  <h3>Track Job Boards</h3>
-                  <p class="section-help">Save sources you check regularly and keep a last-checked trail.</p>
-                </div>
-              </div>
-              <input name="id" type="hidden">
-              <div class="form-grid compact-grid">
-                <label>
-                  <span>Board Name</span>
-                  <input name="name" required placeholder="LinkedIn Jobs">
-                </label>
-                <label>
-                  <span>URL</span>
-                  <input name="url" type="url" placeholder="https://www.linkedin.com/jobs/">
-                </label>
-                <label>
-                  <span>Last Checked</span>
-                  <input name="last_checked_date" type="text" inputmode="numeric" autocomplete="off" placeholder="DD-MM-YYYY" data-date-input>
-                </label>
-                <label class="checkbox inline-checkbox">
-                  <input name="is_active" type="checkbox" checked>
-                  <span>Active source</span>
-                </label>
-                <label class="wide">
-                  <span>Notes</span>
-                  <textarea name="notes" rows="3" placeholder="Target roles, filters, alerts, or specific search URLs"></textarea>
-                </label>
-              </div>
-              <p class="form-error" id="jobBoardError" hidden></p>
-              <div class="inline-actions">
-                <button type="submit">Save Board</button>
-                <button id="jobBoardResetButton" class="secondary" type="button">Clear</button>
-              </div>
-            </form>
-            <section class="detail-section">
-              <div class="section-heading">
-                <div>
-                  <h3>Saved Sources</h3>
-                  <p class="section-help">Use this as a lightweight sourcing dashboard.</p>
-                </div>
-              </div>
-              <div id="jobBoardsList" class="board-list"></div>
-            </section>
-          </section>
-        </section>
-
-        <section id="toolkitView" class="view-panel toolkit-view" hidden>
-          <div id="toolkitContent" class="toolkit-grid"></div>
-        </section>
-        </section>
-
-        <section id="applicationPage" class="page-view" hidden>
-          <div id="applicationPageContent" class="page-shell"></div>
-        </section>
-
-        <section id="contentPage" class="page-view" hidden>
-          <div id="contentPageContent" class="page-shell"></div>
-        </section>
+        <section id="workspaceRoot" class="workspace-root" aria-live="polite"></section>
       </main>
     </div>
 
@@ -396,6 +218,80 @@
       <p class="form-error" id="cvError" hidden></p>
       <div id="cvList" class="cv-list"></div>
     </dialog>
+
+    <dialog id="jobBoardDialog">
+      <form id="jobBoardForm" method="dialog">
+        <div class="dialog-header">
+          <h2 id="jobBoardDialogTitle">Track Job Board</h2>
+          <button class="icon-button" value="cancel" type="button" data-close-dialog>Close</button>
+        </div>
+        <div class="form-grid">
+          <input name="id" type="hidden">
+          <label>
+            <span>Board Name</span>
+            <input name="name" required placeholder="LinkedIn Jobs">
+          </label>
+          <label>
+            <span>URL</span>
+            <input name="url" type="url" placeholder="https://www.linkedin.com/jobs/">
+          </label>
+          <label>
+            <span>Last Checked</span>
+            <input name="last_checked_date" type="text" inputmode="numeric" autocomplete="off" placeholder="DD-MM-YYYY" data-date-input>
+          </label>
+          <label class="checkbox inline-checkbox">
+            <input name="is_active" type="checkbox" checked>
+            <span>Active source</span>
+          </label>
+          <label class="wide">
+            <span>Notes</span>
+            <textarea name="notes" rows="4" placeholder="Target roles, filters, alerts, or specific search URLs"></textarea>
+          </label>
+        </div>
+        <p class="form-error" id="jobBoardError" hidden></p>
+        <div class="dialog-actions">
+          <button id="jobBoardResetButton" class="secondary" type="button">Clear</button>
+          <button type="submit">Save Board</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="confirmDialog">
+      <div class="dialog-header">
+        <h2 id="confirmDialogTitle">Confirm Action</h2>
+        <button class="icon-button" type="button" data-close-dialog>Close</button>
+      </div>
+      <div class="dialog-body">
+        <p id="confirmDialogBody"></p>
+        <p id="confirmDialogError" class="form-error" hidden></p>
+      </div>
+      <div class="dialog-actions">
+        <button id="confirmDialogCancel" class="secondary" type="button">Cancel</button>
+        <button id="confirmDialogAccept" class="danger" type="button">Confirm</button>
+      </div>
+    </dialog>
+
+    <dialog id="editorDialog">
+      <form id="editorDialogForm" method="dialog">
+        <div class="dialog-header">
+          <h2 id="editorDialogTitle">Edit</h2>
+          <button class="icon-button" type="button" data-close-dialog>Close</button>
+        </div>
+        <div class="dialog-body">
+          <label class="wide">
+            <span id="editorDialogLabel">Value</span>
+            <textarea id="editorDialogInput" rows="4"></textarea>
+          </label>
+          <p id="editorDialogError" class="form-error" hidden></p>
+        </div>
+        <div class="dialog-actions">
+          <button class="secondary" type="button" data-close-dialog>Cancel</button>
+          <button id="editorDialogSubmit" type="submit">Save</button>
+        </div>
+      </form>
+    </dialog>
+
+    <section id="appToast" class="app-toast-stack" aria-live="polite" aria-atomic="false"></section>
 
     <script src="/js/app.js" type="module"></script>
   </body>

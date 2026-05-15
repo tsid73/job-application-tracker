@@ -882,7 +882,7 @@ function renderContentSummaryTab({ application, primaryCvId, queuedJobs, failedJ
           </label>
         </div>
         <div class="content-asset-list">
-          ${documentSlots.map((slot) => renderContentDocumentSlot(application.id, slot, primaryCvId, recentDocumentId, workspace.providerPreferences || {})).join('') || (allDocuments.length || allJobs.length
+          ${documentSlots.map((slot) => renderContentDocumentSlot(application.id, slot, primaryCvId, recentDocumentId)).join('') || (allDocuments.length || allJobs.length
             ? renderInlineEmpty('No documents match these filters', 'Clear or relax the active filters to see more generated content.')
             : renderInlineEmpty('No generated content yet', 'Use the overview tab to generate your first persistent document asset.'))}
         </div>
@@ -1343,9 +1343,8 @@ function renderOverviewDocumentSlot(applicationId, slot, cvId) {
   `;
 }
 
-function renderContentDocumentSlot(applicationId, slot, cvId, recentDocumentId = null, providerPreferences = {}) {
+function renderContentDocumentSlot(applicationId, slot, cvId, recentDocumentId = null) {
   const isRecent = slot.latestDocument && Number(slot.latestDocument.id) === Number(recentDocumentId);
-  const preferredProvider = providerPreferences[slot.type] || 'gemini';
   return `
     <section class="document-slot-card${isRecent ? ' is-recent' : ''}">
       <div class="document-slot-head">
@@ -1362,15 +1361,6 @@ function renderContentDocumentSlot(applicationId, slot, cvId, recentDocumentId =
       <div class="document-card-actions document-slot-actions">
         ${renderSlotPrimaryAction(slot, applicationId, cvId)}
       </div>
-      ${(slot.status === 'missing' || slot.status === 'failed') ? `
-        <label class="slot-provider-select">
-          <span>Generation provider</span>
-          <select data-slot-provider="${escapeAttribute(slot.type)}">
-            <option value="gemini"${preferredProvider === 'gemini' ? ' selected' : ''}>Gemini</option>
-            <option value="aws"${preferredProvider === 'aws' ? ' selected' : ''}>AWS</option>
-          </select>
-        </label>
-      ` : ''}
       ${slot.latestDocument ? `
         <details class="document-version-list">
           <summary>${slot.documents.length > 1 ? `Versions (${slot.documents.length})` : 'Current document'}</summary>

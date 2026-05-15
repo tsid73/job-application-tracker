@@ -27,8 +27,6 @@ const aiEndpoints = {
   followup: '/api/ai/follow-up-email'
 };
 
-state.contentWorkspace.providerPreferences = loadProviderPreferences();
-
 bindGlobalEvents();
 
 Promise.all([loadApplications(), loadCVs(), loadSavedFilters(), loadReminders(), loadNotifications(), loadJobBoards()])
@@ -1058,12 +1056,6 @@ function bindContentWorkspaceActions(applicationId, payload) {
     state.contentWorkspace.latestOnly = event.target.checked;
     renderCurrentRoute();
   });
-  root.querySelectorAll('[data-slot-provider]').forEach((select) => {
-    select.addEventListener('change', (event) => {
-      state.contentWorkspace.providerPreferences[event.target.dataset.slotProvider] = event.target.value;
-      persistProviderPreferences();
-    });
-  });
   root.querySelector('[data-generate-missing]')?.addEventListener('click', async (event) => {
     const missingButtons = [...root.querySelectorAll('.document-slot-card [data-ai]')];
     if (!missingButtons.length) return;
@@ -1174,7 +1166,7 @@ async function runAI(button, applicationId, options = {}) {
     return;
   }
 
-  const preferredProvider = resolvePreferredProvider(button.dataset.docType);
+  const provider = state.selectedAIProvider === 'aws' && state.appConfig.awsEnabled ? 'aws' : 'gemini';
 
   setButtonBusy(button, true);
   try {
@@ -1184,13 +1176,9 @@ async function runAI(button, applicationId, options = {}) {
       body: JSON.stringify({
         application_id: applicationId,
         cv_id: cvId,
-        provider: preferredProvider
+        provider
       })
     });
-    if (button.dataset.docType) {
-      state.contentWorkspace.providerPreferences[button.dataset.docType] = preferredProvider;
-      persistProviderPreferences();
-    }
     await loadNotifications();
     if (payload.document?.id) {
       state.contentWorkspace.recentDocumentId = payload.document.id;
@@ -1313,26 +1301,6 @@ function shiftCalendar(action) {
   }
   const offset = action === 'next' ? 1 : -1;
   state.calendarDate = new Date(current.getFullYear(), current.getMonth() + offset, 1);
-}
-
-function loadProviderPreferences() {
-  try {
-    return JSON.parse(window.localStorage.getItem('jobTrackerProviderPreferences') || '{}');
-  } catch {
-    return {};
-  }
-}
-
-function persistProviderPreferences() {
-  window.localStorage.setItem('jobTrackerProviderPreferences', JSON.stringify(state.contentWorkspace.providerPreferences || {}));
-}
-
-function resolvePreferredProvider(documentType) {
-  const preferred = documentType ? state.contentWorkspace.providerPreferences?.[documentType] : '';
-  if (preferred === 'aws' && state.appConfig.awsEnabled) return 'aws';
-  if (preferred === 'gemini' || preferred === 'mock') return preferred;
-  if (state.selectedAIProvider === 'aws' && state.appConfig.awsEnabled) return 'aws';
-  return 'gemini';
 }
 
 function navigateTo(path) {
