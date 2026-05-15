@@ -23,203 +23,174 @@ export class AIProvider {
 }
 
 class MockAIProvider extends AIProvider {
-  async generateCV({ jobDescription, cv }) {
+  async generateCV(input) {
+    const prompt = buildGenerationPrompt('tailored_cv', input);
     return {
       provider: 'mock',
       model: 'mock-local-model',
-      content: [
-        'Tailored CV draft',
+      content: normalizeGeneratedContent([
+        'Headline',
+        conciseLine(input.application?.role_title || 'Tailored CV'),
         '',
-        `Source CV: ${cv.original_name}`,
+        'Summary',
+        `Tailored for ${input.application?.company_name || 'the target company'} using verified experience from ${input.cv.original_name}.`,
         '',
-        'Relevant CV text:',
-        summarize(cv.extracted_text || ''),
+        'Core Skills',
+        ...toBullets(input.candidateSignals?.technologies?.slice(0, 8) || []),
         '',
-        'Emphasize these role-specific points:',
-        summarize(jobDescription)
-      ].join('\n')
+        'Experience Highlights',
+        ...toBullets(input.candidateSignals?.evidence?.slice(0, 5) || [summarize(prompt.userPrompt, 220)]),
+        '',
+        'Suggested Keyword Additions',
+        ...toBullets(input.jobSignals?.keywords?.slice(0, 8) || [])
+      ].join('\n'))
     };
   }
 
-  async generateCoverLetter({ jobDescription, cv }) {
+  async generateCoverLetter(input) {
+    const prompt = buildGenerationPrompt('cover_letter', input);
     return {
       provider: 'mock',
       model: 'mock-local-model',
-      content: [
-        'Dear hiring team,',
+      content: normalizeGeneratedContent([
+        'Opening',
+        `Dear hiring team, I am applying for the ${input.application?.role_title || 'role'} position at ${input.application?.company_name || 'your company'}.`,
         '',
-        `I am applying for this role and have aligned my experience from ${cv.original_name} to the requirements below.`,
+        'Why I Fit',
+        summarize(prompt.contextBlock, 260),
         '',
-        'Relevant background:',
-        summarize(cv.extracted_text || ''),
+        'Evidence',
+        ...toBullets(input.candidateSignals?.evidence?.slice(0, 3) || []),
         '',
-        summarize(jobDescription),
-        '',
-        'Sincerely,'
-      ].join('\n')
+        'Closing',
+        'Thank you for your time and consideration.',
+        '[Your Name]'
+      ].join('\n'))
     };
   }
 
-  async scoreRoleFit({ jobDescription, cv }) {
+  async scoreRoleFit(input) {
     return {
       provider: 'mock',
       model: 'mock-local-model',
-      content: [
-        'Role fit score: 72/100',
+      content: normalizeGeneratedContent([
+        'Score',
+        '72/100',
         '',
-        'Missing skills:',
-        '- Add exact framework names from the job description if you have them.',
-        '- Add recent measurable outcomes.',
+        'Match Summary',
+        summarize(buildContextBlock(input), 240),
         '',
-        'Keyword suggestions:',
-        '- PostgreSQL',
-        '- Node.js',
-        '- API design',
-        '- Operational tooling',
+        'Missing Skills',
+        ...toBullets(input.jobSignals?.requirements?.slice(0, 4) || ['Add more exact role-aligned skills from the job description.']),
         '',
-        'Basis:',
-        summarize(`${jobDescription}\n\n${cv.extracted_text || ''}`)
-      ].join('\n')
+        'Keyword Suggestions',
+        ...toBullets(input.jobSignals?.keywords?.slice(0, 6) || []),
+        '',
+        'CV Improvements',
+        '- Add more measurable outcomes near the top of the resume.',
+        '- Reuse exact role terminology where experience supports it.'
+      ].join('\n'))
     };
   }
 
-  async generateFollowUpEmail({ jobDescription, cv }) {
+  async generateFollowUpEmail(input) {
     return {
       provider: 'mock',
       model: 'mock-local-model',
-      content: [
-        'Subject: Follow-up on my application',
+      content: normalizeGeneratedContent([
+        'Subject',
+        `Follow-up on ${input.application?.role_title || 'my application'}${input.application?.company_name ? ` - ${input.application.company_name}` : ''}`,
         '',
+        'Greeting',
         'Hello,',
         '',
-        'I wanted to follow up on my application. I remain interested in the role and believe my background is aligned with the needs described in the posting.',
+        'Follow-up Message',
+        `I wanted to follow up on my application for the ${input.application?.role_title || 'role'}. My background aligns with the priorities in the posting, especially ${input.jobSignals?.keywords?.slice(0, 3).join(', ') || 'the core requirements'}.`,
         '',
-        summarize(jobDescription),
-        '',
+        'Close',
         'Thank you for your time,',
         '[Your Name]'
-      ].join('\n')
+      ].join('\n'))
     };
   }
 
-  async checkATS({ jobDescription, cv }) {
+  async checkATS(input) {
     return {
       provider: 'mock',
       model: 'mock-local-model',
-      content: [
-        'ATS score: 78/100',
+      content: normalizeGeneratedContent([
+        'ATS Score',
+        '78/100',
         '',
-        'Match summary:',
-        '- Core backend and API terms overlap with the role.',
-        '- Quantified outcomes are limited and should be expanded.',
-        '- Several exact keywords from the posting are missing.',
+        'Match Summary',
+        summarize(buildContextBlock(input), 220),
         '',
-        'Missing keywords:',
-        '- REST APIs',
-        '- CI/CD',
-        '- monitoring',
-        '- TypeScript',
+        'Missing Keywords',
+        ...toBullets(input.jobSignals?.keywords?.slice(0, 6) || []),
         '',
-        'Suggested CV changes:',
-        '- Add an exact skills section using the job description language.',
-        '- Add 3 to 5 measurable impact bullets.',
-        '- Move the most relevant stack terms into the top third of the CV.',
+        'Matched Keywords',
+        ...toBullets(intersectValues(input.jobSignals?.keywords || [], input.candidateSignals?.technologies || []).slice(0, 6)),
         '',
-        'Basis:',
-        summarize(`${jobDescription}\n\n${cv.extracted_text || ''}`)
-      ].join('\n')
+        'Weak Areas',
+        '- Quantified outcomes could be stronger.',
+        '- Top-third keyword density can improve.',
+        '',
+        'Rewrite Suggestions',
+        '- Move the strongest role-aligned technologies higher in the CV.',
+        '- Add measurable impact bullets where evidence exists.'
+      ].join('\n'))
     };
   }
 }
 
 class OpenAICompatibleProvider extends AIProvider {
-  async generateCV({ jobDescription, cv }) {
-    return this.chat(buildPrompt({
-      instruction: 'Rewrite the CV for the target role.',
-      format: [
-        'Return plain text only.',
-        'Use these sections in order: Headline, Summary, Core Skills, Experience Highlights, Suggested Keyword Additions.',
-        'Keep the wording editable and concise.',
-        'Do not invent employers or achievements.'
-      ],
-      cv,
-      jobDescription
-    }));
+  async generateCV(input) {
+    return this.chat(buildGenerationPrompt('tailored_cv', input));
   }
 
-  async generateCoverLetter({ jobDescription, cv }) {
-    return this.chat(buildPrompt({
-      instruction: 'Write a concise, strong cover letter for the target role.',
-      format: [
-        'Return plain text only.',
-        'Use these sections in order: Opening, Why I Fit, Evidence, Closing.',
-        'Keep it under 350 words.',
-        'Make the content specific to the role and resume details provided.',
-        'Do not use placeholders except [Your Name] if needed.'
-      ],
-      cv,
-      jobDescription
-    }));
+  async generateCoverLetter(input) {
+    return this.chat(buildGenerationPrompt('cover_letter', input));
   }
 
-  async scoreRoleFit({ jobDescription, cv }) {
-    return this.chat(buildPrompt({
-      instruction: 'Evaluate the candidate fit for the role.',
-      format: [
-        'Return plain text only.',
-        'Use these sections in order: Score, Match Summary, Missing Skills, Keyword Suggestions, CV Improvements.',
-        'Score must be a number from 0 to 100.',
-        'Keep every section concise and actionable.'
-      ],
-      cv,
-      jobDescription
-    }));
+  async scoreRoleFit(input) {
+    return this.chat(buildGenerationPrompt('role_fit', input));
   }
 
-  async generateFollowUpEmail({ jobDescription, cv }) {
-    return this.chat(buildPrompt({
-      instruction: 'Write a concise follow-up email for this job application.',
-      format: [
-        'Return plain text only.',
-        'Use these sections in order: Subject, Greeting, Follow-up Message, Close.',
-        'Keep it under 180 words.',
-        'Make it specific, professional, and easy to edit.'
-      ],
-      cv,
-      jobDescription
-    }));
+  async generateFollowUpEmail(input) {
+    return this.chat(buildGenerationPrompt('follow_up_email', input));
   }
 
-  async checkATS({ jobDescription, cv }) {
-    return this.chat(buildPrompt({
-      instruction: 'Act as an ATS reviewer for the target role.',
-      format: [
-        'Return plain text only.',
-        'Use these sections in order: ATS Score, Match Summary, Missing Keywords, Matched Keywords, Weak Areas, Rewrite Suggestions.',
-        'Score must be a number from 0 to 100.',
-        'Keep the advice concrete and based only on the provided materials.'
-      ],
-      cv,
-      jobDescription
-    }));
+  async checkATS(input) {
+    return this.chat(buildGenerationPrompt('ats_check', input));
   }
 
   async chat(prompt) {
+    if (!config.aiApiKey) {
+      const error = new Error('AI API key is missing. Set AI_API_KEY or use the mock provider.');
+      error.statusCode = 400;
+      throw error;
+    }
+
     const response = await fetch(`${config.aiApiBaseUrl.replace(/\/$/, '')}/chat/completions`, {
       method: 'POST',
       headers: {
         'content-type': 'application/json',
-        ...(config.aiApiKey ? { authorization: `Bearer ${config.aiApiKey}` } : {})
+        authorization: `Bearer ${config.aiApiKey}`
       },
       body: JSON.stringify({
         model: config.aiModel,
-        messages: [{ role: 'user', content: prompt }],
-        temperature: 0.3
+        messages: [
+          { role: 'system', content: prompt.systemPrompt },
+          { role: 'user', content: prompt.userPrompt }
+        ],
+        temperature: 0.2
       })
     });
 
     if (!response.ok) {
-      const error = new Error(`AI provider failed with HTTP ${response.status}`);
+      const payload = await response.json().catch(() => null);
+      const detail = payload?.error?.message || payload?.error || '';
+      const error = new Error(detail || `AI provider failed with HTTP ${response.status}`);
       error.statusCode = 502;
       throw error;
     }
@@ -228,7 +199,7 @@ class OpenAICompatibleProvider extends AIProvider {
     return {
       provider: 'openai-compatible',
       model: config.aiModel,
-      content: payload.choices?.[0]?.message?.content || ''
+      content: normalizeGeneratedContent(payload.choices?.[0]?.message?.content || '')
     };
   }
 }
@@ -238,18 +209,149 @@ export function createAIProvider(providerName = config.aiProvider) {
   return new MockAIProvider();
 }
 
-function summarize(text) {
-  const cleaned = String(text || '').replace(/\s+/g, ' ').trim();
-  if (!cleaned) return 'No job description was provided.';
-  return cleaned.length > 900 ? `${cleaned.slice(0, 900)}...` : cleaned;
+function buildGenerationPrompt(type, input) {
+  const specification = documentSpecifications[type];
+  const contextBlock = buildContextBlock(input);
+  return {
+    systemPrompt: [
+      'You are a job-application writing assistant.',
+      'Write concise, professional, editable plain text.',
+      'Use only evidence supported by the provided CV context.',
+      'Do not invent employers, projects, dates, metrics, or tools.',
+      'If evidence is weak, write carefully and avoid unsupported claims.',
+      'Avoid generic filler such as "I am excited to apply" unless directly justified.',
+      'Follow the requested section order exactly.',
+      'Return plain text only with clean headings and bullets.'
+    ].join(' '),
+    contextBlock,
+    userPrompt: [
+      specification.goal,
+      specification.rules.join('\n'),
+      '',
+      contextBlock,
+      '',
+      `Output sections in this order:\n${specification.sections.join('\n')}`
+    ].join('\n')
+  };
 }
 
-function buildPrompt({ instruction, format, cv, jobDescription }) {
+const documentSpecifications = {
+  tailored_cv: {
+    goal: 'Rewrite the resume for the target role using verified experience only.',
+    sections: ['Headline', 'Summary', 'Core Skills', 'Experience Highlights', 'Suggested Keyword Additions'],
+    rules: [
+      '- Keep every section concise and editable.',
+      '- Emphasize role-matching strengths first.',
+      '- Use bullets where useful.',
+      '- Do not fabricate achievements.'
+    ]
+  },
+  cover_letter: {
+    goal: 'Write a concise, role-specific cover letter using only supported experience.',
+    sections: ['Opening', 'Why I Fit', 'Evidence', 'Closing'],
+    rules: [
+      '- Stay under 320 words.',
+      '- Avoid generic openings and empty enthusiasm.',
+      '- Make claims only when supported by candidate evidence.',
+      '- Use natural plain text, not markdown.'
+    ]
+  },
+  role_fit: {
+    goal: 'Evaluate candidate fit for the role using the provided resume and job description.',
+    sections: ['Score', 'Match Summary', 'Missing Skills', 'Keyword Suggestions', 'CV Improvements'],
+    rules: [
+      '- Score must be 0 to 100.',
+      '- Keep each section operational and concise.',
+      '- Distinguish strengths from gaps clearly.'
+    ]
+  },
+  follow_up_email: {
+    goal: 'Write a short professional follow-up email for the application.',
+    sections: ['Subject', 'Greeting', 'Follow-up Message', 'Close'],
+    rules: [
+      '- Stay under 170 words.',
+      '- Keep the tone direct, polite, and easy to edit.',
+      '- Do not overstate fit.'
+    ]
+  },
+  ats_check: {
+    goal: 'Review the resume against the target role as an ATS-oriented reviewer.',
+    sections: ['ATS Score', 'Match Summary', 'Missing Keywords', 'Matched Keywords', 'Weak Areas', 'Rewrite Suggestions'],
+    rules: [
+      '- Score must be 0 to 100.',
+      '- Focus on exact role language and resume evidence.',
+      '- Keep rewrite suggestions specific.'
+    ]
+  }
+};
+
+function buildContextBlock(input) {
   return [
-    instruction,
-    ...format,
-    `CV file selected: ${cv.original_name}`,
-    `Extracted CV text:\n${cv.extracted_text || 'No extracted CV text available.'}`,
-    `Job description:\n${jobDescription}`
-  ].join('\n\n');
+    `Target company: ${input.application?.company_name || 'Unknown'}`,
+    `Target role: ${input.application?.role_title || 'Unknown'}`,
+    `CV file: ${input.cv.original_name}`,
+    '',
+    'Job summary:',
+    input.jobSignals?.summary || summarize(input.jobDescription, 700),
+    '',
+    'Top responsibilities:',
+    ...toBullets(input.jobSignals?.responsibilities?.slice(0, 6) || []),
+    '',
+    'Key requirements:',
+    ...toBullets(input.jobSignals?.requirements?.slice(0, 6) || []),
+    '',
+    'Important job keywords:',
+    ...toBullets(input.jobSignals?.keywords?.slice(0, 10) || []),
+    '',
+    'Candidate summary:',
+    input.candidateSignals?.summary || summarize(input.cv.extracted_text || '', 700),
+    '',
+    'Strong candidate evidence:',
+    ...toBullets(input.candidateSignals?.evidence?.slice(0, 6) || []),
+    '',
+    'Candidate technologies:',
+    ...toBullets(input.candidateSignals?.technologies?.slice(0, 10) || [])
+  ].join('\n');
+}
+
+function normalizeGeneratedContent(content) {
+  return String(content || '')
+    .replace(/\r/g, '')
+    .replace(/[ \t]+\n/g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .split('\n')
+    .map((line) => normalizeLine(line))
+    .join('\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
+function normalizeLine(line) {
+  const trimmed = String(line || '').trim();
+  if (!trimmed) return '';
+  if (/^(headline|summary|core skills|experience highlights|suggested keyword additions|opening|why i fit|evidence|closing|score|match summary|missing skills|keyword suggestions|cv improvements|subject|greeting|follow-up message|close|ats score|missing keywords|matched keywords|weak areas|rewrite suggestions)$/i.test(trimmed)) {
+    return trimmed.replace(/:$/, '');
+  }
+  if (/^[*-]\s*/.test(trimmed)) return `- ${trimmed.replace(/^[*-]\s*/, '')}`;
+  return trimmed;
+}
+
+function conciseLine(value) {
+  return summarize(value, 120);
+}
+
+function summarize(text, limit = 900) {
+  const cleaned = String(text || '').replace(/\s+/g, ' ').trim();
+  if (!cleaned) return 'Not available.';
+  return cleaned.length > limit ? `${cleaned.slice(0, limit - 1).trim()}…` : cleaned;
+}
+
+function toBullets(values) {
+  if (!values.length) return ['- Not available.'];
+  return values.map((value) => `- ${String(value || '').replace(/\s+/g, ' ').trim()}`);
+}
+
+function intersectValues(left, right) {
+  const rightSet = new Set(right.map((value) => String(value).toLowerCase()));
+  return left.filter((value) => rightSet.has(String(value).toLowerCase()));
 }
