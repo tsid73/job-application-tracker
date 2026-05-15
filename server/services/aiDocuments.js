@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import { createDocxBuffer } from './docx.js';
 import { extractCVText } from './cvTextExtractor.js';
-import { buildPromptExcerpt, buildSourceContext } from '../utils/text.js';
+import { buildPromptExcerpt, buildSourceContext, extractCandidateSignals, extractJobSignals } from '../utils/text.js';
 
 export async function readAIInput({ req, pool, storage, readJson, cleanString, config }) {
   const body = await readJson(req, config.maxAiBytes);
@@ -77,6 +77,8 @@ export async function readAIInput({ req, pool, storage, readJson, cleanString, c
     jobDescription,
     cv: cvRow,
     application,
+    jobSignals: extractJobSignals(jobDescription),
+    candidateSignals: extractCandidateSignals(cvRow.extracted_text || ''),
     providerRequested: normalizeProvider(body.provider, config.defaultAiRequestProvider),
     previousDocumentId: Number.isInteger(previousDocumentId) ? previousDocumentId : null,
     promptExcerpt: buildPromptExcerpt(jobDescription, cvRow),

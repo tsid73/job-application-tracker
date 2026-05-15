@@ -96,6 +96,63 @@ export function buildSourceContext(application, cv) {
   ].filter(Boolean).join(', '), 500);
 }
 
+export function extractJobSignals(jobDescription) {
+  const lines = splitMeaningfulLines(jobDescription);
+  const normalized = truncateText(lines.join(' '), 2200);
+  const responsibilities = lines.filter((line) => looksLikeBullet(line) || /(responsib|build|develop|design|lead|maintain|own|deliver|support|collaborate)/i.test(line)).slice(0, 8);
+  const requirements = lines.filter((line) => /(require|must|should|experience|skill|qualif|proficient|familiar)/i.test(line)).slice(0, 8);
+  const keywords = extractKeywords(normalized);
+  return {
+    summary: truncateText(normalized, 900),
+    responsibilities,
+    requirements,
+    keywords: keywords.slice(0, 16)
+  };
+}
+
+export function extractCandidateSignals(cvText) {
+  const lines = splitMeaningfulLines(cvText);
+  const experienceLines = lines.filter((line) => /\d+%|\d+\+|led|built|improved|reduced|scaled|designed|implemented|launched|delivered/i.test(line)).slice(0, 8);
+  const technologyKeywords = extractKeywords(lines.join(' '));
+  return {
+    summary: truncateText(lines.join(' '), 900),
+    evidence: experienceLines,
+    technologies: technologyKeywords.slice(0, 16)
+  };
+}
+
+function splitMeaningfulLines(text) {
+  return String(text || '')
+    .replace(/\r/g, '\n')
+    .split('\n')
+    .map((line) => line.replace(/\s+/g, ' ').trim())
+    .filter(Boolean)
+    .filter((line) => line.length > 2);
+}
+
+function extractKeywords(text) {
+  const matches = String(text || '').match(/[A-Za-z][A-Za-z0-9.+#/-]{2,}/g) || [];
+  const seen = new Set();
+  const keywords = [];
+  for (const value of matches) {
+    const normalized = value.toLowerCase();
+    if (seen.has(normalized) || stopWords.has(normalized)) continue;
+    seen.add(normalized);
+    keywords.push(value);
+  }
+  return keywords;
+}
+
+function looksLikeBullet(line) {
+  return /^[-*•]/.test(line);
+}
+
+const stopWords = new Set([
+  'with', 'from', 'that', 'this', 'their', 'have', 'will', 'your', 'about', 'role',
+  'team', 'work', 'years', 'year', 'using', 'build', 'develop', 'support', 'strong',
+  'experience', 'required', 'preferred', 'skills', 'skill', 'job', 'description'
+]);
+
 export function today() {
   const now = new Date();
   const year = now.getFullYear();
