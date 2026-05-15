@@ -17,6 +17,150 @@ import {
   reportRow
 } from './utils.js';
 
+export function renderHomeWorkspace() {
+  return `
+    <section class="workspace-view workspace-view-home" data-workspace-view="home">
+      <section id="notificationsPanel" class="notifications-panel" hidden></section>
+
+      <nav class="view-tabs" aria-label="Views">
+        <button class="secondary is-active" type="button" data-view="list">List</button>
+        <button class="secondary" type="button" data-view="reminders">Reminders</button>
+        <button class="secondary" type="button" data-view="kanban">Kanban</button>
+        <button class="secondary" type="button" data-view="reports">Reports</button>
+        <button class="secondary" type="button" data-view="activity">Activity</button>
+        <button class="secondary" type="button" data-view="boards">Job Boards</button>
+        <button class="secondary" type="button" data-view="toolkit">Toolkit</button>
+        <button class="secondary" type="button" data-view="settings">Settings</button>
+      </nav>
+
+      <section id="listView" class="surface-panel">
+        <section class="toolbar" aria-label="Filters">
+          <label>
+            <span>Search</span>
+            <input id="searchInput" type="search" placeholder="Company">
+          </label>
+          <label>
+            <span>Status</span>
+            <select id="statusFilter">
+              <option value="">All</option>
+              <option value="applied">Applied</option>
+              <option value="interview_scheduled">Interview Scheduled</option>
+              <option value="offer">Offer</option>
+              <option value="accepted">Accepted</option>
+              <option value="rejected">Rejected</option>
+              <option value="withdrawn">Withdrawn</option>
+              <option value="ghosted">Ghosted</option>
+            </select>
+          </label>
+          <label>
+            <span>Tag</span>
+            <input id="tagFilter" type="search" placeholder="Remote">
+          </label>
+          <label>
+            <span>View</span>
+            <select id="archiveFilter">
+              <option value="false">Active</option>
+              <option value="true">Archived</option>
+              <option value="all">All</option>
+            </select>
+          </label>
+          <label>
+            <span>Saved Filter</span>
+            <select id="savedFilterSelect">
+              <option value="">Current filters</option>
+            </select>
+          </label>
+          <label>
+            <span>Save As</span>
+            <input id="savedFilterName" type="text" placeholder="Interview week">
+          </label>
+          <div class="toolbar-actions">
+            <button id="saveFilterButton" class="secondary" type="button">Save Filter</button>
+            <button id="deleteFilterButton" class="secondary" type="button">Delete Filter</button>
+          </div>
+        </section>
+        <section class="table-shell" aria-live="polite">
+          <table>
+            <thead>
+              <tr>
+                <th>Company</th>
+                <th>Applied</th>
+                <th>Status</th>
+                <th>State</th>
+                <th>Interview</th>
+                <th>Days</th>
+                <th>Tags</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="applicationsTable"></tbody>
+          </table>
+          <div id="emptyState" class="empty" hidden>No applications match the current filters.</div>
+        </section>
+      </section>
+
+      <section id="remindersView" class="view-panel" hidden>
+        <div id="remindersList" class="panel-grid"></div>
+      </section>
+
+      <section id="kanbanView" class="view-panel" hidden>
+        <div id="kanbanBoard" class="kanban-board"></div>
+      </section>
+
+      <section id="reportsView" class="view-panel" hidden>
+        <div id="reportsContent" class="reports-grid"></div>
+      </section>
+
+      <section id="activityView" class="surface-panel" hidden>
+        <section class="toolbar" aria-label="Activity filters">
+          <label>
+            <span>Search Activity</span>
+            <input id="activitySearchInput" type="search" placeholder="Company, action, detail">
+          </label>
+        </section>
+        <section class="table-shell" aria-live="polite">
+          <table>
+            <thead>
+              <tr>
+                <th>When</th>
+                <th>Application</th>
+                <th>Action</th>
+                <th>Details</th>
+              </tr>
+            </thead>
+            <tbody id="activityTable"></tbody>
+          </table>
+          <div id="activityEmptyState" class="empty" hidden>No activity found.</div>
+        </section>
+        <div class="pagination" id="activityPagination"></div>
+      </section>
+
+      <section id="boardsView" class="view-panel" hidden>
+        <section class="detail-section boards-surface">
+          <div class="section-heading boards-heading">
+            <div>
+              <h3>Job Boards</h3>
+              <p class="section-help">Keep active sourcing channels visible, recent, and easy to maintain.</p>
+            </div>
+            <button id="jobBoardOpenButton" type="button">Track Job Board</button>
+          </div>
+          <div id="jobBoardsList" class="board-list"></div>
+        </section>
+      </section>
+
+      <section id="toolkitView" class="view-panel toolkit-view" hidden>
+        <div id="toolkitContent" class="toolkit-grid"></div>
+      </section>
+
+      <section id="settingsView" class="view-panel" hidden>
+        <div id="settingsContent" class="settings-grid">
+          ${renderSettingsPanel()}
+        </div>
+      </section>
+    </section>
+  `;
+}
+
 export function renderReports(els, report, statusLabels) {
   els.reportsContent.innerHTML = `
     <section class="report-panel report-panel-status">
@@ -62,11 +206,11 @@ export function renderActivity(els, state, payload) {
       <td>
         <div class="company-cell">
           <strong>${escapeHtml(activityApplicationName(item))}</strong>
-          <span>${item.application_id ? `ID ${item.application_id}` : 'No linked record'}</span>
+          <span>${item.application_id ? `Application ${item.application_id}` : ''}</span>
         </div>
       </td>
-      <td>${escapeHtml(formatAction(item.action))}</td>
-      <td>${escapeHtml(item.details || '')}</td>
+      <td>${escapeHtml(activityLabel(item.action, item.details))}</td>
+      <td>${escapeHtml(cleanActivityDetails(item.details || ''))}</td>
     </tr>
   `).join('');
   if (!payload.activity.length) {
@@ -238,15 +382,15 @@ export function renderJobBoards(els, jobBoards) {
   const inactiveBoards = jobBoards.filter((board) => !board.is_active);
 
   els.jobBoardsList.innerHTML = [
-    renderBoardSection('Active boards', 'Boards you are actively checking.', activeBoards),
+    renderBoardSection('Active boards', 'Boards you are actively checking.', activeBoards, { fullWidth: true }),
     inactiveBoards.length ? renderBoardSection('Inactive boards', 'Boards paused for now but kept for reference.', inactiveBoards) : ''
   ].join('') || renderEmptyState('No job boards saved', 'Add sources you check regularly so your search routine stays visible and repeatable.', 'The app now seeds common boards automatically after migrations run.');
 }
 
-function renderBoardSection(title, description, boards) {
+function renderBoardSection(title, description, boards, options = {}) {
   if (!boards.length) return '';
   return `
-    <section class="board-section">
+    <section class="board-section${options.fullWidth ? ' board-section-wide' : ''}">
       <div class="board-section-head">
         <div>
           <strong>${escapeHtml(title)}</strong>
@@ -254,13 +398,13 @@ function renderBoardSection(title, description, boards) {
         </div>
         <span class="board-section-count">${boards.length}</span>
       </div>
-      <div class="board-section-grid">
+      <div class="board-section-grid${options.fullWidth ? ' board-section-grid-wide' : ''}">
         ${boards.map((board) => `
           <article class="board-card ${board.is_active ? '' : 'is-inactive'} ${jobBoardFreshnessClass(board)}">
       <div class="board-card-top">
         <div>
           <strong>${escapeHtml(board.name)}</strong>
-          <span>${board.url ? `<a href="${escapeAttribute(board.url)}" target="_blank" rel="noreferrer">Open board</a>` : 'No link saved'}</span>
+          <span>${board.url ? `<button class="button-link tertiary board-open-link" type="button" data-job-board-open="${board.id}">Open board</button>` : 'No link saved'}</span>
         </div>
         <span class="state ${board.is_active ? 'active-state' : 'archived-state'}">${board.is_active ? 'Active' : 'Inactive'}</span>
       </div>
@@ -279,6 +423,42 @@ function renderBoardSection(title, description, boards) {
       </div>
           </article>
         `).join('')}
+      </div>
+    </section>
+  `;
+}
+
+function renderSettingsPanel() {
+  return `
+    <section class="route-card settings-card">
+      <div class="section-heading">
+        <div>
+          <div class="panel-kicker">Settings</div>
+          <h3>Data Management</h3>
+          <p class="section-help">Keep import, export, backup, and restore in one operational workspace.</p>
+        </div>
+      </div>
+      <div class="settings-action-grid">
+        <article class="document-summary-card settings-action-card">
+          <strong>Export CSV</strong>
+          <p>Download application rows for spreadsheet work or manual review.</p>
+          <button id="settingsExportCsvButton" class="secondary" type="button">Export CSV</button>
+        </article>
+        <article class="document-summary-card settings-action-card">
+          <strong>Import CSV</strong>
+          <p>Load application rows into the tracker using the latest linked CV.</p>
+          <button id="settingsImportCsvButton" class="secondary" type="button">Import CSV</button>
+        </article>
+        <article class="document-summary-card settings-action-card">
+          <strong>Create Backup</strong>
+          <p>Export applications, AI data, uploads, and workspace settings into one backup file.</p>
+          <button id="settingsBackupButton" type="button">Create Backup</button>
+        </article>
+        <article class="document-summary-card settings-action-card">
+          <strong>Restore Backup</strong>
+          <p>Replace the current local workspace with a validated backup state.</p>
+          <button id="settingsRestoreButton" class="danger" type="button">Restore Backup</button>
+        </article>
       </div>
     </section>
   `;
@@ -335,10 +515,6 @@ export function renderToolkit(els) {
   `).join('');
 }
 
-export function buildDetailContent() {
-  return '';
-}
-
 export function renderApplicationPage(els, payload, statusLabels, viewState) {
   const {
     application,
@@ -363,214 +539,101 @@ export function renderApplicationPage(els, payload, statusLabels, viewState) {
   const failedJobs = jobs.filter((item) => item.status === 'failed');
 
   const tabBodies = {
-    overview: renderOverviewTab({ application, primaryCv, tags, documents: latestDocuments, jobs: queuedJobs, statusLabels, selectedProvider: viewState.selectedProvider, capabilities: viewState.capabilities }),
+    overview: renderOverviewTab({ application, primaryCv, tags, documents, jobs, statusLabels, selectedProvider: viewState.selectedProvider, capabilities: viewState.capabilities }),
     workflow: renderWorkflowTab({ application, preparation, recruiterQuestions, feedbackEntries, todos }),
-    content: renderContentSummaryTab({ application, documents: latestDocuments, queuedJobs, failedJobs, allDocuments: documents }),
+    content: renderContentSummaryTab({ application, primaryCvId: primaryCv?.id || '', queuedJobs, failedJobs, allDocuments: documents, allJobs: jobs, selectedProvider: viewState.selectedProvider, capabilities: viewState.capabilities, workspace: viewState.contentWorkspace }),
     history: renderHistoryTab({ application, history, notes, activity, auditEvents, statusLabels })
   };
 
-  els.applicationPageContent.innerHTML = `
-    <div class="route-page-shell">
-      ${renderPageHeader({
-        backHref: '/',
-        backLabel: 'Tracker',
-        eyebrow: 'Application',
-        title: application.role_title || 'Application Detail',
-        subtitle: application.company_name,
-        actions: [
-          `<button class="secondary" type="button" data-edit-application="${application.id}">Edit Application</button>`,
-          application.archived_at
-            ? `<button class="secondary" type="button" data-restore-application="${application.id}">Restore</button>`
-            : `<button class="secondary" type="button" data-archive-application="${application.id}">Archive</button>`,
-          `<a class="button-link secondary" href="/applications/${application.id}/content">Content Library</a>`
-        ].join('')
-      })}
-      <section class="application-hero-card">
-        <div class="hero-copy-group">
-          <div class="hero-badge-row">
-            <span class="state ${application.archived_at ? 'archived-state' : 'active-state'}">${application.archived_at ? 'Archived' : statusLabels[application.status] || application.status}</span>
-            ${application.interview_date ? `<span class="days-badge">${escapeHtml(formatDate(application.interview_date))}</span>` : `<span class="days-badge">No interview yet</span>`}
+  els.workspaceRoot.innerHTML = `
+    <section class="workspace-view workspace-view-application" data-workspace-view="application">
+    <div id="applicationPageContent" class="route-page-shell">
+      <section class="application-hero-card application-hero-compact">
+        <div class="hero-main-row">
+          <div class="hero-copy-group">
+            <a class="button-link tertiary back-pill" href="/">Tracker</a>
+            <div class="hero-badge-row">
+              <span class="state ${application.archived_at ? 'archived-state' : 'active-state'}">${application.archived_at ? 'Archived' : statusLabels[application.status] || application.status}</span>
+              ${application.interview_date ? `<span class="days-badge">${escapeHtml(formatDate(application.interview_date))}</span>` : ''}
+            </div>
+            <h1>${escapeHtml(application.role_title || 'Application Detail')}</h1>
+            <p class="hero-company-line">${escapeHtml(application.company_name)}</p>
+            ${renderTags(tags)}
           </div>
-          <h2>${escapeHtml(application.company_name)}</h2>
-          <p class="page-subtitle">${escapeHtml(application.role_title || 'Role not specified')}</p>
-          ${renderTags(tags)}
+          <div class="page-header-actions application-hero-actions">
+            <button class="secondary" type="button" data-edit-application="${application.id}">Edit Application</button>
+            ${application.archived_at
+              ? `<button class="secondary" type="button" data-restore-application="${application.id}">Restore</button>`
+              : `<button class="secondary" type="button" data-archive-application="${application.id}">Archive</button>`}
+            <button class="secondary" type="button" data-view-job-description="${application.id}">View Job Description</button>
+            ${application.job_link ? `<a class="button-link" href="${escapeAttribute(application.job_link)}" target="_blank" rel="noreferrer">Open Posting</a>` : ''}
+          </div>
         </div>
-        <div class="hero-meta-grid">
-          ${renderHeroMeta('Applied', formatDate(application.applied_date) || 'Not set')}
-          ${renderHeroMeta('Location', application.location || 'Not set')}
-          ${renderHeroMeta('Recruiter', application.recruiter || 'Not set')}
-          ${renderHeroMeta('Contact', application.contact_person || 'Not set')}
-          ${renderHeroMeta('Salary', application.salary || 'Not set')}
-          ${renderHeroMeta('Job Link', application.job_link ? `<a class="quiet-link" href="${escapeAttribute(application.job_link)}" target="_blank" rel="noreferrer">Open posting</a>` : 'No link')}
+        <div class="hero-inline-meta">
+          ${renderInlineMeta('Applied', formatDate(application.applied_date) || 'Not set')}
+          ${renderInlineMeta('Location', application.location || 'Not set', !application.location)}
+          ${renderInlineMeta('Recruiter', application.recruiter || 'Not set', !application.recruiter)}
+          ${renderInlineMeta('Contact', application.contact_person || 'Not set', !application.contact_person)}
+          ${renderInlineMeta('Salary', application.salary || 'Not set', !application.salary)}
         </div>
       </section>
       <nav class="detail-tabbar" aria-label="Application sections">
-        ${renderDetailTab(application.id, 'overview', 'Overview', activeTab)}
-        ${renderDetailTab(application.id, 'workflow', 'Workflow', activeTab)}
-        ${renderDetailTab(application.id, 'content', 'Content', activeTab)}
-        ${renderDetailTab(application.id, 'history', 'History', activeTab)}
+        ${renderDetailTab(application.id, 'overview', 'Overview', activeTab, 'O')}
+        ${renderDetailTab(application.id, 'workflow', 'Workflow', activeTab, 'W')}
+        ${renderDetailTab(application.id, 'content', 'Content', activeTab, 'C')}
+        ${renderDetailTab(application.id, 'history', 'History', activeTab, 'H')}
       </nav>
       <section class="detail-tab-panel">
         ${tabBodies[activeTab] || tabBodies.overview}
       </section>
     </div>
+    </section>
   `;
 }
 
-export function renderGeneratedContentPage(els, application, documents, jobs, viewState = {}) {
-  const groupedDocuments = groupDocumentsByType(documents);
-  const queuedJobs = jobs.filter((item) => item.status !== 'completed');
-
-  els.contentPageContent.innerHTML = `
-    <div class="route-page-shell">
-      ${renderPageHeader({
-        backHref: `/applications/${application.id}?tab=content`,
-        backLabel: 'Application',
-        eyebrow: 'Content Library',
-        title: 'Generated Content',
-        subtitle: `${application.company_name}${application.role_title ? ` · ${application.role_title}` : ''}`,
-        actions: `<a class="button-link secondary" href="/applications/${application.id}">Overview</a>`
-      })}
-      ${queuedJobs.length ? `
-        <section class="route-card queue-surface">
-          <div class="section-heading">
-            <div>
-              <div class="panel-kicker">Queue</div>
-              <h3>Pending And Failed Jobs</h3>
-            </div>
-          </div>
-          <div class="queue-grid">
-            ${queuedJobs.map((job) => `
-              <article class="queue-card ${job.status === 'failed' ? 'is-failed' : ''}">
-                <strong>${escapeHtml(job.title)}</strong>
-                <p>${escapeHtml(formatAction(job.document_type))}</p>
-                <div class="document-card-meta">
-                  <span class="pill subtle">${escapeHtml(job.provider_requested)}</span>
-                  <span class="pill ${job.status === 'failed' ? 'danger-pill' : 'info-pill'}">${escapeHtml(job.status)}</span>
-                </div>
-                ${job.error_message ? `<p class="form-error inline-error">${escapeHtml(job.error_message)}</p>` : ''}
-              </article>
-            `).join('')}
-          </div>
-        </section>
-      ` : ''}
-      <section class="route-card">
-        <div class="section-heading">
-          <div>
-            <div class="panel-kicker">Library</div>
-            <h3>Documents By Type</h3>
-          </div>
-          ${renderSegmentedProviderControl({
-            selectedProvider: viewState.selectedProvider || 'gemini',
-            awsEnabled: viewState.capabilities?.awsEnabled,
-            attrName: 'data-library-provider-select'
-          })}
-        </div>
-        ${Object.entries(groupedDocuments).map(([type, items]) => `
-          <section class="content-group">
-            <div class="content-group-head">
-              <h4>${escapeHtml(formatAction(type))}</h4>
-              <span class="pill subtle">${items.length} versions</span>
-            </div>
-            <div class="document-grid">
-              ${items.map((doc, index) => renderDocumentLibraryCard(application.id, doc, index === 0)).join('')}
-            </div>
-          </section>
-        `).join('') || renderInlineEmpty('No generated content', 'Generate CVs, letters, ATS checks, or follow-ups from the application page.')}
-      </section>
-    </div>
-  `;
-}
-
-export function renderGeneratedDocumentDetail(els, application, document, capabilities = {}, selectedProvider = 'gemini') {
-  els.contentPageContent.innerHTML = `
-    <div class="route-page-shell">
-      ${renderPageHeader({
-        backHref: `/applications/${application.id}/content`,
-        backLabel: 'Content Library',
-        eyebrow: formatAction(document.document_type),
-        title: document.title,
-        subtitle: application.company_name,
-        actions: `<a class="button-link secondary" href="${escapeAttribute(document.download_url)}">Download DOCX</a>`
-      })}
-      <div class="document-detail-layout">
-        <section class="route-card document-reader-card">
-          <div class="section-heading">
-            <div>
-              <div class="panel-kicker">Document View</div>
-              <h3>${escapeHtml(formatAction(document.document_type))}</h3>
-            </div>
-            <div class="document-card-meta">
-              <span class="pill subtle">${escapeHtml(document.provider_name || document.provider_requested || 'unknown')}</span>
-              <span class="pill info-pill">${escapeHtml(formatDateTime(document.created_at))}</span>
-            </div>
-          </div>
-          <div class="document-rich-body">
-            ${renderDocumentContent(document)}
-          </div>
-        </section>
-        <aside class="document-sidebar">
-          <section class="route-card">
-            <div class="panel-kicker">Actions</div>
-            <h3>Manage Document</h3>
-            ${renderSegmentedProviderControl({
-              selectedProvider,
-              awsEnabled: capabilities.awsEnabled,
-              attrName: 'data-regenerate-provider'
-            })}
-            <div class="document-action-stack">
-              <button type="button" data-regenerate-document="${document.id}">Regenerate</button>
-              <button class="secondary" type="button" data-copy-document="${document.id}">Copy Text</button>
-              <button class="danger" type="button" data-delete-document="${document.id}">Delete</button>
-            </div>
-          </section>
-          <section class="route-card">
-            <div class="panel-kicker">Metadata</div>
-            <h3>Generation Details</h3>
-            <div class="metadata-list">
-              ${renderMetadataItem('Provider', document.provider_name || document.provider_requested || 'Unknown')}
-              ${renderMetadataItem('Model', document.model_name || 'Unknown')}
-              ${renderMetadataItem('Created', formatDateTime(document.created_at))}
-              ${renderMetadataItem('Status', document.generation_status || 'completed')}
-            </div>
-            <details class="metadata-details">
-              <summary>Prompt and source metadata</summary>
-              <div class="metadata-note">
-                <strong>Prompt excerpt</strong>
-                <p>${escapeHtml(document.prompt_excerpt || 'No prompt excerpt stored.')}</p>
-              </div>
-              <div class="metadata-note">
-                <strong>Source context</strong>
-                <p>${escapeHtml(document.source_context || 'No source context stored.')}</p>
-              </div>
-            </details>
-          </section>
-        </aside>
-      </div>
-    </div>
-  `;
-}
+const documentTypeDefinitions = [
+  {
+    type: 'tailored_cv',
+    action: 'cv',
+    title: 'Tailored CV',
+    description: 'Create a resume variant tuned to this application.'
+  },
+  {
+    type: 'cover_letter',
+    action: 'letter',
+    title: 'Cover Letter',
+    description: 'Generate a tailored cover letter based on the role and your CV.'
+  },
+  {
+    type: 'role_fit',
+    action: 'fit',
+    title: 'Role Fit',
+    description: 'Summarize strengths, gaps, and improvement suggestions.'
+  },
+  {
+    type: 'ats_check',
+    action: 'ats',
+    title: 'ATS Check',
+    description: 'Review keyword alignment and applicant tracking compatibility.'
+  },
+  {
+    type: 'follow_up_email',
+    action: 'followup',
+    title: 'Follow-up Email',
+    description: 'Draft a polished follow-up message for recruiters or interviewers.'
+  }
+];
 
 function renderOverviewTab({ application, primaryCv, tags, documents, jobs, statusLabels, selectedProvider, capabilities }) {
+  const documentSlots = buildDocumentSlots(documents, jobs);
   return `
     <div class="tab-grid overview-grid">
       <section class="route-card">
         <div class="section-heading">
           <div>
-            <div class="panel-kicker">Role Context</div>
-            <h3>Job Description</h3>
-          </div>
-        </div>
-        <details class="job-description-panel" ${application.job_description ? '' : 'open'}>
-          <summary>${application.job_description ? 'View role description' : 'No job description saved'}</summary>
-          <p class="description">${escapeHtml(application.job_description || 'Add a job description to improve tailored output and role-fit analysis.')}</p>
-        </details>
-      </section>
-      <section class="route-card">
-        <div class="section-heading">
-          <div>
             <div class="panel-kicker">AI Workspace</div>
-            <h3>Generate Content</h3>
+            <h3>Generated Content</h3>
+            <p class="section-help">Treat generated documents as saved assets. Generate only when a document does not exist, then open and manage it from the content workspace.</p>
           </div>
         </div>
         ${renderSegmentedProviderControl({
@@ -582,12 +645,8 @@ function renderOverviewTab({ application, primaryCv, tags, documents, jobs, stat
           <span class="pill subtle">Default: Gemini</span>
           <span class="pill ${capabilities.awsEnabled ? 'success-pill' : 'danger-pill'}">${capabilities.awsEnabled ? 'AWS available' : 'AWS disabled'}</span>
         </div>
-        <div class="ai-action-grid">
-          <button type="button" data-ai="cv" data-cv-id="${primaryCv?.id || ''}">Tailor CV</button>
-          <button class="secondary" type="button" data-ai="letter" data-cv-id="${primaryCv?.id || ''}">Cover Letter</button>
-          <button class="secondary" type="button" data-ai="fit" data-cv-id="${primaryCv?.id || ''}">Role Fit</button>
-          <button class="secondary" type="button" data-ai="ats" data-cv-id="${primaryCv?.id || ''}">ATS Check</button>
-          <button class="secondary" type="button" data-ai="followup" data-cv-id="${primaryCv?.id || ''}">Follow-up</button>
+        <div class="artifact-grid">
+          ${documentSlots.map((slot) => renderOverviewDocumentSlot(application.id, slot, primaryCv?.id || '')).join('')}
         </div>
       </section>
       <section class="route-card">
@@ -598,7 +657,7 @@ function renderOverviewTab({ application, primaryCv, tags, documents, jobs, stat
           </div>
         </div>
         ${primaryCv ? `
-          <article class="document-summary-card">
+          <article class="document-summary-card attachment-card">
             <strong>${escapeHtml(primaryCv.original_name)}</strong>
             <p>${escapeHtml(primaryCv.version_label || 'Unlabeled')} · ${escapeHtml(formatBytes(Number(primaryCv.file_size || 0)))}</p>
             <div class="document-card-meta">
@@ -617,10 +676,10 @@ function renderOverviewTab({ application, primaryCv, tags, documents, jobs, stat
             <div class="panel-kicker">Latest Output</div>
             <h3>Recent Documents</h3>
           </div>
-          <a class="button-link tertiary" href="/applications/${application.id}/content">Open library</a>
+          <a class="button-link tertiary" href="/applications/${application.id}?tab=content">Open content</a>
         </div>
         <div class="document-stack">
-          ${documents.map((doc) => renderRecentDocumentItem(application.id, doc)).join('') || renderInlineEmpty('No generated content yet', 'Generate a CV, role-fit report, or follow-up message from this page.')}
+          ${summarizeLatestDocuments(documents).map((doc) => renderRecentDocumentItem(application.id, doc)).join('') || renderInlineEmpty('No generated content yet', 'Generate a document from the workspace above to create your first saved asset.')}
         </div>
         ${jobs.length ? `
           <div class="queue-inline-list">
@@ -765,19 +824,67 @@ function renderWorkflowTab({ application, preparation, recruiterQuestions, feedb
   `;
 }
 
-function renderContentSummaryTab({ application, documents, queuedJobs, failedJobs, allDocuments }) {
+function renderContentSummaryTab({ application, primaryCvId, queuedJobs, failedJobs, allDocuments, allJobs, selectedProvider, capabilities, workspace }) {
+  const documentSlots = filterDocumentSlots(buildDocumentSlots(allDocuments, allJobs), workspace);
+  const documentTypes = [...new Set(buildDocumentSlots(allDocuments, allJobs).map((item) => item.type))];
+  const recentDocumentId = Number(workspace.recentDocumentId) || null;
+  const missingSlots = documentSlots.filter((slot) => slot.status === 'missing' || slot.status === 'failed');
   return `
     <div class="tab-grid content-summary-grid">
-      <section class="route-card">
+      <section class="route-card content-workspace-card">
         <div class="section-heading">
           <div>
-            <div class="panel-kicker">Latest Documents</div>
-            <h3>Recent Generated Content</h3>
+            <div class="panel-kicker">Content Workspace</div>
+            <h3>Generated Documents</h3>
+            <p class="section-help">This is the canonical document workspace. Open existing assets directly. Generate only when a document type does not exist yet.</p>
           </div>
-          <a class="button-link tertiary" href="/applications/${application.id}/content">Open full library</a>
+          <div class="content-toolbar-meta">
+            ${renderSegmentedProviderControl({
+              selectedProvider: selectedProvider || 'gemini',
+              awsEnabled: capabilities?.awsEnabled,
+              attrName: 'data-library-provider-select'
+            })}
+            ${missingSlots.length ? `<button class="secondary" type="button" data-generate-missing data-cv-id="${escapeAttribute(primaryCvId || '')}">Generate Missing (${missingSlots.length})</button>` : ''}
+            ${allDocuments.length ? `<a class="button-link secondary" href="/api/applications/${application.id}/artifacts.zip">Export Artifacts</a>` : ''}
+          </div>
         </div>
-        <div class="document-grid compact-document-grid">
-          ${documents.map((doc, index) => renderDocumentLibraryCard(application.id, doc, index === 0)).join('') || renderInlineEmpty('No generated content yet', 'Use the overview tab to generate tailored content.')}
+        ${recentDocumentId ? '<div class="document-card-meta"><span class="pill info-pill">Recent update available in the list below.</span></div>' : ''}
+        <div class="content-filter-bar">
+          <label>
+            <span>Search</span>
+            <input type="search" value="${escapeAttribute(workspace.search || '')}" placeholder="Title or provider" data-content-search>
+          </label>
+          <label>
+            <span>Type</span>
+            <select data-content-type>
+              <option value="all">All types</option>
+              ${documentTypes.map((type) => `<option value="${escapeAttribute(type)}"${workspace.type === type ? ' selected' : ''}>${escapeHtml(formatAction(type))}</option>`).join('')}
+            </select>
+          </label>
+          <label>
+            <span>Provider</span>
+            <select data-content-provider>
+              <option value="all"${workspace.provider === 'all' ? ' selected' : ''}>All providers</option>
+              <option value="gemini"${workspace.provider === 'gemini' ? ' selected' : ''}>Gemini</option>
+              <option value="aws"${workspace.provider === 'aws' ? ' selected' : ''}>AWS</option>
+            </select>
+          </label>
+          <label>
+            <span>Sort</span>
+            <select data-content-sort>
+              <option value="newest"${workspace.sort === 'newest' ? ' selected' : ''}>Newest first</option>
+              <option value="oldest"${workspace.sort === 'oldest' ? ' selected' : ''}>Oldest first</option>
+            </select>
+          </label>
+          <label class="checkbox inline-checkbox content-filter-toggle">
+            <input type="checkbox" data-content-latest-only ${workspace.latestOnly ? 'checked' : ''}>
+            <span>Latest only</span>
+          </label>
+        </div>
+        <div class="content-asset-list">
+          ${documentSlots.map((slot) => renderContentDocumentSlot(application.id, slot, primaryCvId, recentDocumentId, workspace.providerPreferences || {})).join('') || (allDocuments.length || allJobs.length
+            ? renderInlineEmpty('No documents match these filters', 'Clear or relax the active filters to see more generated content.')
+            : renderInlineEmpty('No generated content yet', 'Use the overview tab to generate your first persistent document asset.'))}
         </div>
       </section>
       <section class="route-card">
@@ -847,8 +954,8 @@ function renderHistoryTab({ application, history, notes, activity, auditEvents, 
             <h3>Activity</h3>
           </div>
         </div>
-        <div class="history-list">
-          ${activity.map((item) => `<div class="history-item">${escapeHtml(formatAction(item.action))}<br><small>${escapeHtml(item.details || '')} · ${formatDateTime(item.created_at)}</small></div>`).join('') || renderInlineEmpty('No activity yet', 'Actions on this application will appear here.')}
+        <div class="history-list history-timeline">
+          ${renderTimeline(activity)}
         </div>
       </section>
       <section class="route-card">
@@ -893,17 +1000,22 @@ function renderPageHeader({ backHref, backLabel, eyebrow, title, subtitle, actio
   `;
 }
 
-function renderHeroMeta(label, value) {
+function renderInlineMeta(label, value, muted = false) {
   return `
-    <div class="hero-meta-card">
+    <div class="hero-inline-meta-item${muted ? ' is-empty' : ''}">
       <span>${escapeHtml(label)}</span>
       <strong>${typeof value === 'string' && value.includes('<a') ? value : escapeHtml(value)}</strong>
     </div>
   `;
 }
 
-function renderDetailTab(applicationId, key, label, activeTab) {
-  return `<a class="detail-tab${activeTab === key ? ' is-active' : ''}" href="/applications/${applicationId}?tab=${key}">${escapeHtml(label)}</a>`;
+function renderDetailTab(applicationId, key, label, activeTab, icon) {
+  return `
+    <a class="detail-tab${activeTab === key ? ' is-active' : ''}" href="/applications/${applicationId}?tab=${key}">
+      <span class="tab-icon" aria-hidden="true">${escapeHtml(icon || label.slice(0, 1))}</span>
+      <span>${escapeHtml(label)}</span>
+    </a>
+  `;
 }
 
 function renderSegmentedProviderControl({ selectedProvider, awsEnabled, attrName }) {
@@ -923,35 +1035,37 @@ function renderRecentDocumentItem(applicationId, doc) {
         <p>${escapeHtml(formatAction(doc.document_type))}</p>
       </div>
       <div class="document-card-meta">
-        <span class="pill subtle">${escapeHtml(doc.provider_name || doc.provider_requested || 'unknown')}</span>
-        <a class="button-link tertiary" href="/applications/${applicationId}/content/${doc.id}">Open</a>
+        <span class="pill subtle">${escapeHtml(readProviderLabel(doc))}</span>
+        <a class="button-link tertiary" href="/applications/${applicationId}?tab=content&document=${doc.id}">Open</a>
       </div>
     </article>
   `;
 }
 
-function renderDocumentLibraryCard(applicationId, doc, isLatest) {
-  return `
-    <article class="document-card">
-      <div class="document-card-head">
-        <div>
-          <h4>${escapeHtml(doc.title)}</h4>
-          <p>${escapeHtml(formatAction(doc.document_type))}</p>
-        </div>
-        ${isLatest ? '<span class="pill success-pill">Latest</span>' : ''}
+function renderTimeline(activity) {
+  if (!activity.length) return renderInlineEmpty('No activity yet', 'Actions on this application will appear here.');
+  const groups = new Map();
+  for (const item of activity) {
+    const key = new Date(item.created_at).toDateString();
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(item);
+  }
+  return [...groups.entries()].map(([label, items]) => `
+    <section class="timeline-group">
+      <div class="timeline-date">${escapeHtml(label)}</div>
+      <div class="timeline-items">
+        ${items.map((item) => `
+          <article class="timeline-item">
+            <span class="timeline-icon">${escapeHtml(activityIcon(item.action))}</span>
+            <div>
+              <strong>${escapeHtml(activityLabel(item.action, item.details))}</strong>
+              <small>${escapeHtml(activityMeta(item))}</small>
+            </div>
+          </article>
+        `).join('')}
       </div>
-      <div class="document-card-meta">
-        <span class="pill subtle">${escapeHtml(doc.provider_name || doc.provider_requested || 'unknown')}</span>
-        <span class="pill info-pill">${escapeHtml(formatDateTime(doc.created_at))}</span>
-      </div>
-      <div class="document-card-actions">
-        <a class="button-link secondary" href="/applications/${applicationId}/content/${doc.id}">Open</a>
-        <a class="button-link tertiary" href="${escapeAttribute(doc.download_url)}">Download</a>
-        <button class="secondary" type="button" data-regenerate-card="${doc.id}">Regenerate</button>
-        <button class="secondary" type="button" data-delete-card="${doc.id}">Delete</button>
-      </div>
-    </article>
-  `;
+    </section>
+  `).join('');
 }
 
 function renderProviderSummaryCard(label, count, detail) {
@@ -973,7 +1087,7 @@ function renderMetadataItem(label, value) {
   `;
 }
 
-function renderDocumentContent(document) {
+export function renderDocumentContent(document) {
   const sections = parseDocumentSections(document.content || '', document.document_type);
   return sections.map((section) => {
     if (section.type === 'email') {
@@ -1134,12 +1248,264 @@ function summarizeLatestDocuments(documents) {
   return results.slice(0, 6);
 }
 
-function groupDocumentsByType(documents) {
+function buildDocumentSlots(documents, jobs) {
+  const definitions = new Map(documentTypeDefinitions.map((item) => [item.type, item]));
+  const types = new Set([
+    ...documentTypeDefinitions.map((item) => item.type),
+    ...documents.map((item) => item.document_type),
+    ...jobs.map((item) => item.document_type)
+  ]);
+
+  return [...types].map((type) => {
+    const config = definitions.get(type) || {
+      type,
+      action: '',
+      title: formatAction(type),
+      description: 'Generated document'
+    };
+    const typeDocuments = documents.filter((item) => item.document_type === type)
+      .sort((left, right) => new Date(right.created_at).getTime() - new Date(left.created_at).getTime());
+    const typeJobs = jobs.filter((item) => item.document_type === type)
+      .sort((left, right) => new Date(right.created_at).getTime() - new Date(left.created_at).getTime());
+    const activeJob = typeJobs.find((item) => item.status !== 'completed' && item.status !== 'failed') || null;
+    const failedJob = typeJobs.find((item) => item.status === 'failed') || null;
+    const latestDocument = typeDocuments[0] || null;
+    let status = 'missing';
+    if (latestDocument && activeJob) status = 'updating';
+    else if (latestDocument) status = 'ready';
+    else if (activeJob) status = 'generating';
+    else if (failedJob) status = 'failed';
+
+    return {
+      ...config,
+      status,
+      latestDocument,
+      documents: typeDocuments,
+      activeJob,
+      failedJob
+    };
+  }).sort((left, right) => left.title.localeCompare(right.title));
+}
+
+function filterDocumentSlots(slots, workspace = {}) {
+  const search = String(workspace.search || '').trim().toLowerCase();
+  let filtered = [...slots];
+  if (workspace.type && workspace.type !== 'all') {
+    filtered = filtered.filter((item) => item.type === workspace.type);
+  }
+  if (workspace.provider && workspace.provider !== 'all') {
+    filtered = filtered.filter((item) => item.latestDocument ? isProvider(item.latestDocument, workspace.provider) : item.activeJob ? String(item.activeJob.provider_requested || '').toLowerCase().includes(workspace.provider) : false);
+  }
+  if (search) {
+    filtered = filtered.filter((item) => {
+      const text = [
+        item.title,
+        item.description,
+        item.latestDocument?.title,
+        item.latestDocument?.provider_name,
+        item.latestDocument?.provider_requested,
+        item.activeJob?.provider_requested
+      ].filter(Boolean).join(' ').toLowerCase();
+      return text.includes(search);
+    });
+  }
+  return filtered.sort((left, right) => {
+    const leftTime = new Date(left.latestDocument?.created_at || left.activeJob?.created_at || left.failedJob?.created_at || 0).getTime();
+    const rightTime = new Date(right.latestDocument?.created_at || right.activeJob?.created_at || right.failedJob?.created_at || 0).getTime();
+    return workspace.sort === 'oldest' ? leftTime - rightTime : rightTime - leftTime;
+  }).map((slot) => ({
+    ...slot,
+    documents: workspace.latestOnly ? slot.documents.slice(0, 1) : slot.documents
+  }));
+}
+
+function renderOverviewDocumentSlot(applicationId, slot, cvId) {
+  const primary = renderSlotPrimaryAction(slot, applicationId, cvId);
+  return `
+    <article class="artifact-card artifact-card-${slot.status}">
+      <div class="artifact-card-head">
+        <div class="document-type-line">
+          <span class="document-type-icon" aria-hidden="true">${renderDocumentTypeIcon(slot.type)}</span>
+          <div>
+            <div class="panel-kicker">${escapeHtml(slot.status === 'ready' || slot.status === 'updating' ? 'Generated Asset' : slot.status === 'generating' ? 'Generating' : slot.status === 'failed' ? 'Needs Attention' : 'Missing')}</div>
+            <h4>${escapeHtml(slot.title)}</h4>
+          </div>
+        </div>
+        ${renderSlotStatusBadge(slot)}
+      </div>
+      <p>${escapeHtml(slot.description)}</p>
+      ${renderSlotMetadata(slot)}
+      <div class="document-card-actions artifact-actions">
+        ${primary}
+        ${(slot.status === 'ready' || slot.status === 'updating') ? `<a class="button-link tertiary" href="/applications/${applicationId}?tab=content">Manage</a>` : ''}
+      </div>
+    </article>
+  `;
+}
+
+function renderContentDocumentSlot(applicationId, slot, cvId, recentDocumentId = null, providerPreferences = {}) {
+  const isRecent = slot.latestDocument && Number(slot.latestDocument.id) === Number(recentDocumentId);
+  const preferredProvider = providerPreferences[slot.type] || 'gemini';
+  return `
+    <section class="document-slot-card${isRecent ? ' is-recent' : ''}">
+      <div class="document-slot-head">
+        <div class="document-type-line">
+          <span class="document-type-icon" aria-hidden="true">${renderDocumentTypeIcon(slot.type)}</span>
+          <div class="document-slot-copy">
+            <h4>Document Type - ${escapeHtml(slot.title)}</h4>
+            ${isRecent ? '<span class="pill info-pill">Latest changed</span>' : ''}
+          </div>
+        </div>
+        ${renderSlotStatusBadge(slot)}
+      </div>
+      ${renderSlotMetadata(slot)}
+      <div class="document-card-actions document-slot-actions">
+        ${renderSlotPrimaryAction(slot, applicationId, cvId)}
+      </div>
+      ${(slot.status === 'missing' || slot.status === 'failed') ? `
+        <label class="slot-provider-select">
+          <span>Generation provider</span>
+          <select data-slot-provider="${escapeAttribute(slot.type)}">
+            <option value="gemini"${preferredProvider === 'gemini' ? ' selected' : ''}>Gemini</option>
+            <option value="aws"${preferredProvider === 'aws' ? ' selected' : ''}>AWS</option>
+          </select>
+        </label>
+      ` : ''}
+      ${slot.latestDocument ? `
+        <details class="document-version-list">
+          <summary>${slot.documents.length > 1 ? `Versions (${slot.documents.length})` : 'Current document'}</summary>
+          <div class="document-version-items">
+            ${slot.documents.map((doc, index) => renderDocumentVersionRow(applicationId, doc, index === 0, slot.documents[0]?.id)).join('')}
+          </div>
+        </details>
+      ` : ''}
+      ${slot.failedJob && !slot.latestDocument ? `<p class="form-error inline-error">${escapeHtml(slot.failedJob.error_message || 'Generation failed. Retry to create this document.')}</p>` : ''}
+    </section>
+  `;
+}
+
+function renderDocumentVersionRow(applicationId, doc, isLatest, latestDocumentId) {
+  return `
+    <article class="document-version-row">
+      <div>
+        <strong>${escapeHtml(documentVersionLabel(doc.version_number || 1, isLatest))}</strong>
+        <p>${escapeHtml(formatDateTime(doc.created_at))}</p>
+      </div>
+      <div class="document-card-actions">
+        ${isLatest ? '<span class="pill success-pill">Latest</span>' : ''}
+        <a class="button-link secondary" href="/applications/${applicationId}?tab=content&document=${doc.id}">Open Version</a>
+        <details class="inline-menu">
+          <summary class="button-link tertiary" aria-label="More actions for ${escapeAttribute(doc.title)}">More</summary>
+          <div class="inline-menu-list">
+            <a class="button-link tertiary" href="${escapeAttribute(doc.download_url)}">Download</a>
+            <button class="secondary" type="button" data-copy-document="${doc.id}">Copy</button>
+            ${!isLatest && latestDocumentId ? `<button class="secondary" type="button" data-compare-card="${doc.id}" data-compare-latest="${latestDocumentId}">Compare</button>` : ''}
+            ${!isLatest ? `<button class="secondary" type="button" data-restore-card="${doc.id}">Restore as Latest</button>` : ''}
+            <button class="secondary" type="button" data-regenerate-card="${doc.id}">Regenerate</button>
+            <button class="danger" type="button" data-delete-card="${doc.id}">Delete</button>
+          </div>
+        </details>
+      </div>
+    </article>
+  `;
+}
+
+function renderSlotPrimaryAction(slot, applicationId, cvId = '') {
+  if (slot.status === 'ready' || slot.status === 'updating') {
+    return `<a class="button-link secondary" href="/applications/${applicationId}?tab=content&document=${slot.latestDocument.id}">Open ${escapeHtml(slot.title)}</a>`;
+  }
+  if (slot.status === 'generating') {
+    return `<button type="button" disabled data-loading-label="Generating">Generating</button>`;
+  }
+  if (slot.status === 'failed') {
+    return `<button type="button" data-ai="${escapeAttribute(slot.action)}" data-doc-type="${escapeAttribute(slot.type)}" data-cv-id="${escapeAttribute(cvId)}">Retry Generation</button>`;
+  }
+  return `<button type="button" data-ai="${escapeAttribute(slot.action)}" data-doc-type="${escapeAttribute(slot.type)}" data-cv-id="${escapeAttribute(cvId)}">Generate</button>`;
+}
+
+function renderSlotStatusBadge(slot) {
+  if (slot.status === 'ready') return '<span class="pill success-pill">Ready</span>';
+  if (slot.status === 'updating') return '<span class="pill info-pill">Regenerating</span>';
+  if (slot.status === 'generating') return '<span class="pill info-pill">Generating</span>';
+  if (slot.status === 'failed') return '<span class="pill danger-pill">Failed</span>';
+  return '<span class="pill subtle">Missing</span>';
+}
+
+function renderSlotMetadata(slot) {
+  if (slot.latestDocument) {
+    return `
+      <div class="document-card-meta artifact-meta">
+        <span class="pill info-pill">Last generated ${escapeHtml(formatDateTime(slot.latestDocument.created_at))}</span>
+        ${slot.documents.length > 1 ? `<span class="pill subtle">${slot.documents.length} versions</span>` : ''}
+        ${slot.activeJob ? '<span class="pill info-pill">New version in progress</span>' : ''}
+        ${slot.failedJob ? `<span class="pill danger-pill">${escapeHtml(truncateText(slot.failedJob.error_message || 'Latest regeneration failed', 60))}</span>` : ''}
+      </div>
+    `;
+  }
+  if (slot.activeJob) {
+    return `
+      <div class="document-card-meta artifact-meta">
+        <span class="pill info-pill">Started ${escapeHtml(formatDateTime(slot.activeJob.created_at))}</span>
+      </div>
+    `;
+  }
+  if (slot.failedJob) {
+    return `
+      <div class="artifact-meta-copy">
+        <p>${escapeHtml(slot.failedJob.error_message || 'Generation failed. Review the job description or linked CV, then retry.')}</p>
+        <small>Last attempt ${escapeHtml(formatDateTime(slot.failedJob.created_at))}</small>
+      </div>
+    `;
+  }
+  return '<p class="artifact-meta-copy">No saved document yet.</p>';
+}
+
+function renderDocumentTypeIcon(type) {
+  const icons = {
+    tailored_cv: '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M6 3.5h5l3 3V16a1 1 0 0 1-1 1H6.9A1.9 1.9 0 0 1 5 15.1V5.4A1.9 1.9 0 0 1 6.9 3.5Z"/><path d="M11 3.5V7h3"/></svg>',
+    cover_letter: '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="3.5" y="5" width="13" height="10" rx="2"/><path d="m5.5 7 4.5 3.5L14.5 7"/></svg>',
+    role_fit: '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M10 3.5 15.5 6v4.2c0 3.1-2.2 5.9-5.5 6.8-3.3-.9-5.5-3.7-5.5-6.8V6L10 3.5Z"/><path d="m7.6 10 1.4 1.5 3.3-3.5"/></svg>',
+    ats_check: '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="8.5" cy="8.5" r="4.5"/><path d="M12 12 16 16"/><path d="M7 8.5h3"/></svg>',
+    follow_up_email: '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M3.5 10a6.5 6.5 0 1 1 2.3 5"/><path d="M3.5 13.5V16h2.5"/><path d="M7.5 10h5"/></svg>'
+  };
+  return icons[type] || '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="4" y="4" width="12" height="12" rx="2"/></svg>';
+}
+
+function truncateText(value, maxLength) {
+  const text = String(value || '').replace(/\s+/g, ' ').trim();
+  if (!text || text.length <= maxLength) return text;
+  return `${text.slice(0, maxLength - 1).trim()}…`;
+}
+
+function documentVersionLabel(versionNumber, isLatest) {
+  return isLatest ? `Version ${versionNumber} • Latest` : `Version ${versionNumber}`;
+}
+
+function readProviderLabel(document) {
+  const requested = String(document.provider_requested || '').trim().toLowerCase();
+  const provider = String(document.provider_name || '').trim().toLowerCase();
+  if (requested === 'gemini') return 'Gemini';
+  if (requested === 'aws') return 'AWS';
+  if (requested === 'mock') return 'Mock';
+  if (provider === 'openai-compatible') return 'AI Provider';
+  if (provider === 'gemini') return 'Gemini';
+  if (provider === 'aws') return 'AWS';
+  if (provider === 'mock') return 'Mock';
+  return document.provider_name || document.provider_requested || 'unknown';
+}
+
+function groupDocumentsByType(documents, sort = 'newest') {
   const grouped = documents.reduce((groups, item) => {
     if (!groups[item.document_type]) groups[item.document_type] = [];
     groups[item.document_type].push(item);
     return groups;
   }, {});
+  for (const key of Object.keys(grouped)) {
+    grouped[key].sort((left, right) => {
+      const delta = new Date(left.created_at).getTime() - new Date(right.created_at).getTime();
+      return sort === 'oldest' ? delta : -delta;
+    });
+  }
   return Object.fromEntries(Object.entries(grouped).sort((left, right) => left[0].localeCompare(right[0])));
 }
 
@@ -1147,6 +1513,53 @@ function isProvider(document, provider) {
   const name = String(document.provider_name || document.provider_requested || '').toLowerCase();
   if (provider === 'aws') return name.includes('aws');
   return name.includes(provider);
+}
+
+function activityIcon(action) {
+  const value = String(action || '');
+  if (value.includes('ai_')) return 'DOC';
+  if (value.includes('status') || value.includes('interview')) return 'APP';
+  if (value.includes('todo')) return 'TASK';
+  if (value.includes('note') || value.includes('preparation')) return 'NOTE';
+  if (value.includes('question')) return 'ASK';
+  if (value.includes('feedback')) return 'FDBK';
+  return 'ACT';
+}
+
+function activityLabel(action, details) {
+  const value = String(action || '');
+  if (value === 'created') return 'Application created';
+  if (value === 'archived') return 'Application archived';
+  if (value === 'restored') return 'Application restored';
+  if (value === 'status_changed') return 'Status changed';
+  if (value === 'interview_date_changed') return 'Interview updated';
+  if (value === 'todo_completed') return 'Task completed';
+  if (value === 'todo_added') return 'Task added';
+  if (value === 'recruiter_question_added') return 'Recruiter question added';
+  if (value === 'feedback_added') return 'Feedback added';
+  if (value === 'note_added') return 'Note added';
+  if (value === 'preparation_updated') return 'Research notes updated';
+  if (value === 'ai_document_deleted') return 'Document deleted';
+  if (value.includes('queued')) return 'Generation queued';
+  if (value.includes('ai_')) return 'Document generated';
+  return formatAction(details ? action : action || 'updated');
+}
+
+function activityMeta(item) {
+  const details = cleanActivityDetails(item.details);
+  const provider = activityProviderLabel(item);
+  return [details, provider, formatDateTime(item.created_at)].filter(Boolean).join(' • ');
+}
+
+function cleanActivityDetails(details) {
+  return String(details || '').replace(/^[^:]+:\s*/, '').trim();
+}
+
+function activityProviderLabel(item) {
+  const details = String(item.details || '');
+  if (/aws/i.test(details)) return 'AWS';
+  if (/gemini/i.test(details)) return 'Gemini';
+  return '';
 }
 
 function jobBoardFreshnessLabel(board) {
@@ -1193,6 +1606,25 @@ function renderInlineEmpty(title, body) {
     <div class="empty-inline">
       <strong>${escapeHtml(title)}</strong>
       <p>${escapeHtml(body)}</p>
+    </div>
+  `;
+}
+
+export function renderRouteLoadingState(title, subtitle = 'Loading workspace') {
+  return `
+    <div class="route-page-shell">
+      <section class="route-card loading-shell">
+        <div class="loading-header">
+          <span class="loading-chip">${escapeHtml(subtitle)}</span>
+          <h2>${escapeHtml(title)}</h2>
+        </div>
+        <div class="loading-grid">
+          <div class="loading-block loading-block-wide"></div>
+          <div class="loading-block"></div>
+          <div class="loading-block"></div>
+          <div class="loading-block"></div>
+        </div>
+      </section>
     </div>
   `;
 }

@@ -1,18 +1,19 @@
-import { els } from './dom.js';
+import { bindWorkspaceElements, els } from './dom.js';
 import { state, statusLabels, statusOptions } from './state.js';
-import { api, attachDateMask, debounce, formatIsoDateForDisplay, localToday, parseDisplayDateToIso, renderDateInput, setError } from './utils.js';
+import { api, attachDateMask, debounce, escapeAttribute, escapeHtml, formatDateTime, formatIsoDateForDisplay, localToday, parseDisplayDateToIso, renderDateInput, setError } from './utils.js';
 import {
   renderActivity,
   renderApplicationCVSelect,
+  renderDocumentContent,
   renderApplicationPage,
   renderApplications,
   renderCVs,
   renderCalendar,
-  renderGeneratedContentPage,
-  renderGeneratedDocumentDetail,
+  renderHomeWorkspace,
   renderJobBoards,
   renderKanban,
   renderNotifications,
+  renderRouteLoadingState,
   renderReports,
   renderSavedFilters,
   renderToolkit
@@ -26,12 +27,13 @@ const aiEndpoints = {
   followup: '/api/ai/follow-up-email'
 };
 
+state.contentWorkspace.providerPreferences = loadProviderPreferences();
+
 bindGlobalEvents();
 
 Promise.all([loadApplications(), loadCVs(), loadSavedFilters(), loadReminders(), loadNotifications(), loadJobBoards()])
   .then(async () => {
     await loadAppConfig();
-    renderToolkit(els);
     await renderCurrentRoute();
   })
   .catch((error) => {
@@ -41,14 +43,15 @@ Promise.all([loadApplications(), loadCVs(), loadSavedFilters(), loadReminders(),
 function bindGlobalEvents() {
   document.querySelector('#newApplicationButton').addEventListener('click', openApplicationDialog);
   document.querySelector('#cvManagerButton').addEventListener('click', openCVDialog);
-  document.querySelector('#exportCsvButton').addEventListener('click', () => {
-    window.location.href = '/api/export/applications.csv';
-  });
-  document.querySelector('#importCsvButton').addEventListener('click', () => els.importCsvInput.click());
   els.importCsvInput.addEventListener('change', importCsv);
+  els.restoreBackupInput.addEventListener('change', restoreBackup);
 
   document.querySelectorAll('[data-close-dialog]').forEach((button) => {
-    button.addEventListener('click', () => button.closest('dialog').close());
+    button.addEventListener('click', () => {
+      const dialog = button.closest('dialog');
+      dialog?.close();
+      resetDialogState(dialog);
+    });
   });
 
   document.querySelectorAll('[data-view]').forEach((button) => {
@@ -58,31 +61,31 @@ function bindGlobalEvents() {
     });
   });
 
-  els.search.addEventListener('input', debounce(() => {
+  els.search?.addEventListener('input', debounce(() => {
     state.filters.search = els.search.value.trim();
     els.savedFilterSelect.value = '';
     loadApplications();
   }, 250));
 
-  els.statusFilter.addEventListener('change', () => {
+  els.statusFilter?.addEventListener('change', () => {
     state.filters.status = els.statusFilter.value;
     els.savedFilterSelect.value = '';
     loadApplications();
   });
 
-  els.tagFilter.addEventListener('input', debounce(() => {
+  els.tagFilter?.addEventListener('input', debounce(() => {
     state.filters.tag = els.tagFilter.value.trim();
     els.savedFilterSelect.value = '';
     loadApplications();
   }, 250));
 
-  els.archiveFilter.addEventListener('change', () => {
+  els.archiveFilter?.addEventListener('change', () => {
     state.filters.archived = els.archiveFilter.value;
     els.savedFilterSelect.value = '';
     loadApplications();
   });
 
-  els.savedFilterSelect.addEventListener('change', async () => {
+  els.savedFilterSelect?.addEventListener('change', async () => {
     const id = Number(els.savedFilterSelect.value);
     const savedFilter = state.savedFilters.find((item) => item.id === id);
     if (!savedFilter) return;
@@ -90,16 +93,16 @@ function bindGlobalEvents() {
     await loadApplications();
   });
 
-  els.saveFilterButton.addEventListener('click', saveCurrentFilter);
-  els.deleteFilterButton.addEventListener('click', deleteCurrentSavedFilter);
+  els.saveFilterButton?.addEventListener('click', saveCurrentFilter);
+  els.deleteFilterButton?.addEventListener('click', deleteCurrentSavedFilter);
 
-  els.activitySearch.addEventListener('input', debounce(() => {
+  els.activitySearch?.addEventListener('input', debounce(() => {
     state.activity.search = els.activitySearch.value.trim();
     state.activity.page = 1;
     loadActivity();
   }, 250));
 
-  els.activityPagination.addEventListener('click', async (event) => {
+  els.activityPagination?.addEventListener('click', async (event) => {
     const button = event.target.closest('[data-activity-page]');
     if (!button) return;
     state.activity.page = Number(button.dataset.activityPage);
@@ -113,42 +116,6 @@ function bindGlobalEvents() {
   els.jobBoardResetButton.addEventListener('click', resetJobBoardForm);
   els.jobBoardForm.querySelectorAll('[data-date-input]').forEach(attachDateMask);
 
-  els.table.addEventListener('change', updateInlineStatus);
-  els.table.addEventListener('click', async (event) => {
-    const openButton = event.target.closest('[data-detail-id]');
-    const archiveButton = event.target.closest('[data-archive-row-id]');
-    const restoreButton = event.target.closest('[data-restore-row-id]');
-
-    if (openButton) navigateTo(`/applications/${openButton.dataset.detailId}`);
-    if (archiveButton) await archiveApplication(Number(archiveButton.dataset.archiveRowId));
-    if (restoreButton) await restoreApplication(Number(restoreButton.dataset.restoreRowId));
-  });
-
-  els.remindersList.addEventListener('click', async (event) => {
-    const action = event.target.closest('[data-calendar-action]');
-    const detail = event.target.closest('[data-calendar-detail]');
-
-    if (action) {
-      shiftCalendar(action.dataset.calendarAction);
-      await loadReminders();
-    }
-
-    if (detail) navigateTo(`/applications/${detail.dataset.calendarDetail}`);
-  });
-
-  els.notificationsPanel.addEventListener('click', async (event) => {
-    const toggle = event.target.closest('[data-toggle-notifications]');
-    const detail = event.target.closest('[data-notification-detail]');
-
-    if (toggle) {
-      state.notificationsExpanded = !state.notificationsExpanded;
-      renderNotifications(els, state.notifications, state.notificationsExpanded);
-      bindNotificationActions();
-    }
-
-    if (detail) navigateTo(`/applications/${detail.dataset.notificationDetail}`);
-  });
-
   document.addEventListener('click', (event) => {
     const link = event.target.closest('a[href^="/applications/"], a[href="/"]');
     if (!link || link.target === '_blank' || event.defaultPrevented) return;
@@ -158,17 +125,150 @@ function bindGlobalEvents() {
 
   window.addEventListener('popstate', () => {
     renderCurrentRoute().catch((error) => {
-      alert(error.message);
+      showToast(error.message, 'error');
     });
   });
 }
 
+function bindHomeWorkspaceEvents() {
+  els.jobBoardOpenButton?.addEventListener('click', () => openJobBoardDialog());
+  els.search?.addEventListener('input', debounce(() => {
+    state.filters.search = els.search.value.trim();
+    els.savedFilterSelect.value = '';
+    loadApplications();
+  }, 250));
+  els.statusFilter?.addEventListener('change', () => {
+    state.filters.status = els.statusFilter.value;
+    els.savedFilterSelect.value = '';
+    loadApplications();
+  });
+  els.tagFilter?.addEventListener('input', debounce(() => {
+    state.filters.tag = els.tagFilter.value.trim();
+    els.savedFilterSelect.value = '';
+    loadApplications();
+  }, 250));
+  els.archiveFilter?.addEventListener('change', () => {
+    state.filters.archived = els.archiveFilter.value;
+    els.savedFilterSelect.value = '';
+    loadApplications();
+  });
+  els.savedFilterSelect?.addEventListener('change', async () => {
+    const id = Number(els.savedFilterSelect.value);
+    const savedFilter = state.savedFilters.find((item) => item.id === id);
+    if (!savedFilter) return;
+    applySavedFilter(savedFilter);
+    await loadApplications();
+  });
+  els.saveFilterButton?.addEventListener('click', saveCurrentFilter);
+  els.deleteFilterButton?.addEventListener('click', deleteCurrentSavedFilter);
+  els.activitySearch?.addEventListener('input', debounce(() => {
+    state.activity.search = els.activitySearch.value.trim();
+    state.activity.page = 1;
+    loadActivity();
+  }, 250));
+  els.activityPagination?.addEventListener('click', async (event) => {
+    const button = event.target.closest('[data-activity-page]');
+    if (!button) return;
+    state.activity.page = Number(button.dataset.activityPage);
+    await loadActivity();
+  });
+  els.table?.addEventListener('change', updateInlineStatus);
+  els.table?.addEventListener('click', async (event) => {
+    const openButton = event.target.closest('[data-detail-id]');
+    const archiveButton = event.target.closest('[data-archive-row-id]');
+    const restoreButton = event.target.closest('[data-restore-row-id]');
+    if (openButton) navigateTo(`/applications/${openButton.dataset.detailId}`);
+    if (archiveButton) {
+      const application = state.applications.find((item) => item.id === Number(archiveButton.dataset.archiveRowId));
+      if (!application) return;
+      await runConfirmedAction({
+        title: 'Archive application',
+        body: `Archive ${application.company_name}?`,
+        acceptLabel: 'Archive',
+        triggerButton: archiveButton,
+        successMessage: 'Application archived.',
+        onConfirm: async () => {
+          await archiveApplication(application.id);
+        }
+      });
+    }
+    if (restoreButton) {
+      await withAsyncButton(restoreButton, async () => {
+        await restoreApplication(Number(restoreButton.dataset.restoreRowId));
+        showToast('Restore completed.', 'info');
+      });
+    }
+  });
+  els.remindersList?.addEventListener('click', async (event) => {
+    const action = event.target.closest('[data-calendar-action]');
+    const detail = event.target.closest('[data-calendar-detail]');
+    if (action) {
+      shiftCalendar(action.dataset.calendarAction);
+      await loadReminders();
+    }
+    if (detail) navigateTo(`/applications/${detail.dataset.calendarDetail}`);
+  });
+  els.notificationsPanel?.addEventListener('click', async (event) => {
+    const toggle = event.target.closest('[data-toggle-notifications]');
+    const detail = event.target.closest('[data-notification-detail]');
+    if (toggle) {
+      state.notificationsExpanded = !state.notificationsExpanded;
+      renderNotifications(els, state.notifications, state.notificationsExpanded);
+      bindNotificationActions();
+    }
+    if (detail) navigateTo(`/applications/${detail.dataset.notificationDetail}`);
+  });
+  els.workspaceRoot.querySelectorAll('[data-view]').forEach((button) => {
+    button.addEventListener('click', () => {
+      if (location.pathname !== '/') navigateTo('/');
+      switchView(button.dataset.view);
+    });
+  });
+  bindSettingsActions();
+}
+
+function bindSettingsActions() {
+  if (els.settingsExportCsvButton && els.settingsExportCsvButton.dataset.bound !== 'true') {
+    els.settingsExportCsvButton.dataset.bound = 'true';
+    els.settingsExportCsvButton.addEventListener('click', () => {
+      window.location.href = '/api/export/applications.csv';
+    });
+  }
+  if (els.settingsImportCsvButton && els.settingsImportCsvButton.dataset.bound !== 'true') {
+    els.settingsImportCsvButton.dataset.bound = 'true';
+    els.settingsImportCsvButton.addEventListener('click', () => els.importCsvInput.click());
+  }
+  if (els.settingsBackupButton && els.settingsBackupButton.dataset.bound !== 'true') {
+    els.settingsBackupButton.dataset.bound = 'true';
+    els.settingsBackupButton.addEventListener('click', async (event) => {
+      await withAsyncButton(event.currentTarget, async () => {
+        window.location.href = '/api/export/backup';
+        showToast('Backup download started.', 'info');
+      });
+    });
+  }
+  if (els.settingsRestoreButton && els.settingsRestoreButton.dataset.bound !== 'true') {
+    els.settingsRestoreButton.dataset.bound = 'true';
+    els.settingsRestoreButton.addEventListener('click', async (event) => {
+      const confirmed = await confirmAction(
+        'Restore backup',
+        'Restore will replace the current local data, uploads, AI documents, jobs, and settings with the selected backup.',
+        'Choose Backup'
+      );
+      if (!confirmed) return;
+      event.currentTarget.dataset.pendingRestore = 'true';
+      els.restoreBackupInput.click();
+    });
+  }
+}
+
 async function switchView(view) {
   state.view = view;
-  document.querySelectorAll('[data-view]').forEach((button) => {
+  els.workspaceRoot.querySelectorAll('[data-view]').forEach((button) => {
     button.classList.toggle('is-active', button.dataset.view === view);
   });
 
+  if (!els.listView) return;
   els.listView.hidden = view !== 'list';
   els.remindersView.hidden = view !== 'reminders';
   els.kanbanView.hidden = view !== 'kanban';
@@ -176,13 +276,29 @@ async function switchView(view) {
   els.activityView.hidden = view !== 'activity';
   els.boardsView.hidden = view !== 'boards';
   els.toolkitView.hidden = view !== 'toolkit';
+  els.settingsView.hidden = view !== 'settings';
 
-  if (view === 'reminders') await loadReminders();
+  unmountInactiveHomeViews(view);
+
+  if (view === 'reminders') {
+    renderSectionLoading(els.remindersList, 'Loading reminders');
+    await loadReminders();
+  }
   if (view === 'kanban') renderKanban(els, state.applications, statusLabels);
-  if (view === 'reports') await loadReports();
-  if (view === 'activity') await loadActivity();
-  if (view === 'boards') await loadJobBoards();
+  if (view === 'reports') {
+    renderSectionLoading(els.reportsContent, 'Loading reports');
+    await loadReports();
+  }
+  if (view === 'activity') {
+    renderSectionLoading(els.activityTable, 'Loading activity');
+    await loadActivity();
+  }
+  if (view === 'boards') {
+    renderSectionLoading(els.jobBoardsList, 'Loading job boards');
+    await loadJobBoards();
+  }
   if (view === 'toolkit') renderToolkit(els);
+  if (view === 'settings') bindSettingsActions();
 }
 
 async function loadApplications() {
@@ -194,8 +310,8 @@ async function loadApplications() {
 
   const payload = await api(`/api/applications?${params.toString()}`);
   state.applications = payload.applications;
-  renderApplications(els, state, statusOptions);
-  if (state.view === 'kanban') renderKanban(els, state.applications, statusLabels);
+  if (els.table) renderApplications(els, state, statusOptions);
+  if (state.view === 'kanban' && els.kanbanBoard) renderKanban(els, state.applications, statusLabels);
 }
 
 async function loadAppConfig() {
@@ -213,39 +329,45 @@ async function loadAppConfig() {
 async function loadCVs() {
   const payload = await api('/api/cv');
   state.cvs = payload.cvs;
-  renderCVs(els, state.cvs);
-  renderApplicationCVSelect(els, state.cvs);
-  bindCvActions();
+  if (els.cvList) {
+    renderCVs(els, state.cvs);
+    bindCvActions();
+  }
+  if (els.applicationCvSelect) renderApplicationCVSelect(els, state.cvs);
 }
 
 async function loadSavedFilters() {
   const payload = await api('/api/saved-filters');
   state.savedFilters = payload.filters;
-  renderSavedFilters(els, state.savedFilters);
+  if (els.savedFilterSelect) renderSavedFilters(els, state.savedFilters);
 }
 
 async function loadJobBoards() {
   const payload = await api('/api/job-boards');
   state.jobBoards = payload.job_boards;
-  renderJobBoards(els, state.jobBoards);
-  bindJobBoardActions();
+  if (els.jobBoardsList) {
+    renderJobBoards(els, state.jobBoards);
+    bindJobBoardActions();
+  }
 }
 
 async function loadReminders() {
   const payload = await api('/api/reminders');
-  renderCalendar(els, state.calendarDate, payload.reminders);
+  if (els.remindersList) renderCalendar(els, state.calendarDate, payload.reminders);
 }
 
 async function loadNotifications() {
   const payload = await api('/api/notifications');
   state.notifications = payload.notifications;
-  renderNotifications(els, state.notifications, state.notificationsExpanded);
-  bindNotificationActions();
+  if (els.notificationsPanel) {
+    renderNotifications(els, state.notifications, state.notificationsExpanded);
+    bindNotificationActions();
+  }
 }
 
 async function loadReports() {
   const payload = await api('/api/reports');
-  renderReports(els, payload, statusLabels);
+  if (els.reportsContent) renderReports(els, payload, statusLabels);
 }
 
 async function loadActivity() {
@@ -256,7 +378,7 @@ async function loadActivity() {
   if (state.activity.search) params.set('search', state.activity.search);
 
   const payload = await api(`/api/activity?${params.toString()}`);
-  renderActivity(els, state, payload);
+  if (els.activityTable) renderActivity(els, state, payload);
 }
 
 async function submitApplicationForm(event) {
@@ -284,15 +406,16 @@ async function submitApplicationForm(event) {
   if (!file?.size) formData.delete('cv');
   if (!formData.get('cv_id')) formData.delete('cv_id');
 
-  try {
+  await withAsyncForm(els.applicationForm, async () => {
     const payload = await api('/api/applications', { method: 'POST', body: formData });
     els.applicationDialog.close();
     els.applicationForm.reset();
+    showToast('Application saved.');
     await Promise.all([loadApplications(), loadCVs(), loadReminders(), loadNotifications()]);
     navigateTo(`/applications/${payload.application.id}`);
-  } catch (error) {
+  }, (error) => {
     setError(els.applicationError, error.message);
-  }
+  });
 }
 
 async function submitCvForm(event) {
@@ -302,14 +425,15 @@ async function submitCvForm(event) {
   const formData = new FormData(els.cvForm);
   formData.set('is_latest', els.cvForm.elements.is_latest.checked ? 'true' : 'false');
 
-  try {
+  await withAsyncForm(els.cvForm, async () => {
     await api('/api/cv', { method: 'POST', body: formData });
     els.cvForm.reset();
     els.cvForm.elements.is_latest.checked = true;
+    showToast('CV saved.');
     await loadCVs();
-  } catch (error) {
+  }, (error) => {
     setError(els.cvError, error.message);
-  }
+  });
 }
 
 async function submitJobBoardForm(event) {
@@ -325,17 +449,19 @@ async function submitJobBoardForm(event) {
     is_active: els.jobBoardForm.elements.is_active.checked
   };
 
-  try {
+  await withAsyncForm(els.jobBoardForm, async () => {
     await api(id ? `/api/job-boards/${id}` : '/api/job-boards', {
       method: id ? 'PUT' : 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify(payload)
     });
+    els.jobBoardDialog.close();
     resetJobBoardForm();
     await loadJobBoards();
-  } catch (error) {
+    showToast(id ? 'Job board updated.' : 'Job board saved.');
+  }, (error) => {
     setError(els.jobBoardError, error.message);
-  }
+  });
 }
 
 async function updateInlineStatus(event) {
@@ -355,12 +481,13 @@ async function updateInlineStatus(event) {
   }
 
   if (status === 'interview_scheduled' && !interviewDate) {
-    alert('Set an interview date before saving Interview Scheduled.');
+    showToast('Set an interview date before saving Interview Scheduled.', 'warning');
     await loadApplications();
     return;
   }
 
   try {
+    event.target.disabled = true;
     await api(`/api/applications/${application.id}`, {
       method: 'PUT',
       headers: { 'content-type': 'application/json' },
@@ -369,23 +496,33 @@ async function updateInlineStatus(event) {
         interview_date: status === 'interview_scheduled' ? interviewDate : null
       })
     });
+    showToast('Save successful.');
     await Promise.all([loadApplications(), loadReminders()]);
   } catch (error) {
-    alert(error.message);
+    showToast(error.message, 'error');
     await loadApplications();
+  } finally {
+    event.target.disabled = false;
   }
 }
 
 function bindCvActions() {
   els.cvList.querySelectorAll('[data-delete-cv-id]').forEach((button) => {
     button.addEventListener('click', async () => {
-      if (!confirm('Delete this CV? Linked historical CVs cannot be deleted.')) return;
-      try {
-        await api(`/api/cv/${button.dataset.deleteCvId}`, { method: 'DELETE' });
-        await loadCVs();
-      } catch (error) {
-        setError(els.cvError, error.message);
-      }
+      await runConfirmedAction({
+        title: 'Delete CV',
+        body: 'Delete this CV? Linked historical CVs cannot be deleted.',
+        acceptLabel: 'Delete',
+        triggerButton: button,
+        successMessage: 'CV deleted.',
+        onConfirm: async () => {
+          await api(`/api/cv/${button.dataset.deleteCvId}`, { method: 'DELETE' });
+          await loadCVs();
+        },
+        onError: (error) => {
+          setError(els.cvError, error.message);
+        }
+      });
     });
   });
 }
@@ -397,18 +534,29 @@ function bindNotificationActions() {
 }
 
 function bindJobBoardActions() {
+  els.jobBoardsList.querySelectorAll('[data-job-board-open]').forEach((button) => {
+    button.addEventListener('click', async () => {
+      const board = state.jobBoards.find((item) => item.id === Number(button.dataset.jobBoardOpen));
+      if (!board?.url) return;
+      const openedTab = window.open(board.url, '_blank', 'noopener,noreferrer');
+      button.disabled = true;
+      try {
+        await api(`/api/job-boards/${board.id}/check`, { method: 'POST' });
+        await loadJobBoards();
+      } catch (error) {
+        setError(els.jobBoardError, error.message);
+        if (!openedTab) window.open(board.url, '_blank', 'noopener,noreferrer');
+      } finally {
+        button.disabled = false;
+      }
+    });
+  });
+
   els.jobBoardsList.querySelectorAll('[data-job-board-edit]').forEach((button) => {
     button.addEventListener('click', () => {
       const board = state.jobBoards.find((item) => item.id === Number(button.dataset.jobBoardEdit));
       if (!board) return;
-      els.jobBoardForm.elements.id.value = board.id;
-      els.jobBoardForm.elements.name.value = board.name || '';
-      els.jobBoardForm.elements.url.value = board.url || '';
-      els.jobBoardForm.elements.notes.value = board.notes || '';
-      els.jobBoardForm.elements.last_checked_date.value = formatIsoDateForDisplay(board.last_checked_date || '');
-      els.jobBoardForm.elements.is_active.checked = Boolean(board.is_active);
-      setError(els.jobBoardError, '');
-      els.jobBoardForm.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      openJobBoardDialog(board);
     });
   });
 
@@ -424,6 +572,7 @@ function bindJobBoardActions() {
           body: JSON.stringify({ ...board, is_active: !board.is_active })
         });
         await loadJobBoards();
+        showToast(board.is_active ? 'Board marked inactive.' : 'Board activated.');
       } catch (error) {
         setError(els.jobBoardError, error.message);
       } finally {
@@ -434,18 +583,22 @@ function bindJobBoardActions() {
 
   els.jobBoardsList.querySelectorAll('[data-job-board-delete]').forEach((button) => {
     button.addEventListener('click', async () => {
-      if (!confirm('Delete this job board?')) return;
-      button.disabled = true;
-      try {
-        await api(`/api/job-boards/${button.dataset.jobBoardDelete}`, { method: 'DELETE' });
-        state.jobBoards = state.jobBoards.filter((item) => item.id !== Number(button.dataset.jobBoardDelete));
-        renderJobBoards(els, state.jobBoards);
-        bindJobBoardActions();
-      } catch (error) {
-        setError(els.jobBoardError, error.message);
-      } finally {
-        button.disabled = false;
-      }
+      await runConfirmedAction({
+        title: 'Delete job board',
+        body: 'Delete this job board?',
+        acceptLabel: 'Delete',
+        triggerButton: button,
+        successMessage: 'Job board deleted.',
+        onConfirm: async () => {
+          await api(`/api/job-boards/${button.dataset.jobBoardDelete}`, { method: 'DELETE' });
+          state.jobBoards = state.jobBoards.filter((item) => item.id !== Number(button.dataset.jobBoardDelete));
+          renderJobBoards(els, state.jobBoards);
+          bindJobBoardActions();
+        },
+        onError: (error) => {
+          setError(els.jobBoardError, error.message);
+        }
+      });
     });
   });
 }
@@ -455,7 +608,22 @@ function resetJobBoardForm() {
   els.jobBoardForm.elements.id.value = '';
   els.jobBoardForm.elements.is_active.checked = true;
   els.jobBoardForm.elements.last_checked_date.value = '';
+  if (els.jobBoardDialogTitle) els.jobBoardDialogTitle.textContent = 'Track Job Board';
   setError(els.jobBoardError, '');
+}
+
+function openJobBoardDialog(board = null) {
+  resetJobBoardForm();
+  if (board) {
+    els.jobBoardDialogTitle.textContent = 'Edit Job Board';
+    els.jobBoardForm.elements.id.value = board.id;
+    els.jobBoardForm.elements.name.value = board.name || '';
+    els.jobBoardForm.elements.url.value = board.url || '';
+    els.jobBoardForm.elements.notes.value = board.notes || '';
+    els.jobBoardForm.elements.last_checked_date.value = formatIsoDateForDisplay(board.last_checked_date || '');
+    els.jobBoardForm.elements.is_active.checked = Boolean(board.is_active);
+  }
+  els.jobBoardDialog.showModal();
 }
 
 async function openApplicationDialog() {
@@ -474,20 +642,23 @@ async function openCVDialog() {
 }
 
 async function renderCurrentRoute() {
+  clearContentPolling();
+  resetTransientUiState();
   state.route = parseRoute(location.pathname, location.search);
-  els.appHome.hidden = state.route.page !== 'home';
-  els.applicationPage.hidden = state.route.page !== 'application';
-  els.contentPage.hidden = state.route.page !== 'content' && state.route.page !== 'document';
+  window.scrollTo({ top: 0, behavior: 'auto' });
 
   if (state.route.page === 'home') {
+    mountWorkspace(renderHomeWorkspace(), 'home');
+    bindHomeWorkspaceElements();
     await switchView(state.view);
     return;
   }
 
   if (state.route.page === 'application') {
+    mountWorkspace(renderRouteLoadingState('Loading application', 'Fetching application'), 'loading');
     const payload = await api(`/api/applications/${state.route.applicationId}`).catch(() => null);
     if (!payload) {
-      els.applicationPageContent.innerHTML = buildRouteErrorState('Application not found', 'This application route no longer points to an available record.');
+      mountWorkspace(buildRouteErrorState('Application not found', 'This application route no longer points to an available record.'), 'error');
       return;
     }
     state.currentApplication = payload;
@@ -496,51 +667,61 @@ async function renderCurrentRoute() {
     renderApplicationPage(els, payload, statusLabels, {
       activeTab: state.route.tab,
       selectedProvider: state.selectedAIProvider,
-      capabilities: state.appConfig
+      capabilities: state.appConfig,
+      contentWorkspace: state.contentWorkspace
     });
+    bindWorkspaceElements();
+    assertSingleWorkspaceView('application');
     bindApplicationPageActions(payload);
+    if (state.route.tab === 'content' && state.route.documentId) {
+      const document = payload.ai_documents.find((item) => Number(item.id) === Number(state.route.documentId));
+      if (document) {
+        openDocumentPreview(payload.application, document, payload.ai_documents.filter((item) => item.document_type === document.document_type));
+      }
+    }
     return;
   }
+}
 
-  const application = state.currentApplication?.application?.id === state.route.applicationId
-    ? state.currentApplication.application
-    : (await api(`/api/applications/${state.route.applicationId}`).catch(() => null))?.application;
-  if (!application) {
-    els.contentPageContent.innerHTML = buildRouteErrorState('Application not found', 'This content route is linked to an application that is no longer available.');
-    return;
-  }
-  state.currentApplication = {
-    ...(state.currentApplication || {}),
-    application
-  };
-  const library = await api(`/api/applications/${state.route.applicationId}/ai-documents`).catch(() => null);
-  if (!library) {
-    els.contentPageContent.innerHTML = buildRouteErrorState('Content library unavailable', 'Generated content could not be loaded for this application.');
-    return;
-  }
-  state.currentApplicationDocuments = library.documents;
-  state.currentApplicationJobs = library.jobs;
+function mountWorkspace(markup, viewName) {
+  els.workspaceRoot.innerHTML = markup;
+  bindWorkspaceElements();
+  els.workspaceMounted = viewName;
+  assertSingleWorkspaceView(viewName);
+}
 
-  if (state.route.page === 'content') {
-    renderGeneratedContentPage(els, application, library.documents, library.jobs, {
-      selectedProvider: state.selectedAIProvider,
-      capabilities: state.appConfig
-    });
-    bindContentLibraryActions(application.id);
-    return;
+function bindHomeWorkspaceElements() {
+  bindWorkspaceElements();
+  if (els.summary) {
+    const interviews = state.applications.filter((item) => item.status === 'interview_scheduled').length;
+    const archived = state.applications.filter((item) => item.archived_at).length;
+    const viewName = state.filters.archived === 'true' ? 'archived' : state.filters.archived === 'all' ? 'total' : 'active';
+    els.summary.textContent = `${state.applications.length} ${viewName}, ${interviews} interviews scheduled, ${archived} archived shown`;
   }
+  if (els.search) els.search.value = state.filters.search;
+  if (els.statusFilter) els.statusFilter.value = state.filters.status;
+  if (els.tagFilter) els.tagFilter.value = state.filters.tag;
+  if (els.archiveFilter) els.archiveFilter.value = state.filters.archived;
+  if (els.savedFilterName) els.savedFilterName.value = '';
+  renderApplications(els, state, statusOptions);
+  renderSavedFilters(els, state.savedFilters);
+  renderNotifications(els, state.notifications, state.notificationsExpanded);
+  renderJobBoards(els, state.jobBoards);
+  renderToolkit(els);
+  bindHomeWorkspaceEvents();
+  bindNotificationActions();
+  bindJobBoardActions();
+  if (state.view === 'kanban') renderKanban(els, state.applications, statusLabels);
+  if (state.view === 'reports') loadReports();
+  if (state.view === 'activity') loadActivity();
+  if (state.view === 'reminders') loadReminders();
+}
 
-  const payload = await api(`/api/ai/documents/${state.route.documentId}`).catch(() => null);
-  if (!payload?.document) {
-    els.contentPageContent.innerHTML = buildRouteErrorState('Document not found', 'This generated document may have been deleted or moved.');
-    return;
+function assertSingleWorkspaceView(viewName) {
+  const mounted = els.workspaceRoot.querySelectorAll('[data-workspace-view]');
+  if (mounted.length > 1) {
+    console.warn(`Multiple workspace views mounted for ${viewName}`, mounted.length);
   }
-  if (Number(payload.document.application_id) !== Number(application.id)) {
-    els.contentPageContent.innerHTML = buildRouteErrorState('Document not found', 'This document does not belong to the current application route.');
-    return;
-  }
-  renderGeneratedDocumentDetail(els, application, payload.document, state.appConfig, state.selectedAIProvider);
-  bindGeneratedDocumentActions(application.id, payload.document.id);
 }
 
 function bindApplicationPageActions(payload) {
@@ -559,12 +740,50 @@ function bindApplicationPageActions(payload) {
     openApplicationEditDialog(application);
   });
   root.querySelector('[data-archive-application]')?.addEventListener('click', async () => {
-    await archiveApplication(application.id);
-    await Promise.all([loadApplications(), loadReminders(), loadNotifications(), renderCurrentRoute()]);
+    await runConfirmedAction({
+      title: 'Archive application',
+      body: `Archive ${application.company_name}?`,
+      acceptLabel: 'Archive',
+      triggerButton: root.querySelector('[data-archive-application]'),
+      successMessage: 'Application archived.',
+      onConfirm: async () => {
+        await archiveApplication(application.id);
+        await Promise.all([loadApplications(), loadReminders(), loadNotifications(), renderCurrentRoute()]);
+      }
+    });
   });
   root.querySelector('[data-restore-application]')?.addEventListener('click', async () => {
-    await restoreApplication(application.id);
-    await Promise.all([loadApplications(), loadReminders(), loadNotifications(), renderCurrentRoute()]);
+    const button = root.querySelector('[data-restore-application]');
+    await withAsyncButton(button, async () => {
+      await restoreApplication(application.id);
+      showToast('Application restored.', 'info');
+      await Promise.all([loadApplications(), loadReminders(), loadNotifications(), renderCurrentRoute()]);
+    });
+  });
+  root.querySelector('[data-view-job-description]')?.addEventListener('click', () => {
+    openDetailDialog(application.job_description ? 'Job Description' : 'Job Description Missing', `
+      <section class="route-card detail-dialog-card">
+        <div class="section-heading">
+          <div>
+            <div class="panel-kicker">Role Context</div>
+            <h3>${escapeHtml(application.company_name)}</h3>
+          </div>
+        </div>
+        <p class="description">${escapeHtml(application.job_description || 'Add a job description to improve tailored output, ATS checks, and role-fit analysis.')}</p>
+        <div class="document-card-actions modal-quick-actions">
+          <button type="button" data-modal-ai="fit" data-cv-id="${payload.cvs[0]?.id || ''}">Role Fit Summary</button>
+          <button class="secondary" type="button" data-modal-ai="ats" data-cv-id="${payload.cvs[0]?.id || ''}">ATS Skill Extraction</button>
+          <button class="secondary" type="button" data-modal-ai="cv" data-cv-id="${payload.cvs[0]?.id || ''}">Compare With Resume</button>
+          <button class="secondary" type="button" data-modal-ai="letter" data-cv-id="${payload.cvs[0]?.id || ''}">Interview Topic Draft</button>
+        </div>
+      </section>
+    `);
+    els.detailContent.querySelectorAll('[data-modal-ai]').forEach((button) => {
+      button.addEventListener('click', () => {
+        els.detailDialog.close();
+        runAI(button, application.id);
+      });
+    });
   });
 
   root.querySelectorAll('[data-ai]').forEach((button) => {
@@ -573,73 +792,98 @@ function bindApplicationPageActions(payload) {
 
   root.querySelector('[data-note-form]')?.addEventListener('submit', async (event) => {
     event.preventDefault();
-    const body = event.target.elements.body.value.trim();
+    const body = readRequiredText(event.target, 'body', 'Add a note before saving.');
     if (!body) return;
-    await api(`/api/applications/${application.id}/notes`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ body })
+    await withAsyncForm(event.target, async () => {
+      await api(`/api/applications/${application.id}/notes`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ body })
+      });
+      showToast('Note saved.');
+      await Promise.all([loadNotifications(), renderCurrentRoute()]);
     });
-    await Promise.all([loadNotifications(), renderCurrentRoute()]);
   });
 
   root.querySelector('[data-preparation-form]')?.addEventListener('submit', async (event) => {
     event.preventDefault();
     const form = new FormData(event.target);
-    await api(`/api/applications/${application.id}/preparation`, {
-      method: 'PUT',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({
-        about_company: form.get('about_company'),
-        company_values: form.get('company_values'),
-        application_notes: form.get('application_notes')
-      })
+    const values = ['about_company', 'company_values', 'application_notes'].map((key) => String(form.get(key) || '').trim());
+    if (!values.some(Boolean)) {
+      setFormError(event.target, 'Add at least one note before saving.');
+      showToast('Validation error.', 'warning');
+      return;
+    }
+    await withAsyncForm(event.target, async () => {
+      await api(`/api/applications/${application.id}/preparation`, {
+        method: 'PUT',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          about_company: String(form.get('about_company') || '').trim(),
+          company_values: String(form.get('company_values') || '').trim(),
+          application_notes: String(form.get('application_notes') || '').trim()
+        })
+      });
+      showToast('Research notes saved.');
+      await renderCurrentRoute();
     });
-    await renderCurrentRoute();
   });
 
   root.querySelector('[data-question-form]')?.addEventListener('submit', async (event) => {
     event.preventDefault();
-    const question = event.target.elements.question.value.trim();
+    const question = readRequiredText(event.target, 'question', 'Add a question before saving.');
     if (!question) return;
-    await api(`/api/applications/${application.id}/recruiter-questions`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ question })
+    await withAsyncForm(event.target, async () => {
+      await api(`/api/applications/${application.id}/recruiter-questions`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ question })
+      });
+      showToast('Recruiter question added.');
+      await renderCurrentRoute();
     });
-    await renderCurrentRoute();
   });
 
   root.querySelector('[data-feedback-form]')?.addEventListener('submit', async (event) => {
     event.preventDefault();
-    const body = event.target.elements.body.value.trim();
+    const body = readRequiredText(event.target, 'body', 'Add feedback before saving.');
     if (!body) return;
-    await api(`/api/applications/${application.id}/feedback`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({
-        source_type: event.target.elements.source_type.value,
-        body
-      })
+    await withAsyncForm(event.target, async () => {
+      await api(`/api/applications/${application.id}/feedback`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          source_type: event.target.elements.source_type.value,
+          body
+        })
+      });
+      showToast('Feedback added.');
+      await renderCurrentRoute();
     });
-    await renderCurrentRoute();
   });
 
   root.querySelector('[data-todo-form]')?.addEventListener('submit', async (event) => {
     event.preventDefault();
-    const body = event.target.elements.body.value.trim();
+    const body = readRequiredText(event.target, 'body', 'Add a task before saving.');
     if (!body) return;
-    await api(`/api/applications/${application.id}/todos`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({
-        body,
-        due_date: parseDisplayDateToIso(event.target.elements.due_date.value || '')
-      })
+    const dueDate = normalizeOptionalDisplayDate(event.target, 'due_date');
+    if (dueDate === null) return;
+    await withAsyncForm(event.target, async () => {
+      await api(`/api/applications/${application.id}/todos`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          body,
+          due_date: dueDate
+        })
+      });
+      showToast('Task added.');
+      await Promise.all([loadNotifications(), renderCurrentRoute()]);
     });
-    await Promise.all([loadNotifications(), renderCurrentRoute()]);
   });
 
+  bindValidatedForms(root);
+  bindContentWorkspaceActions(application.id, payload);
   root.querySelectorAll('[data-date-input]').forEach(attachDateMask);
   bindPreparationActions(application.id, recruiterQuestions, todos, root);
 }
@@ -649,21 +893,38 @@ function bindPreparationActions(applicationId, recruiterQuestions, todos, root) 
     button.addEventListener('click', async () => {
       const current = recruiterQuestions.find((item) => item.id === Number(button.dataset.questionEdit));
       if (!current) return;
-      const next = prompt('Edit recruiter question', current.question);
-      if (next === null) return;
-      await api(`/api/recruiter-questions/${current.id}`, {
-        method: 'PUT',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ question: next })
+      const next = await promptForText({
+        title: 'Edit recruiter question',
+        label: 'Question',
+        value: current.question,
+        submitLabel: 'Save question'
       });
-      await renderCurrentRoute();
+      if (next === null) return;
+      await withAsyncButton(button, async () => {
+        await api(`/api/recruiter-questions/${current.id}`, {
+          method: 'PUT',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ question: next })
+        });
+        showToast('Recruiter question updated.');
+        await renderCurrentRoute();
+      });
     });
   });
 
   root.querySelectorAll('[data-question-delete]').forEach((button) => {
     button.addEventListener('click', async () => {
-      await api(`/api/recruiter-questions/${button.dataset.questionDelete}`, { method: 'DELETE' });
-      await renderCurrentRoute();
+      await runConfirmedAction({
+        title: 'Delete recruiter question',
+        body: 'Remove this recruiter question?',
+        acceptLabel: 'Delete',
+        triggerButton: button,
+        successMessage: 'Recruiter question deleted.',
+        onConfirm: async () => {
+          await api(`/api/recruiter-questions/${button.dataset.questionDelete}`, { method: 'DELETE' });
+          await renderCurrentRoute();
+        }
+      });
     });
   });
 
@@ -687,14 +948,24 @@ function bindPreparationActions(applicationId, recruiterQuestions, todos, root) 
           body: JSON.stringify({ sort_order: current.sort_order, question: swapped.question })
         })
       ]);
+      showToast('Question order updated.');
       await renderCurrentRoute();
     });
   });
 
   root.querySelectorAll('[data-feedback-delete]').forEach((button) => {
     button.addEventListener('click', async () => {
-      await api(`/api/feedback/${button.dataset.feedbackDelete}`, { method: 'DELETE' });
-      await renderCurrentRoute();
+      await runConfirmedAction({
+        title: 'Delete feedback',
+        body: 'Remove this feedback entry?',
+        acceptLabel: 'Delete',
+        triggerButton: button,
+        successMessage: 'Feedback deleted.',
+        onConfirm: async () => {
+          await api(`/api/feedback/${button.dataset.feedbackDelete}`, { method: 'DELETE' });
+          await renderCurrentRoute();
+        }
+      });
     });
   });
 
@@ -702,12 +973,18 @@ function bindPreparationActions(applicationId, recruiterQuestions, todos, root) 
     input.addEventListener('change', async () => {
       const todo = todos.find((item) => item.id === Number(input.dataset.todoToggle));
       if (!todo) return;
-      await api(`/api/todos/${todo.id}`, {
-        method: 'PUT',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ body: todo.body, due_date: todo.due_date, completed: input.checked })
-      });
-      await Promise.all([loadNotifications(), renderCurrentRoute()]);
+      input.disabled = true;
+      try {
+        await api(`/api/todos/${todo.id}`, {
+          method: 'PUT',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ body: todo.body, due_date: todo.due_date, completed: input.checked })
+        });
+        showToast(input.checked ? 'Task completed.' : 'Task reopened.', 'info');
+        await Promise.all([loadNotifications(), renderCurrentRoute()]);
+      } finally {
+        input.disabled = false;
+      }
     });
   });
 
@@ -715,27 +992,45 @@ function bindPreparationActions(applicationId, recruiterQuestions, todos, root) 
     button.addEventListener('click', async () => {
       const todo = todos.find((item) => item.id === Number(button.dataset.todoEdit));
       if (!todo) return;
-      const next = prompt('Edit to-do', todo.body);
-      if (next === null) return;
-      await api(`/api/todos/${todo.id}`, {
-        method: 'PUT',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ body: next, due_date: todo.due_date, completed: todo.completed })
+      const next = await promptForText({
+        title: 'Edit task',
+        label: 'Task',
+        value: todo.body,
+        submitLabel: 'Save task'
       });
-      await renderCurrentRoute();
+      if (next === null) return;
+      await withAsyncButton(button, async () => {
+        await api(`/api/todos/${todo.id}`, {
+          method: 'PUT',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ body: next, due_date: todo.due_date, completed: todo.completed })
+        });
+        showToast('Task updated.');
+        await renderCurrentRoute();
+      });
     });
   });
 
   root.querySelectorAll('[data-todo-delete]').forEach((button) => {
     button.addEventListener('click', async () => {
-      await api(`/api/todos/${button.dataset.todoDelete}`, { method: 'DELETE' });
-      await Promise.all([loadNotifications(), renderCurrentRoute()]);
+      await runConfirmedAction({
+        title: 'Delete task',
+        body: 'Remove this task?',
+        acceptLabel: 'Delete',
+        triggerButton: button,
+        successMessage: 'Task deleted.',
+        onConfirm: async () => {
+          await api(`/api/todos/${button.dataset.todoDelete}`, { method: 'DELETE' });
+          await Promise.all([loadNotifications(), renderCurrentRoute()]);
+        }
+      });
     });
   });
 }
 
-function bindContentLibraryActions(applicationId) {
-  els.contentPageContent.querySelectorAll('[data-library-provider-select]').forEach((button) => {
+function bindContentWorkspaceActions(applicationId, payload) {
+  const root = els.applicationPageContent;
+  root.querySelectorAll('[data-library-provider-select]').forEach((button) => {
     button.addEventListener('click', () => {
       if (button.disabled) return;
       state.selectedAIProvider = button.dataset.libraryProviderSelect;
@@ -743,59 +1038,145 @@ function bindContentLibraryActions(applicationId) {
     });
   });
 
-  els.contentPageContent.querySelectorAll('[data-regenerate-card]').forEach((button) => {
-    button.addEventListener('click', async () => {
-      const provider = state.selectedAIProvider === 'aws' && state.appConfig.awsEnabled ? 'aws' : 'gemini';
-      const payload = await api(`/api/ai/documents/${button.dataset.regenerateCard}/regenerate`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ provider })
-      });
-      if (payload.document?.id) {
-        navigateTo(`/applications/${applicationId}/content/${payload.document.id}`);
-        return;
-      }
-      navigateTo(`/applications/${applicationId}/content`);
+  root.querySelector('[data-content-search]')?.addEventListener('input', debounce((event) => {
+    state.contentWorkspace.search = event.target.value.trim();
+    renderCurrentRoute();
+  }, 180));
+  root.querySelector('[data-content-type]')?.addEventListener('change', (event) => {
+    state.contentWorkspace.type = event.target.value;
+    renderCurrentRoute();
+  });
+  root.querySelector('[data-content-provider]')?.addEventListener('change', (event) => {
+    state.contentWorkspace.provider = event.target.value;
+    renderCurrentRoute();
+  });
+  root.querySelector('[data-content-sort]')?.addEventListener('change', (event) => {
+    state.contentWorkspace.sort = event.target.value;
+    renderCurrentRoute();
+  });
+  root.querySelector('[data-content-latest-only]')?.addEventListener('change', (event) => {
+    state.contentWorkspace.latestOnly = event.target.checked;
+    renderCurrentRoute();
+  });
+  root.querySelectorAll('[data-slot-provider]').forEach((select) => {
+    select.addEventListener('change', (event) => {
+      state.contentWorkspace.providerPreferences[event.target.dataset.slotProvider] = event.target.value;
+      persistProviderPreferences();
     });
   });
-
-  els.contentPageContent.querySelectorAll('[data-delete-card]').forEach((button) => {
-    button.addEventListener('click', async () => {
-      if (!confirm('Delete this generated document?')) return;
-      await api(`/api/ai/documents/${button.dataset.deleteCard}`, { method: 'DELETE' });
+  root.querySelector('[data-generate-missing]')?.addEventListener('click', async (event) => {
+    const missingButtons = [...root.querySelectorAll('.document-slot-card [data-ai]')];
+    if (!missingButtons.length) return;
+    await withAsyncButton(event.currentTarget, async () => {
+      for (const button of missingButtons) {
+        await runAI(button, applicationId, { silentQueued: true, suppressNavigate: true });
+      }
+      showToast('Missing document generation started.', 'info');
       await renderCurrentRoute();
     });
   });
 
-  const pendingJobs = els.contentPageContent.querySelectorAll('.queue-card');
-  if (!pendingJobs.length) return;
-  const shouldPoll = state.currentApplicationJobs.some((item) => item.status !== 'completed' && item.status !== 'failed');
-  if (!shouldPoll) return;
-  window.clearTimeout(bindContentLibraryActions.timerId);
-  bindContentLibraryActions.timerId = window.setTimeout(async () => {
-    if (location.pathname !== `/applications/${applicationId}/content`) return;
-    const pendingJobIds = state.currentApplicationJobs
-      .filter((item) => item.status !== 'completed' && item.status !== 'failed')
-      .map((item) => item.id);
-    await Promise.all(pendingJobIds.map((jobId) => api(`/api/ai/jobs/${jobId}`).catch(() => null)));
-    const refreshed = await api(`/api/applications/${applicationId}/ai-documents`);
-    state.currentApplicationDocuments = refreshed.documents;
-    state.currentApplicationJobs = refreshed.jobs;
-    renderGeneratedContentPage(els, state.currentApplication.application || { id: applicationId, company_name: 'Application' }, refreshed.documents, refreshed.jobs, {
-      selectedProvider: state.selectedAIProvider,
-      capabilities: state.appConfig
+  root.querySelectorAll('[data-regenerate-card]').forEach((button) => {
+    button.addEventListener('click', async () => {
+      const provider = state.selectedAIProvider === 'aws' && state.appConfig.awsEnabled ? 'aws' : 'gemini';
+      await runConfirmedAction({
+        title: 'Regenerate document',
+        body: 'Create a new version from this document. The latest version will stay available until the new result is ready.',
+        acceptLabel: 'Regenerate',
+        triggerButton: button,
+        successMessage: null,
+        onConfirm: async () => {
+          const nextPayload = await api(`/api/ai/documents/${button.dataset.regenerateCard}/regenerate`, {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ provider })
+          });
+          if (nextPayload.document?.id) state.contentWorkspace.recentDocumentId = nextPayload.document.id;
+          showToast(nextPayload.document?.id ? 'Document regenerated.' : 'Regeneration queued.');
+          navigateTo(nextPayload.document?.id ? `/applications/${applicationId}?tab=content&document=${nextPayload.document.id}` : `/applications/${applicationId}?tab=content`);
+        }
+      });
     });
-    bindContentLibraryActions(applicationId);
+  });
+
+  root.querySelectorAll('[data-restore-card]').forEach((button) => {
+    button.addEventListener('click', async () => {
+      const provider = state.selectedAIProvider === 'aws' && state.appConfig.awsEnabled ? 'aws' : 'gemini';
+      await runConfirmedAction({
+        title: 'Restore version',
+        body: 'Restore this version as the new latest document. This creates a fresh version instead of overwriting the older draft.',
+        acceptLabel: 'Restore',
+        triggerButton: button,
+        successMessage: null,
+        onConfirm: async () => {
+          const nextPayload = await api(`/api/ai/documents/${button.dataset.restoreCard}/regenerate`, {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ provider })
+          });
+          if (nextPayload.document?.id) state.contentWorkspace.recentDocumentId = nextPayload.document.id;
+          showToast(nextPayload.document?.id ? 'Version restored as latest.' : 'Restore queued.');
+          navigateTo(nextPayload.document?.id ? `/applications/${applicationId}?tab=content&document=${nextPayload.document.id}` : `/applications/${applicationId}?tab=content`);
+        }
+      });
+    });
+  });
+
+  root.querySelectorAll('[data-compare-card]').forEach((button) => {
+    button.addEventListener('click', () => {
+      const left = payload.ai_documents.find((item) => Number(item.id) === Number(button.dataset.compareCard));
+      const right = payload.ai_documents.find((item) => Number(item.id) === Number(button.dataset.compareLatest));
+      if (!left || !right) return;
+      openDetailDialog('Compare versions', buildDocumentComparisonBody(left, right));
+    });
+  });
+
+  root.querySelectorAll('[data-copy-document]').forEach((button) => {
+    button.addEventListener('click', async () => {
+      const document = payload.ai_documents.find((item) => Number(item.id) === Number(button.dataset.copyDocument));
+      if (!document) return;
+      await navigator.clipboard.writeText(document.content || '').catch(() => null);
+      showToast('Copy successful.');
+    });
+  });
+
+  root.querySelectorAll('[data-delete-card]').forEach((button) => {
+    button.addEventListener('click', async () => {
+      await runConfirmedAction({
+        title: 'Delete document',
+        body: 'Delete this generated document?',
+        acceptLabel: 'Delete',
+        triggerButton: button,
+        successMessage: 'Document deleted.',
+        onConfirm: async () => {
+          await api(`/api/ai/documents/${button.dataset.deleteCard}`, { method: 'DELETE' });
+          await renderCurrentRoute();
+        }
+      });
+    });
+  });
+
+  const shouldPoll = payload.ai_jobs.some((item) => item.status !== 'completed' && item.status !== 'failed');
+  if (!shouldPoll) return;
+  window.clearTimeout(state.contentPollTimerId);
+  state.contentPollTimerId = window.setTimeout(async () => {
+    if (location.pathname !== `/applications/${applicationId}` && !location.pathname.startsWith(`/applications/${applicationId}/content`)) return;
+    const pendingJobIds = payload.ai_jobs.filter((item) => item.status !== 'completed' && item.status !== 'failed').map((item) => item.id);
+    await Promise.all(pendingJobIds.map((jobId) => api(`/api/ai/jobs/${jobId}`).catch(() => null)));
+    await renderCurrentRoute();
   }, 5000);
 }
 
-async function runAI(button, applicationId) {
+async function runAI(button, applicationId, options = {}) {
   const cvId = Number(button.dataset.cvId);
   if (!cvId) {
-    alert('No CV is linked to this application.');
+    showToast('No CV is linked to this application.', 'warning');
     return;
   }
 
+  const preferredProvider = resolvePreferredProvider(button.dataset.docType);
+
+  setButtonBusy(button, true);
   try {
     const payload = await api(aiEndpoints[button.dataset.ai], {
       method: 'POST',
@@ -803,65 +1184,29 @@ async function runAI(button, applicationId) {
       body: JSON.stringify({
         application_id: applicationId,
         cv_id: cvId,
-        provider: state.selectedAIProvider
+        provider: preferredProvider
       })
     });
+    if (button.dataset.docType) {
+      state.contentWorkspace.providerPreferences[button.dataset.docType] = preferredProvider;
+      persistProviderPreferences();
+    }
     await loadNotifications();
     if (payload.document?.id) {
-      navigateTo(`/applications/${applicationId}/content/${payload.document.id}`);
+      state.contentWorkspace.recentDocumentId = payload.document.id;
+      showToast('Document generated.');
+      if (!options.suppressNavigate) navigateTo(`/applications/${applicationId}?tab=content&document=${payload.document.id}`);
       return;
     }
   } catch (error) {
-    if (error.message.includes('HTTP 202')) {
-      return;
-    }
-    alert(error.message);
+    showToast(error.message, 'error');
     return;
+  } finally {
+    setButtonBusy(button, false);
   }
 
-  alert('The request was queued for AWS generation. Open the generated content page to watch job status.');
-  navigateTo(`/applications/${applicationId}/content`);
-}
-
-function bindGeneratedDocumentActions(applicationId, documentId) {
-  els.contentPageContent.querySelectorAll('[data-regenerate-provider]').forEach((button) => {
-    button.addEventListener('click', () => {
-      if (button.disabled) return;
-      els.contentPageContent.querySelectorAll('[data-regenerate-provider]').forEach((item) => {
-        item.classList.toggle('is-active', item === button);
-        item.classList.toggle('secondary', item !== button);
-      });
-      els.contentPageContent.dataset.regenerateProvider = button.dataset.regenerateProvider;
-    });
-  });
-  els.contentPageContent.dataset.regenerateProvider = 'gemini';
-
-  els.contentPageContent.querySelector('[data-regenerate-document]')?.addEventListener('click', async () => {
-    const provider = els.contentPageContent.dataset.regenerateProvider || 'gemini';
-    const payload = await api(`/api/ai/documents/${documentId}/regenerate`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ provider })
-    });
-    if (payload.document?.id) {
-      navigateTo(`/applications/${applicationId}/content/${payload.document.id}`);
-      return;
-    }
-    alert('The document was queued for AWS regeneration.');
-    navigateTo(`/applications/${applicationId}/content`);
-  });
-
-  els.contentPageContent.querySelector('[data-delete-document]')?.addEventListener('click', async () => {
-    if (!confirm('Delete this generated document?')) return;
-    await api(`/api/ai/documents/${documentId}`, { method: 'DELETE' });
-    navigateTo(`/applications/${applicationId}/content`);
-  });
-
-  els.contentPageContent.querySelector('[data-copy-document]')?.addEventListener('click', async () => {
-    const content = state.currentApplicationDocuments.find((item) => item.id === Number(documentId))?.content || '';
-    if (!content) return;
-    await navigator.clipboard.writeText(content).catch(() => null);
-  });
+  if (!options.silentQueued) showToast('Generation queued.');
+  if (!options.suppressNavigate) navigateTo(`/applications/${applicationId}?tab=content`);
 }
 
 async function archiveApplication(id) {
@@ -882,41 +1227,70 @@ async function importCsv() {
   try {
     await api('/api/import/applications', { method: 'POST', body: formData });
     await loadApplications();
+    showToast('Import completed.');
   } catch (error) {
-    alert(error.message);
+    showToast(error.message, 'error');
   } finally {
     els.importCsvInput.value = '';
+  }
+}
+
+async function restoreBackup() {
+  const file = els.restoreBackupInput.files[0];
+  if (!file) return;
+  const formData = new FormData();
+  formData.append('backup', file);
+  try {
+    await api('/api/import/backup', { method: 'POST', body: formData });
+    state.contentWorkspace.recentDocumentId = null;
+    await Promise.all([loadApplications(), loadCVs(), loadSavedFilters(), loadReminders(), loadNotifications(), loadJobBoards()]);
+    showToast('Backup restored.', 'info');
+    navigateTo('/');
+  } catch (error) {
+    showToast(error.message, 'error');
+  } finally {
+    els.restoreBackupInput.value = '';
   }
 }
 
 async function saveCurrentFilter() {
   const name = els.savedFilterName.value.trim();
   if (!name) {
-    alert('Enter a filter name first.');
+    showToast('Enter a filter name first.', 'warning');
     return;
   }
 
-  const payload = await api('/api/saved-filters', {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ name, ...state.filters })
+  await withAsyncButton(els.saveFilterButton, async () => {
+    const payload = await api('/api/saved-filters', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ name, ...state.filters })
+    });
+    els.savedFilterName.value = '';
+    await loadSavedFilters();
+    els.savedFilterSelect.value = String(payload.filter.id);
+    showToast('Filter saved.');
   });
-  els.savedFilterName.value = '';
-  await loadSavedFilters();
-  els.savedFilterSelect.value = String(payload.filter.id);
 }
 
 async function deleteCurrentSavedFilter() {
   const id = Number(els.savedFilterSelect.value);
   if (!id) {
-    alert('Select a saved filter first.');
+    showToast('Select a saved filter first.', 'warning');
     return;
   }
-  if (!confirm('Delete this saved filter?')) return;
-
-  await api(`/api/saved-filters/${id}`, { method: 'DELETE' });
-  els.savedFilterSelect.value = '';
-  await loadSavedFilters();
+  await runConfirmedAction({
+    title: 'Delete saved filter',
+    body: 'Delete this saved filter?',
+    acceptLabel: 'Delete',
+    triggerButton: els.deleteFilterButton,
+    successMessage: 'Saved filter deleted.',
+    onConfirm: async () => {
+      await api(`/api/saved-filters/${id}`, { method: 'DELETE' });
+      els.savedFilterSelect.value = '';
+      await loadSavedFilters();
+    }
+  });
 }
 
 function applySavedFilter(savedFilter) {
@@ -941,10 +1315,30 @@ function shiftCalendar(action) {
   state.calendarDate = new Date(current.getFullYear(), current.getMonth() + offset, 1);
 }
 
+function loadProviderPreferences() {
+  try {
+    return JSON.parse(window.localStorage.getItem('jobTrackerProviderPreferences') || '{}');
+  } catch {
+    return {};
+  }
+}
+
+function persistProviderPreferences() {
+  window.localStorage.setItem('jobTrackerProviderPreferences', JSON.stringify(state.contentWorkspace.providerPreferences || {}));
+}
+
+function resolvePreferredProvider(documentType) {
+  const preferred = documentType ? state.contentWorkspace.providerPreferences?.[documentType] : '';
+  if (preferred === 'aws' && state.appConfig.awsEnabled) return 'aws';
+  if (preferred === 'gemini' || preferred === 'mock') return preferred;
+  if (state.selectedAIProvider === 'aws' && state.appConfig.awsEnabled) return 'aws';
+  return 'gemini';
+}
+
 function navigateTo(path) {
   window.history.pushState({}, '', path);
   renderCurrentRoute().catch((error) => {
-    alert(error.message);
+    showToast(error.message, 'error');
   });
 }
 
@@ -954,7 +1348,7 @@ function parseRoute(pathname, search) {
   if (contentMatch) {
     return {
       path: pathname,
-      page: 'document',
+      page: 'application',
       applicationId: Number(contentMatch[1]),
       documentId: Number(contentMatch[2]),
       tab: 'content'
@@ -965,7 +1359,7 @@ function parseRoute(pathname, search) {
   if (libraryMatch) {
     return {
       path: pathname,
-      page: 'content',
+      page: 'application',
       applicationId: Number(libraryMatch[1]),
       documentId: null,
       tab: 'content'
@@ -979,7 +1373,7 @@ function parseRoute(pathname, search) {
       path: pathname,
       page: 'application',
       applicationId: Number(appMatch[1]),
-      documentId: null,
+      documentId: searchParams.get('document') ? Number(searchParams.get('document')) : null,
       tab: ['overview', 'workflow', 'content', 'history'].includes(requestedTab) ? requestedTab : 'overview'
     };
   }
@@ -1011,21 +1405,41 @@ function openApplicationEditDialog(application) {
   els.applicationEditForm.querySelector('[data-restore-action]').hidden = !application.archived_at;
 
   els.applicationEditForm.querySelector('[data-archive-action]').onclick = async () => {
-    await archiveApplication(application.id);
-    els.applicationEditDialog.close();
-    await Promise.all([loadApplications(), loadReminders(), loadNotifications(), renderCurrentRoute()]);
+    await runConfirmedAction({
+      title: 'Archive application',
+      body: `Archive ${application.company_name}?`,
+      acceptLabel: 'Archive',
+      triggerButton: els.applicationEditForm.querySelector('[data-archive-action]'),
+      successMessage: 'Application archived.',
+      onConfirm: async () => {
+        await archiveApplication(application.id);
+        els.applicationEditDialog.close();
+        await Promise.all([loadApplications(), loadReminders(), loadNotifications(), renderCurrentRoute()]);
+      }
+    });
   };
   els.applicationEditForm.querySelector('[data-restore-action]').onclick = async () => {
-    await restoreApplication(application.id);
-    els.applicationEditDialog.close();
-    await Promise.all([loadApplications(), loadReminders(), loadNotifications(), renderCurrentRoute()]);
+    await withAsyncButton(els.applicationEditForm.querySelector('[data-restore-action]'), async () => {
+      await restoreApplication(application.id);
+      els.applicationEditDialog.close();
+      showToast('Application restored.', 'info');
+      await Promise.all([loadApplications(), loadReminders(), loadNotifications(), renderCurrentRoute()]);
+    });
   };
   els.applicationEditForm.querySelector('[data-delete-action]').onclick = async () => {
-    if (!confirm('Are you sure you want to delete this application?')) return;
-    await api(`/api/applications/${application.id}`, { method: 'DELETE' });
-    els.applicationEditDialog.close();
-    await Promise.all([loadApplications(), loadReminders(), loadNotifications()]);
-    navigateTo('/');
+    await runConfirmedAction({
+      title: 'Delete application',
+      body: `Delete ${application.company_name}? This cannot be undone.`,
+      acceptLabel: 'Delete',
+      triggerButton: els.applicationEditForm.querySelector('[data-delete-action]'),
+      successMessage: 'Application deleted.',
+      onConfirm: async () => {
+        await api(`/api/applications/${application.id}`, { method: 'DELETE' });
+        els.applicationEditDialog.close();
+        await Promise.all([loadApplications(), loadReminders(), loadNotifications()]);
+        navigateTo('/');
+      }
+    });
   };
 
   els.applicationEditDialog.showModal();
@@ -1038,7 +1452,7 @@ async function submitApplicationEditForm(event) {
   setError(els.applicationEditError, '');
   const form = new FormData(els.applicationEditForm);
 
-  try {
+  await withAsyncForm(els.applicationEditForm, async () => {
     await api(`/api/applications/${form.get('id')}`, {
       method: 'PUT',
       headers: { 'content-type': 'application/json' },
@@ -1059,10 +1473,11 @@ async function submitApplicationEditForm(event) {
       })
     });
     els.applicationEditDialog.close();
+    showToast('Save successful.');
     await Promise.all([loadApplications(), loadReminders(), loadNotifications(), renderCurrentRoute()]);
-  } catch (error) {
+  }, (error) => {
     setError(els.applicationEditError, error.message);
-  }
+  });
 }
 
 function buildRouteErrorState(title, body) {
@@ -1082,4 +1497,541 @@ function renderErrorBlock(title, body) {
       <p>${body}</p>
     </div>
   `;
+}
+
+function clearContentPolling() {
+  if (state.contentPollTimerId) {
+    window.clearTimeout(state.contentPollTimerId);
+    state.contentPollTimerId = null;
+  }
+}
+
+function setButtonBusy(button, isBusy) {
+  if (!button) return;
+  if (isBusy) {
+    button.dataset.originalLabel = button.dataset.originalLabel || button.textContent;
+    button.dataset.busyLabel = button.dataset.loadingLabel || 'Working';
+    button.style.width = `${Math.ceil(button.getBoundingClientRect().width)}px`;
+    button.classList.add('is-busy');
+    button.setAttribute('aria-busy', 'true');
+    button.disabled = true;
+    return;
+  }
+  button.disabled = false;
+  button.classList.remove('is-busy');
+  button.removeAttribute('aria-busy');
+  button.style.width = '';
+}
+
+function showToast(message, type = 'success') {
+  if (!els.appToast) return;
+  const id = `${Date.now()}-${Math.random().toString(16).slice(2, 8)}`;
+  state.toasts = [...state.toasts, { id, message, type }];
+  renderToasts();
+  window.setTimeout(() => dismissToast(id), type === 'error' ? 4400 : 2600);
+}
+
+function dismissToast(id) {
+  state.toasts = state.toasts.filter((item) => item.id !== id);
+  renderToasts();
+}
+
+function renderToasts() {
+  if (!els.appToast) return;
+  els.appToast.innerHTML = state.toasts.map((toast) => `
+    <article class="app-toast" data-type="${escapeAttribute(toast.type)}">
+      <div>
+        <strong>${escapeHtml(toastTypeLabel(toast.type))}</strong>
+        <p>${escapeHtml(toast.message)}</p>
+      </div>
+      <button class="icon-button" type="button" data-toast-dismiss="${toast.id}" aria-label="Dismiss notification">Close</button>
+    </article>
+  `).join('');
+  els.appToast.querySelectorAll('[data-toast-dismiss]').forEach((button) => {
+    button.addEventListener('click', () => dismissToast(button.dataset.toastDismiss));
+  });
+}
+
+function toastTypeLabel(type) {
+  if (type === 'error') return 'Error';
+  if (type === 'warning') return 'Warning';
+  if (type === 'info') return 'Info';
+  return 'Success';
+}
+
+function openDetailDialog(title, body) {
+  els.detailTitle.textContent = title;
+  els.detailContent.innerHTML = body;
+  els.detailDialog.showModal();
+}
+
+function bindValidatedForms(root) {
+  root.querySelectorAll('form[data-note-form], form[data-question-form], form[data-feedback-form], form[data-todo-form], form[data-preparation-form]').forEach((form) => {
+    const submitButton = form.querySelector('button[type="submit"]');
+    if (!submitButton) return;
+    const validate = () => {
+      clearFormError(form);
+      const textareas = [...form.querySelectorAll('textarea')];
+      const valid = textareas.length ? textareas.some((field) => String(field.value || '').trim()) : true;
+      const dueDateInput = form.elements?.due_date;
+      const dueDateValid = !dueDateInput || !dueDateInput.value.trim() || /^\d{4}-\d{2}-\d{2}$/.test(parseDisplayDateToIso(dueDateInput.value));
+      submitButton.disabled = !valid || !dueDateValid || form.dataset.submitting === 'true';
+    };
+    form.addEventListener('input', validate);
+    form.addEventListener('submit', () => {
+      if (form.dataset.submitting === 'true') return false;
+      return true;
+    });
+    validate();
+  });
+}
+
+async function confirmAction(title, body, acceptLabel = 'Confirm') {
+  return new Promise((resolve) => {
+    let result = false;
+    els.confirmDialogTitle.textContent = title;
+    els.confirmDialogBody.textContent = body;
+    els.confirmDialogAccept.textContent = acceptLabel;
+    setError(els.confirmDialogError, '');
+    setButtonBusy(els.confirmDialogAccept, false);
+    els.confirmDialogCancel.onclick = () => {
+      result = false;
+      els.confirmDialog.close();
+    };
+    els.confirmDialogAccept.onclick = () => {
+      result = true;
+      els.confirmDialog.close();
+    };
+    els.confirmDialog.addEventListener('close', () => resolve(result), { once: true });
+    els.confirmDialog.showModal();
+  });
+}
+
+async function runConfirmedAction({ title, body, acceptLabel = 'Confirm', triggerButton = null, successMessage = null, onConfirm, onError = null }) {
+  if (!(await confirmAction(title, body, acceptLabel))) return false;
+  try {
+    await withAsyncButton(triggerButton, onConfirm);
+    if (successMessage) showToast(successMessage);
+    return true;
+  } catch (error) {
+    if (onError) onError(error);
+    else showToast(error.message, 'error');
+    return false;
+  }
+}
+
+async function withAsyncButton(button, task) {
+  setButtonBusy(button, true);
+  try {
+    return await task();
+  } finally {
+    setButtonBusy(button, false);
+  }
+}
+
+async function withAsyncForm(form, task, onError = null) {
+  if (!form || form.dataset.submitting === 'true') return null;
+  const submitButton = form.querySelector('button[type="submit"]');
+  form.dataset.submitting = 'true';
+  clearFormError(form);
+  setButtonBusy(submitButton, true);
+  try {
+    return await task();
+  } catch (error) {
+    if (onError) onError(error);
+    else {
+      setFormError(form, error.message);
+      showToast(error.message, 'error');
+    }
+    return null;
+  } finally {
+    form.dataset.submitting = 'false';
+    setButtonBusy(submitButton, false);
+  }
+}
+
+function readRequiredText(form, fieldName, message) {
+  const field = form?.elements?.[fieldName];
+  const value = String(field?.value || '').trim();
+  if (!value) {
+    setFormError(form, message);
+    showToast('Validation error.', 'warning');
+    return '';
+  }
+  field.value = value;
+  clearFormError(form);
+  return value;
+}
+
+function normalizeOptionalDisplayDate(form, fieldName) {
+  const field = form?.elements?.[fieldName];
+  const value = String(field?.value || '').trim();
+  if (!value) return '';
+  const normalized = parseDisplayDateToIso(value);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(normalized)) {
+    setFormError(form, 'Enter a valid due date in DD-MM-YYYY format.');
+    showToast('Validation error.', 'warning');
+    return null;
+  }
+  clearFormError(form);
+  return normalized;
+}
+
+function setFormError(form, message) {
+  const element = ensureFormError(form);
+  setError(element, message);
+}
+
+function clearFormError(form) {
+  const element = form?.querySelector('[data-form-error]');
+  if (element) setError(element, '');
+}
+
+function ensureFormError(form) {
+  let element = form.querySelector('[data-form-error]');
+  if (element) return element;
+  element = document.createElement('p');
+  element.className = 'form-error inline-form-error';
+  element.dataset.formError = 'true';
+  element.hidden = true;
+  form.appendChild(element);
+  return element;
+}
+
+function resetDialogState(dialog) {
+  if (!dialog) return;
+  if (dialog === els.confirmDialog) {
+    setError(els.confirmDialogError, '');
+    setButtonBusy(els.confirmDialogAccept, false);
+  }
+  if (dialog === els.editorDialog) {
+    setError(els.editorDialogError, '');
+  }
+  if (dialog === els.detailDialog) {
+    els.detailContent.innerHTML = '';
+  }
+}
+
+function resetTransientUiState() {
+  [els.detailDialog, els.confirmDialog, els.editorDialog].forEach((dialog) => {
+    if (dialog?.open) {
+      dialog.close();
+      resetDialogState(dialog);
+    }
+  });
+}
+
+function unmountInactiveHomeViews(activeView) {
+  const clear = (element) => {
+    if (element) element.innerHTML = '';
+  };
+  if (activeView !== 'reminders') clear(els.remindersList);
+  if (activeView !== 'kanban') clear(els.kanbanBoard);
+  if (activeView !== 'reports') clear(els.reportsContent);
+  if (activeView !== 'activity') {
+    clear(els.activityTable);
+    if (els.activityPagination) els.activityPagination.innerHTML = '';
+  }
+  if (activeView !== 'boards') clear(els.jobBoardsList);
+}
+
+function renderSectionLoading(element, title) {
+  if (!element) return;
+  if (element.tagName === 'TBODY') {
+    element.innerHTML = `<tr><td colspan="4"><div class="section-loading">${escapeHtml(title)}...</div></td></tr>`;
+    return;
+  }
+  element.innerHTML = `<div class="section-loading">${escapeHtml(title)}...</div>`;
+}
+
+async function promptForText({ title, label, value = '', submitLabel = 'Save' }) {
+  return new Promise((resolve) => {
+    let result = null;
+    els.editorDialogTitle.textContent = title;
+    els.editorDialogLabel.textContent = label;
+    els.editorDialogInput.value = value;
+    els.editorDialogSubmit.textContent = submitLabel;
+    setError(els.editorDialogError, '');
+    els.editorDialogForm.onsubmit = (event) => {
+      event.preventDefault();
+      const next = els.editorDialogInput.value.trim();
+      if (!next) {
+        setError(els.editorDialogError, `${label} is required.`);
+        return;
+      }
+      result = next;
+      els.editorDialog.close();
+    };
+    els.editorDialog.addEventListener('close', () => resolve(result), { once: true });
+    els.editorDialog.showModal();
+    els.editorDialogInput.focus();
+  });
+}
+
+function bindDocumentPreviewActions(application, document, relatedDocuments = []) {
+  els.detailContent.querySelector('[data-preview-copy]')?.addEventListener('click', async () => {
+    await navigator.clipboard.writeText(document.content || '').catch(() => null);
+    showToast('Copy successful.');
+  });
+  els.detailContent.querySelector('[data-preview-regenerate]')?.addEventListener('click', async (event) => {
+    const provider = state.selectedAIProvider === 'aws' && state.appConfig.awsEnabled ? 'aws' : 'gemini';
+    await runConfirmedAction({
+      title: 'Regenerate document',
+      body: 'Create a new version from this document. The current latest version stays available until regeneration completes.',
+      acceptLabel: 'Regenerate',
+      triggerButton: event.currentTarget,
+      successMessage: null,
+      onConfirm: async () => {
+        const payload = await api(`/api/ai/documents/${document.id}/regenerate`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ provider })
+        });
+        els.detailDialog.close();
+        if (payload.document?.id) state.contentWorkspace.recentDocumentId = payload.document.id;
+        showToast(payload.document?.id ? 'Document regenerated.' : 'Regeneration queued.');
+        navigateTo(payload.document?.id ? `/applications/${application.id}?tab=content&document=${payload.document.id}` : `/applications/${application.id}?tab=content`);
+      }
+    });
+  });
+  els.detailContent.querySelector('[data-preview-delete]')?.addEventListener('click', async (event) => {
+    await runConfirmedAction({
+      title: 'Delete document',
+      body: 'Delete this generated document?',
+      acceptLabel: 'Delete',
+      triggerButton: event.currentTarget,
+      successMessage: 'Document deleted.',
+      onConfirm: async () => {
+        await api(`/api/ai/documents/${document.id}`, { method: 'DELETE' });
+        els.detailDialog.close();
+        await renderCurrentRoute();
+      }
+    });
+  });
+  els.detailContent.querySelectorAll('[data-view-version]').forEach((button) => {
+    button.addEventListener('click', () => {
+      navigateTo(`/applications/${application.id}?tab=content&document=${button.dataset.viewVersion}`);
+    });
+  });
+  els.detailContent.querySelector('[data-view-compare]')?.addEventListener('click', () => {
+    const latest = relatedDocuments[0];
+    if (!latest || Number(latest.id) === Number(document.id)) return;
+    openDetailDialog('Compare versions', buildDocumentComparisonBody(document, latest));
+  });
+  els.detailContent.querySelector('[data-view-restore]')?.addEventListener('click', async (event) => {
+    const provider = state.selectedAIProvider === 'aws' && state.appConfig.awsEnabled ? 'aws' : 'gemini';
+    await runConfirmedAction({
+      title: 'Restore version',
+      body: 'Restore this version as the new latest document. This creates a fresh version instead of overwriting the older draft.',
+      acceptLabel: 'Restore',
+      triggerButton: event.currentTarget,
+      successMessage: null,
+      onConfirm: async () => {
+        const payload = await api(`/api/ai/documents/${document.id}/regenerate`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ provider })
+        });
+        els.detailDialog.close();
+        if (payload.document?.id) state.contentWorkspace.recentDocumentId = payload.document.id;
+        showToast(payload.document?.id ? 'Version restored as latest.' : 'Restore queued.');
+        navigateTo(payload.document?.id ? `/applications/${application.id}?tab=content&document=${payload.document.id}` : `/applications/${application.id}?tab=content`);
+      }
+    });
+  });
+}
+
+function buildDocumentComparisonBody(left, right) {
+  const diff = buildDocumentDiff(left.content || '', right.content || '');
+  return `
+    <section class="route-card detail-dialog-card">
+      <div class="section-heading">
+        <div>
+          <div class="panel-kicker">Version Compare</div>
+          <h3>${escapeHtml(left.title)}</h3>
+        </div>
+      </div>
+      <div class="document-card-meta">
+        <span class="pill subtle">${diff.added} added</span>
+        <span class="pill subtle">${diff.removed} removed</span>
+        <span class="pill info-pill">${diff.changed} changed blocks</span>
+      </div>
+      <div class="document-compare-grid">
+        <article class="document-compare-card">
+          <div class="document-card-head">
+            <div>
+              <strong>Selected version</strong>
+              <p>${escapeHtml(formatDateTime(left.created_at))}</p>
+            </div>
+            <span class="pill subtle">${escapeHtml(friendlyProviderLabel(left))}</span>
+          </div>
+          <pre class="document-preview-body">${escapeHtml(left.content || '')}</pre>
+        </article>
+        <article class="document-compare-card">
+          <div class="document-card-head">
+            <div>
+              <strong>Latest version</strong>
+              <p>${escapeHtml(formatDateTime(right.created_at))}</p>
+            </div>
+            <span class="pill success-pill">Latest</span>
+          </div>
+          <pre class="document-preview-body">${escapeHtml(right.content || '')}</pre>
+        </article>
+      </div>
+      ${diff.rows.length ? `
+        <div class="document-diff-list">
+          ${diff.rows.map((row) => `
+            <article class="document-diff-row diff-${escapeAttribute(row.kind)}">
+              <strong>${escapeHtml(row.label)}</strong>
+              <p>${escapeHtml(row.text)}</p>
+            </article>
+          `).join('')}
+        </div>
+      ` : ''}
+    </section>
+  `;
+}
+
+function buildDocumentDiff(leftContent, rightContent) {
+  const leftLines = String(leftContent || '').split('\n').map((line) => line.trim()).filter(Boolean);
+  const rightLines = String(rightContent || '').split('\n').map((line) => line.trim()).filter(Boolean);
+  const rowCount = Math.max(leftLines.length, rightLines.length);
+  const rows = [];
+  let added = 0;
+  let removed = 0;
+  let changed = 0;
+
+  for (let index = 0; index < rowCount; index += 1) {
+    const left = leftLines[index] || '';
+    const right = rightLines[index] || '';
+    if (left && !right) {
+      removed += 1;
+      rows.push({ kind: 'removed', label: 'Removed', text: left });
+      continue;
+    }
+    if (!left && right) {
+      added += 1;
+      rows.push({ kind: 'added', label: 'Added', text: right });
+      continue;
+    }
+    if (left !== right) {
+      changed += 1;
+      rows.push({ kind: 'changed', label: 'Changed from', text: left });
+      rows.push({ kind: 'added', label: 'Changed to', text: right });
+    }
+  }
+
+  return { added, removed, changed, rows };
+}
+
+function openDocumentPreview(application, document, relatedDocuments = []) {
+  openDetailDialog(document.title, renderRouteLoadingState(`Opening ${formatDocType(document.document_type)}`, 'Preparing document viewer'));
+  window.requestAnimationFrame(() => {
+    const orderedDocuments = [...relatedDocuments].sort((left, right) => new Date(right.created_at).getTime() - new Date(left.created_at).getTime());
+    const currentIndex = orderedDocuments.findIndex((item) => Number(item.id) === Number(document.id));
+    const versionNumber = currentIndex === -1 ? 1 : orderedDocuments.length - currentIndex;
+    const latestDocument = orderedDocuments[0] || document;
+    els.detailContent.innerHTML = `
+      <section class="document-viewer-shell">
+        <header class="document-viewer-header">
+          <div class="document-viewer-header-copy">
+            <div class="panel-kicker">${escapeHtml(formatDocType(document.document_type))}</div>
+            <h3>${escapeHtml(document.title)}</h3>
+            <div class="document-card-meta">
+              <span class="pill subtle">${escapeHtml(friendlyProviderLabel(document))}</span>
+              <span class="pill info-pill">Version ${versionNumber}${currentIndex === 0 ? ' • Latest' : ''}</span>
+              <span class="pill subtle">${escapeHtml(formatDateTime(document.created_at))}</span>
+              ${document.model_name ? `<span class="pill subtle">${escapeHtml(document.model_name)}</span>` : ''}
+            </div>
+          </div>
+          <div class="document-card-actions document-viewer-actions">
+            <a class="button-link secondary" href="${escapeAttribute(document.download_url)}">Download</a>
+            <button type="button" data-preview-copy="${document.id}">Copy Text</button>
+            <button class="secondary" type="button" data-preview-regenerate="${document.id}">Regenerate</button>
+            <button class="danger" type="button" data-preview-delete="${document.id}">Delete</button>
+          </div>
+        </header>
+        <div class="document-viewer-layout">
+          <article class="document-viewer-main">
+            <div class="document-viewer-content">
+              ${renderDocumentContent(document)}
+            </div>
+          </article>
+          <aside class="document-viewer-sidebar">
+            <section class="route-card document-viewer-sidecard">
+              <div class="panel-kicker">Document Details</div>
+              <div class="metadata-list">
+                <div class="metadata-row">
+                  <span>Status</span>
+                  <strong>${escapeHtml(document.generation_status || 'completed')}</strong>
+                </div>
+                <div class="metadata-row">
+                  <span>Saved Versions</span>
+                  <strong>${escapeHtml(String(orderedDocuments.length))}</strong>
+                </div>
+                <div class="metadata-row">
+                  <span>Format</span>
+                  <strong>DOCX + Text</strong>
+                </div>
+              </div>
+            </section>
+            <section class="route-card document-viewer-sidecard">
+              <div class="section-heading">
+                <div>
+                  <div class="panel-kicker">Versions</div>
+                  <h4>${orderedDocuments.length} saved</h4>
+                </div>
+                ${currentIndex !== 0 ? '<button class="secondary" type="button" data-view-restore>Restore</button>' : ''}
+              </div>
+              <div class="document-viewer-version-list">
+                ${orderedDocuments.map((item, index) => `
+                  <article class="document-viewer-version-item ${Number(item.id) === Number(document.id) ? 'is-current' : ''}">
+                    <div>
+                      <strong>Version ${orderedDocuments.length - index}${index === 0 ? ' • Latest' : ''}</strong>
+                      <p>${escapeHtml(formatDateTime(item.created_at))}</p>
+                    </div>
+                    <div class="document-card-actions">
+                      ${Number(item.id) === Number(document.id)
+                        ? '<span class="pill success-pill">Open</span>'
+                        : `<button class="secondary" type="button" data-view-version="${item.id}">Open</button>`}
+                    </div>
+                  </article>
+                `).join('')}
+              </div>
+              ${currentIndex !== 0 && latestDocument ? '<button class="secondary" type="button" data-view-compare>Compare with latest</button>' : ''}
+            </section>
+          </aside>
+        </div>
+      </section>
+    `;
+    const scroller = els.detailContent.querySelector('.document-viewer-main');
+    const shell = els.detailContent.querySelector('.document-viewer-shell');
+    scroller?.addEventListener('scroll', () => {
+      shell?.classList.toggle('is-scrolled', scroller.scrollTop > 6);
+    });
+    bindDocumentPreviewActions(application, document, orderedDocuments);
+  });
+  els.detailDialog.addEventListener('close', () => {
+    const current = parseRoute(location.pathname, location.search);
+    if (current.page === 'application' && current.tab === 'content' && Number(current.documentId) === Number(document.id)) {
+      window.history.replaceState({}, '', `/applications/${application.id}?tab=content`);
+    }
+  }, { once: true });
+}
+
+function formatDocType(type) {
+  return String(type || '').replaceAll('_', ' ');
+}
+
+function friendlyProviderLabel(document) {
+  const requested = String(document?.provider_requested || '').trim().toLowerCase();
+  const provider = String(document?.provider_name || '').trim().toLowerCase();
+  if (requested === 'gemini') return 'Gemini';
+  if (requested === 'aws') return 'AWS';
+  if (requested === 'mock') return 'Mock';
+  if (provider === 'gemini') return 'Gemini';
+  if (provider === 'aws') return 'AWS';
+  if (provider === 'mock') return 'Mock';
+  if (provider === 'openai-compatible') return 'AI Provider';
+  return document?.provider_name || document?.provider_requested || 'unknown';
 }
