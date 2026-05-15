@@ -1,13 +1,14 @@
 import http from 'node:http';
-import { join } from 'node:path';
+import { mkdir, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises';
+import { join, dirname, relative, resolve } from 'node:path';
 import { statSync } from 'node:fs';
-import { readFile } from 'node:fs/promises';
 import { config } from './config.js';
+import JSZip from 'jszip';
 import { pool } from './db/pool.js';
 import { sendError, sendHtmlError, sendJson, readJson, readMultipart, serveStatic } from './utils/http.js';
 import { cleanString, parseBoolean, parseDate, parseInteger, validateFeedbackSource, validateStatus, validateUrl } from './utils/validation.js';
 import { createRequestGuard } from './utils/requestGuards.js';
-import { csvEscape, parseCsv, changedApplicationFields, dateForLog } from './utils/text.js';
+import { csvEscape, parseCsv, changedApplicationFields, dateForLog, buildPromptExcerpt, buildSourceContext, extractCandidateSignals, extractJobSignals } from './utils/text.js';
 import { LocalFileStorage } from './storage/localFileStorage.js';
 import { createAIProvider } from './services/aiProvider.js';
 import { createAuditLogger } from './services/audit.js';
@@ -78,9 +79,12 @@ const routeApi = createApiRouter({
   deleteSavedFilter,
   createJobBoard,
   updateJobBoard,
+  checkJobBoard,
   deleteJobBoard,
   exportApplicationsCsv,
   importApplicationsCsv,
+  exportBackup,
+  importBackup,
   getApplications: async (req, res, url) => sendJson(res, 200, await readApi.getApplications(url)),
   createApplication,
   getApplication: async (req, res, id) => sendJson(res, 200, await readApi.getApplication(id)),
@@ -108,6 +112,7 @@ const routeApi = createApiRouter({
   checkATS,
   generateFollowUpEmail,
   getApplicationAIDocuments: async (req, res, id) => sendJson(res, 200, await readApi.getApplicationAIDocuments(id)),
+  exportApplicationArtifacts,
   getAIDocument: async (req, res, id) => sendJson(res, 200, await readApi.getAIDocument(id)),
   deleteAIDocument,
   regenerateAIDocument,
@@ -164,7 +169,6 @@ async function createJobBoard(req, res) {
     `,
     [data.name, data.url, data.notes, data.last_checked_date, data.is_active]
   );
-  await logActivity(pool, null, 'job_board_added', result.rows[0].name);
   sendJson(res, 201, { job_board: result.rows[0] });
 }
 
@@ -187,14 +191,26 @@ async function updateJobBoard(req, res, id) {
     `,
     [data.name, data.url, data.notes, data.last_checked_date, data.is_active, id]
   );
-  await logActivity(pool, null, 'job_board_updated', result.rows[0].name);
+  sendJson(res, 200, { job_board: result.rows[0] });
+}
+
+async function checkJobBoard(req, res, id) {
+  const result = await pool.query(
+    `
+      UPDATE job_boards
+      SET last_checked_date = CURRENT_DATE
+      WHERE id = $1
+      RETURNING id, name, url, notes, to_char(last_checked_date, 'YYYY-MM-DD') AS last_checked_date, is_active, created_at, updated_at
+    `,
+    [id]
+  );
+  if (!result.rowCount) return sendError(res, 404, 'Job board not found');
   sendJson(res, 200, { job_board: result.rows[0] });
 }
 
 async function deleteJobBoard(req, res, id) {
   const result = await pool.query('DELETE FROM job_boards WHERE id = $1 RETURNING id, name', [id]);
   if (!result.rowCount) return sendError(res, 404, 'Job board not found');
-  await logActivity(pool, null, 'job_board_deleted', result.rows[0].name);
   await audit.log(req, {
     targetType: 'job_board',
     targetId: id,
@@ -229,6 +245,42 @@ async function ensureApplicationExists(applicationId) {
     throw error;
   }
   return result.rows[0];
+}
+
+async function assertNoDuplicateApplication(executor, data, excludeId = null) {
+  const duplicate = await findDuplicateApplication(executor, data, excludeId);
+  if (!duplicate) return;
+  const error = new Error(`Duplicate application detected for ${duplicate.company_name}${duplicate.role_title ? ` - ${duplicate.role_title}` : ''}.`);
+  error.statusCode = 409;
+  throw error;
+}
+
+async function findDuplicateApplication(executor, data, excludeId = null) {
+  const company = normalizedDuplicateValue(data.company_name);
+  const role = normalizedDuplicateValue(data.role_title);
+  const link = normalizedDuplicateValue(data.job_link);
+  if (!company) return null;
+
+  const result = await executor.query(
+    `
+      SELECT id, company_name, role_title, job_link
+      FROM applications
+      WHERE ($1::bigint IS NULL OR id <> $1)
+        AND lower(trim(company_name)) = $2
+        AND lower(trim(coalesce(role_title, ''))) = $3
+    `,
+    [excludeId, company, role]
+  );
+
+  return result.rows.find((row) => {
+    const existingLink = normalizedDuplicateValue(row.job_link);
+    if (link || existingLink) return link === existingLink;
+    return true;
+  }) || null;
+}
+
+function normalizedDuplicateValue(value) {
+  return String(value || '').trim().toLowerCase();
 }
 
 
@@ -290,6 +342,7 @@ async function importApplicationsCsv(req, res) {
     for (const values of rows.slice(1)) {
       const fields = Object.fromEntries(headers.map((header, index) => [header, values[index] || '']));
       const data = normalizeApplicationInput({ ...fields, cv_id: latest.rows[0].id }, true);
+      await assertNoDuplicateApplication(client, data);
       const created = await client.query(
         `
           INSERT INTO applications (company_name, role_title, job_link, job_description, status, salary, location, recruiter, contact_person, applied_date, interview_date, notes, archived_at)
@@ -316,6 +369,98 @@ async function importApplicationsCsv(req, res) {
   sendJson(res, 201, { imported });
 }
 
+async function exportBackup(req, res) {
+  const backup = {
+    version: 1,
+    created_at: new Date().toISOString(),
+    config: {
+      default_provider: config.defaultAiRequestProvider,
+      aws_enabled: config.awsAiEnabled,
+      file_storage_mode: config.fileStorageMode
+    },
+    data: await readBackupData(),
+    files: await readBackupFiles()
+  };
+
+  const payload = JSON.stringify(backup);
+  res.writeHead(200, {
+    'content-type': 'application/json; charset=utf-8',
+    'content-disposition': `attachment; filename="job-tracker-backup-${Date.now()}.json"`,
+    'content-length': Buffer.byteLength(payload),
+    'x-content-type-options': 'nosniff'
+  });
+  res.end(payload);
+}
+
+async function importBackup(req, res) {
+  const { files } = await readMultipart(req, config.maxUploadBytes * 20);
+  if (!files.backup) return sendError(res, 400, 'Backup file is required');
+
+  let backup;
+  try {
+    backup = JSON.parse(files.backup.buffer.toString('utf8'));
+  } catch {
+    return sendError(res, 400, 'Backup file is not valid JSON');
+  }
+
+  validateBackupPayload(backup);
+  await restoreBackupPayload(backup);
+  sendJson(res, 200, { ok: true, restored_at: new Date().toISOString() });
+}
+
+async function exportApplicationArtifacts(req, res, id) {
+  const application = await pool.query('SELECT company_name, role_title FROM applications WHERE id = $1', [id]);
+  if (!application.rowCount) return sendError(res, 404, 'Application not found');
+
+  const documents = await pool.query(
+    `
+      SELECT id, title, document_type, content, file_path, provider_name, provider_requested, model_name, created_at
+      FROM ai_documents
+      WHERE application_id = $1
+        AND deleted_at IS NULL
+      ORDER BY created_at DESC, id DESC
+    `,
+    [id]
+  );
+
+  const zip = new JSZip();
+  const folderName = safeZipName(`${application.rows[0].company_name}-${application.rows[0].role_title || 'application'}`);
+  const root = zip.folder(folderName);
+  root.file('manifest.json', JSON.stringify({
+    application_id: id,
+    company_name: application.rows[0].company_name,
+    role_title: application.rows[0].role_title,
+    exported_at: new Date().toISOString(),
+    documents: documents.rows.map((row) => ({
+      id: row.id,
+      title: row.title,
+      document_type: row.document_type,
+      provider_name: row.provider_name,
+      provider_requested: row.provider_requested,
+      model_name: row.model_name,
+      created_at: row.created_at
+    }))
+  }, null, 2));
+
+  for (const [index, document] of documents.rows.entries()) {
+    const entryName = `${String(index + 1).padStart(2, '0')}-${safeZipName(document.title)}`;
+    root.file(`${entryName}.txt`, document.content || '');
+    if (document.file_path) {
+      const buffer = await readFile(storage.resolveSafe(document.file_path)).catch(() => null);
+      if (buffer) root.file(`${entryName}.docx`, buffer);
+    }
+  }
+
+  const payload = await zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE' });
+  res.writeHead(200, {
+    'content-type': 'application/zip',
+    'content-disposition': `attachment; filename="${folderName}-artifacts.zip"`,
+    'content-length': payload.length,
+    'x-content-type-options': 'nosniff'
+  });
+  res.end(payload);
+}
+
 
 async function createApplication(req, res) {
   const contentType = req.headers['content-type'] || '';
@@ -328,6 +473,7 @@ async function createApplication(req, res) {
 
   try {
     await client.query('BEGIN');
+    await assertNoDuplicateApplication(client, data);
     const cvId = await resolveApplicationCV({
       client,
       storage,
@@ -403,6 +549,7 @@ async function updateApplication(req, res, id) {
 
   try {
     await client.query('BEGIN');
+    await assertNoDuplicateApplication(client, data, id);
     await client.query(
       `
         UPDATE applications
@@ -1027,6 +1174,210 @@ async function readApplicationMultipart(req) {
   return { fields, file: files.cv || null };
 }
 
+async function readBackupData() {
+  const tableQueries = {
+    applications: 'SELECT * FROM applications ORDER BY id',
+    cv_versions: 'SELECT * FROM cv_versions ORDER BY id',
+    application_cvs: 'SELECT * FROM application_cvs ORDER BY application_id, cv_id',
+    status_history: 'SELECT * FROM status_history ORDER BY id',
+    application_notes: 'SELECT * FROM application_notes ORDER BY id',
+    tags: 'SELECT * FROM tags ORDER BY id',
+    application_tags: 'SELECT * FROM application_tags ORDER BY application_id, tag_id',
+    ai_documents: 'SELECT * FROM ai_documents ORDER BY id',
+    ai_generation_jobs: 'SELECT * FROM ai_generation_jobs ORDER BY id',
+    activity_logs: 'SELECT * FROM activity_logs ORDER BY id',
+    saved_filters: 'SELECT * FROM saved_filters ORDER BY id',
+    audit_events: 'SELECT * FROM audit_events ORDER BY id',
+    application_preparation: 'SELECT * FROM application_preparation ORDER BY application_id',
+    recruiter_questions: 'SELECT * FROM recruiter_questions ORDER BY id',
+    hiring_feedback: 'SELECT * FROM hiring_feedback ORDER BY id',
+    application_todos: 'SELECT * FROM application_todos ORDER BY id',
+    job_boards: 'SELECT * FROM job_boards ORDER BY id'
+  };
+
+  const entries = await Promise.all(
+    Object.entries(tableQueries).map(async ([key, query]) => [key, (await pool.query(query)).rows])
+  );
+  return Object.fromEntries(entries);
+}
+
+async function readBackupFiles() {
+  const baseDir = resolve(process.cwd(), config.uploadDir);
+  const exists = await stat(baseDir).then(() => true).catch(() => false);
+  if (!exists) return [];
+  const paths = await listFilesRecursive(baseDir);
+  return Promise.all(paths.map(async (absolutePath) => ({
+    path: relative(process.cwd(), absolutePath).replace(/\\/g, '/'),
+    content_base64: (await readFile(absolutePath)).toString('base64')
+  })));
+}
+
+async function restoreBackupPayload(backup) {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    await client.query(`
+      TRUNCATE TABLE
+        ai_generation_jobs,
+        audit_events,
+        hiring_feedback,
+        recruiter_questions,
+        application_preparation,
+        application_todos,
+        application_notes,
+        application_tags,
+        tags,
+        status_history,
+        application_cvs,
+        ai_documents,
+        activity_logs,
+        job_boards,
+        saved_filters,
+        applications,
+        cv_versions
+      RESTART IDENTITY CASCADE
+    `);
+
+    const insertionOrder = [
+      'cv_versions',
+      'applications',
+      'application_cvs',
+      'status_history',
+      'application_notes',
+      'tags',
+      'application_tags',
+      'ai_documents',
+      'ai_generation_jobs',
+      'activity_logs',
+      'saved_filters',
+      'audit_events',
+      'application_preparation',
+      'recruiter_questions',
+      'hiring_feedback',
+      'application_todos',
+      'job_boards'
+    ];
+
+    for (const table of insertionOrder) {
+      await insertBackupRows(client, table, backup.data[table] || []);
+    }
+
+    await resetBackupSequences(client, backup.data);
+    await client.query('COMMIT');
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
+
+  await restoreBackupFiles(backup.files || []);
+}
+
+async function insertBackupRows(client, table, rows) {
+  if (!rows.length) return;
+  const columns = Object.keys(rows[0]);
+  const valueGroups = [];
+  const values = [];
+
+  rows.forEach((row, rowIndex) => {
+    const placeholders = columns.map((_, columnIndex) => `$${rowIndex * columns.length + columnIndex + 1}`);
+    valueGroups.push(`(${placeholders.join(', ')})`);
+    values.push(...columns.map((column) => row[column]));
+  });
+
+  await client.query(
+    `INSERT INTO ${table} (${columns.join(', ')}) VALUES ${valueGroups.join(', ')}`,
+    values
+  );
+}
+
+async function resetBackupSequences(client, data) {
+  const sequences = [
+    ['applications', 'applications_id_seq'],
+    ['cv_versions', 'cv_versions_id_seq'],
+    ['status_history', 'status_history_id_seq'],
+    ['application_notes', 'application_notes_id_seq'],
+    ['tags', 'tags_id_seq'],
+    ['ai_documents', 'ai_documents_id_seq'],
+    ['ai_generation_jobs', 'ai_generation_jobs_id_seq'],
+    ['activity_logs', 'activity_logs_id_seq'],
+    ['saved_filters', 'saved_filters_id_seq'],
+    ['audit_events', 'audit_events_id_seq'],
+    ['recruiter_questions', 'recruiter_questions_id_seq'],
+    ['hiring_feedback', 'hiring_feedback_id_seq'],
+    ['application_todos', 'application_todos_id_seq'],
+    ['job_boards', 'job_boards_id_seq']
+  ];
+
+  for (const [table, sequence] of sequences) {
+    const maxId = Math.max(0, ...(data[table] || []).map((row) => Number(row.id || 0)));
+    await client.query('SELECT setval($1::regclass, $2, $3)', [sequence, maxId || 1, maxId > 0]);
+  }
+}
+
+function validateBackupPayload(backup) {
+  if (!backup || typeof backup !== 'object') {
+    const error = new Error('Backup payload is required');
+    error.statusCode = 400;
+    throw error;
+  }
+  if (backup.version !== 1) {
+    const error = new Error('Unsupported backup version');
+    error.statusCode = 400;
+    throw error;
+  }
+  if (!backup.data || typeof backup.data !== 'object') {
+    const error = new Error('Backup data is missing');
+    error.statusCode = 400;
+    throw error;
+  }
+  if (!Array.isArray(backup.files)) {
+    const error = new Error('Backup files are missing');
+    error.statusCode = 400;
+    throw error;
+  }
+}
+
+async function restoreBackupFiles(files) {
+  const baseDir = resolve(process.cwd(), config.uploadDir);
+  await rm(baseDir, { recursive: true, force: true });
+  await mkdir(baseDir, { recursive: true });
+  for (const entry of files) {
+    if (!entry?.path || !entry?.content_base64) continue;
+    const absolutePath = resolve(process.cwd(), entry.path);
+    if (!absolutePath.startsWith(baseDir)) {
+      const error = new Error('Backup contains an invalid file path');
+      error.statusCode = 400;
+      throw error;
+    }
+    await mkdir(dirname(absolutePath), { recursive: true });
+    await writeFile(absolutePath, Buffer.from(entry.content_base64, 'base64'));
+  }
+}
+
+async function listFilesRecursive(rootDir) {
+  const entries = await readdir(rootDir, { withFileTypes: true });
+  const files = [];
+  for (const entry of entries) {
+    const absolutePath = join(rootDir, entry.name);
+    if (entry.isDirectory()) {
+      files.push(...await listFilesRecursive(absolutePath));
+      continue;
+    }
+    if (entry.isFile()) files.push(absolutePath);
+  }
+  return files;
+}
+
+function safeZipName(value) {
+  return String(value || 'artifact')
+    .toLowerCase()
+    .replace(/[^a-z0-9_-]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 80) || 'artifact';
+}
+
 startServer();
 
 process.on('SIGTERM', shutdown);
@@ -1182,10 +1533,12 @@ async function loadAIInputFromIds({ applicationId, cvId, providerRequested }) {
     application,
     cv,
     jobDescription,
+    jobSignals: extractJobSignals(jobDescription),
+    candidateSignals: extractCandidateSignals(cv.extracted_text || ''),
     providerRequested,
     previousDocumentId: null,
-    promptExcerpt: `${(application?.job_description || '').slice(0, 320)}${String(application?.job_description || '').length > 320 ? '...' : ''}`,
-    sourceContext: [application?.company_name, cv.original_name].filter(Boolean).join(' | ')
+    promptExcerpt: buildPromptExcerpt(jobDescription, cv),
+    sourceContext: buildSourceContext(application, cv)
   };
 }
 
