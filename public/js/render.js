@@ -457,7 +457,19 @@ function renderSettingsPanel() {
         <article class="document-summary-card settings-action-card">
           <strong>Restore Backup</strong>
           <p>Replace the current local workspace with a validated backup state.</p>
-          <button id="settingsRestoreButton" class="danger" type="button">Restore Backup</button>
+          <button id="settingsRestoreButton" class="secondary" type="button">Choose Backup</button>
+          <div id="restoreBackupSelection" class="backup-file-selection" hidden>
+            <div>
+              <span>Selected backup</span>
+              <strong id="restoreBackupFileName"></strong>
+              <p id="restoreBackupStatus">Ready to restore.</p>
+            </div>
+            <div class="split-actions">
+              <button id="settingsRestoreSelectedButton" class="danger" type="button">Restore Selected</button>
+              <button id="settingsReplaceBackupButton" class="secondary" type="button">Choose Another</button>
+              <button id="settingsClearBackupButton" class="secondary" type="button">Remove</button>
+            </div>
+          </div>
         </article>
       </div>
     </section>

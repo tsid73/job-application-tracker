@@ -1,6 +1,6 @@
 import http from 'node:http';
 import { mkdir, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises';
-import { join, dirname, relative, resolve } from 'node:path';
+import { join, dirname, isAbsolute, relative, resolve } from 'node:path';
 import { statSync } from 'node:fs';
 import { config } from './config.js';
 import JSZip from 'jszip';
@@ -404,6 +404,7 @@ async function importBackup(req, res) {
   }
 
   validateBackupPayload(backup);
+  validateBackupFilePaths(backup.files || []);
   await restoreBackupPayload(backup);
   sendJson(res, 200, { ok: true, restored_at: new Date().toISOString() });
 }
@@ -1339,18 +1340,28 @@ function validateBackupPayload(backup) {
   }
 }
 
+function validateBackupFilePaths(files) {
+  const baseDir = resolve(process.cwd(), config.uploadDir);
+  for (const entry of files) {
+    if (!entry?.path || !entry?.content_base64) continue;
+    const absolutePath = resolve(process.cwd(), entry.path);
+    const relativePath = relative(baseDir, absolutePath);
+    if (relativePath.startsWith('..') || isAbsolute(relativePath)) {
+      const error = new Error('Backup contains an invalid file path');
+      error.statusCode = 400;
+      throw error;
+    }
+  }
+}
+
 async function restoreBackupFiles(files) {
   const baseDir = resolve(process.cwd(), config.uploadDir);
+  validateBackupFilePaths(files);
   await rm(baseDir, { recursive: true, force: true });
   await mkdir(baseDir, { recursive: true });
   for (const entry of files) {
     if (!entry?.path || !entry?.content_base64) continue;
     const absolutePath = resolve(process.cwd(), entry.path);
-    if (!absolutePath.startsWith(baseDir)) {
-      const error = new Error('Backup contains an invalid file path');
-      error.statusCode = 400;
-      throw error;
-    }
     await mkdir(dirname(absolutePath), { recursive: true });
     await writeFile(absolutePath, Buffer.from(entry.content_base64, 'base64'));
   }

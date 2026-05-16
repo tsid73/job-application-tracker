@@ -42,7 +42,7 @@ function bindGlobalEvents() {
   document.querySelector('#newApplicationButton').addEventListener('click', openApplicationDialog);
   document.querySelector('#cvManagerButton').addEventListener('click', openCVDialog);
   els.importCsvInput.addEventListener('change', importCsv);
-  els.restoreBackupInput.addEventListener('change', restoreBackup);
+  els.restoreBackupInput.addEventListener('change', handleRestoreBackupSelection);
 
   document.querySelectorAll('[data-close-dialog]').forEach((button) => {
     button.addEventListener('click', () => {
@@ -247,17 +247,27 @@ function bindSettingsActions() {
   }
   if (els.settingsRestoreButton && els.settingsRestoreButton.dataset.bound !== 'true') {
     els.settingsRestoreButton.dataset.bound = 'true';
-    els.settingsRestoreButton.addEventListener('click', async (event) => {
-      const confirmed = await confirmAction(
-        'Restore backup',
-        'Restore will replace the current local data, uploads, AI documents, jobs, and settings with the selected backup.',
-        'Choose Backup'
-      );
-      if (!confirmed) return;
-      event.currentTarget.dataset.pendingRestore = 'true';
+    els.settingsRestoreButton.addEventListener('click', () => {
       els.restoreBackupInput.click();
     });
   }
+  if (els.settingsReplaceBackupButton && els.settingsReplaceBackupButton.dataset.bound !== 'true') {
+    els.settingsReplaceBackupButton.dataset.bound = 'true';
+    els.settingsReplaceBackupButton.addEventListener('click', () => {
+      els.restoreBackupInput.click();
+    });
+  }
+  if (els.settingsClearBackupButton && els.settingsClearBackupButton.dataset.bound !== 'true') {
+    els.settingsClearBackupButton.dataset.bound = 'true';
+    els.settingsClearBackupButton.addEventListener('click', clearSelectedBackup);
+  }
+  if (els.settingsRestoreSelectedButton && els.settingsRestoreSelectedButton.dataset.bound !== 'true') {
+    els.settingsRestoreSelectedButton.dataset.bound = 'true';
+    els.settingsRestoreSelectedButton.addEventListener('click', async (event) => {
+      await withAsyncButton(event.currentTarget, restoreBackup);
+    });
+  }
+  updateRestoreBackupSelection();
 }
 
 async function switchView(view) {
@@ -1223,21 +1233,55 @@ async function importCsv() {
   }
 }
 
+function handleRestoreBackupSelection() {
+  updateRestoreBackupSelection();
+  const file = els.restoreBackupInput.files[0];
+  if (file) showToast(`Backup selected: ${file.name}`, 'info');
+}
+
+function clearSelectedBackup() {
+  els.restoreBackupInput.value = '';
+  updateRestoreBackupSelection();
+  showToast('Backup selection cleared.', 'info');
+}
+
+function updateRestoreBackupSelection(message = 'Ready to restore.') {
+  const file = els.restoreBackupInput.files[0];
+  const hasFile = Boolean(file);
+  if (els.restoreBackupSelection) els.restoreBackupSelection.hidden = !hasFile;
+  if (els.restoreBackupFileName) els.restoreBackupFileName.textContent = file?.name || '';
+  if (els.restoreBackupStatus) els.restoreBackupStatus.textContent = hasFile ? message : '';
+  if (els.settingsRestoreSelectedButton) els.settingsRestoreSelectedButton.disabled = !hasFile;
+  if (els.settingsClearBackupButton) els.settingsClearBackupButton.disabled = !hasFile;
+}
+
 async function restoreBackup() {
   const file = els.restoreBackupInput.files[0];
-  if (!file) return;
+  if (!file) {
+    updateRestoreBackupSelection();
+    showToast('Choose a backup file first.', 'warning');
+    return;
+  }
+  const confirmed = await confirmAction(
+    'Restore backup',
+    `Restore will replace the current local data, uploads, AI documents, jobs, and settings with "${file.name}".`,
+    'Restore Backup'
+  );
+  if (!confirmed) return;
   const formData = new FormData();
   formData.append('backup', file);
   try {
+    updateRestoreBackupSelection('Restoring selected backup...');
     await api('/api/import/backup', { method: 'POST', body: formData });
     state.contentWorkspace.recentDocumentId = null;
     await Promise.all([loadApplications(), loadCVs(), loadSavedFilters(), loadReminders(), loadNotifications(), loadJobBoards()]);
     showToast('Backup restored.', 'info');
+    els.restoreBackupInput.value = '';
+    updateRestoreBackupSelection();
     navigateTo('/');
   } catch (error) {
+    updateRestoreBackupSelection('Restore failed. You can retry or choose another file.');
     showToast(error.message, 'error');
-  } finally {
-    els.restoreBackupInput.value = '';
   }
 }
 

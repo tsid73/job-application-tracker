@@ -74,6 +74,12 @@ const workspaceKeys = [
   'settingsImportCsvButton',
   'settingsBackupButton',
   'settingsRestoreButton',
+  'settingsRestoreSelectedButton',
+  'settingsReplaceBackupButton',
+  'settingsClearBackupButton',
+  'restoreBackupSelection',
+  'restoreBackupFileName',
+  'restoreBackupStatus',
   'applicationPageContent'
 ];
 
@@ -114,6 +120,12 @@ export function bindWorkspaceElements(root = els.workspaceRoot) {
   els.settingsImportCsvButton = root.querySelector('#settingsImportCsvButton');
   els.settingsBackupButton = root.querySelector('#settingsBackupButton');
   els.settingsRestoreButton = root.querySelector('#settingsRestoreButton');
+  els.settingsRestoreSelectedButton = root.querySelector('#settingsRestoreSelectedButton');
+  els.settingsReplaceBackupButton = root.querySelector('#settingsReplaceBackupButton');
+  els.settingsClearBackupButton = root.querySelector('#settingsClearBackupButton');
+  els.restoreBackupSelection = root.querySelector('#restoreBackupSelection');
+  els.restoreBackupFileName = root.querySelector('#restoreBackupFileName');
+  els.restoreBackupStatus = root.querySelector('#restoreBackupStatus');
   els.applicationPageContent = root.querySelector('#applicationPageContent');
   return els;
 }

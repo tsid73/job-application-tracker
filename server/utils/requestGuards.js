@@ -38,7 +38,7 @@ function resolveRateLimit(pathname, config) {
   if (pathname.startsWith('/api/ai/')) {
     return { name: 'ai_requests', windowMs: config.aiRateLimitWindowMs, max: config.aiRateLimitMax };
   }
-  if (pathname === '/api/cv' || pathname === '/api/applications' || pathname === '/api/import/applications') {
+  if (pathname === '/api/cv' || pathname === '/api/applications' || pathname === '/api/import/applications' || pathname === '/api/import/backup') {
     return { name: 'uploads', windowMs: config.uploadRateLimitWindowMs, max: config.uploadRateLimitMax };
   }
   if (pathname.startsWith('/api/')) {
@@ -51,6 +51,7 @@ function maxAllowedBodyBytes(pathname, config) {
   if (pathname.startsWith('/api/ai/')) return config.maxAiBytes;
   if (pathname === '/api/cv' || pathname === '/api/applications') return config.maxUploadBytes + 1024 * 1024;
   if (pathname === '/api/import/applications') return config.maxUploadBytes + 1024 * 1024;
+  if (pathname === '/api/import/backup') return config.maxUploadBytes * 20 + 1024 * 1024;
   if (pathname.startsWith('/api/')) return config.maxJsonBytes;
   return Number.MAX_SAFE_INTEGER;
 }

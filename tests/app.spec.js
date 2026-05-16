@@ -1,3 +1,4 @@
+import fs from 'node:fs';
 import path from 'node:path';
 import { test, expect } from '@playwright/test';
 
@@ -44,6 +45,25 @@ test('export CSV and save a reusable filter', async ({ page }) => {
   await page.getByRole('button', { name: 'Export CSV' }).click();
   const download = await downloadPromise;
   expect(download.suggestedFilename()).toBe('job-applications.csv');
+});
+
+test('settings restore shows selected backup before restore', async ({ page }, testInfo) => {
+  const backupPath = testInfo.outputPath('sample-backup.json');
+  fs.writeFileSync(backupPath, JSON.stringify({ version: 1, data: {}, files: [] }));
+
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Settings' }).click();
+  const fileChooserPromise = page.waitForEvent('filechooser');
+  await page.getByRole('button', { name: 'Choose Backup' }).click();
+  const fileChooser = await fileChooserPromise;
+  await fileChooser.setFiles(backupPath);
+
+  await expect(page.locator('#restoreBackupFileName')).toHaveText('sample-backup.json');
+  await expect(page.getByRole('button', { name: 'Restore Selected' })).toBeEnabled();
+
+  await page.getByRole('button', { name: 'Remove' }).click();
+  await expect(page.locator('#restoreBackupSelection')).toBeHidden();
 });
 
 test('manage preparation workspace and job boards', async ({ page }) => {
