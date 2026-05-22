@@ -2,6 +2,7 @@ export const state = {
   applications: [],
   cvs: [],
   jobBoards: [],
+  targetCompanies: [],
   savedFilters: [],
   currentApplication: null,
   currentApplicationDocuments: [],
@@ -33,6 +34,13 @@ export const state = {
     page: 1,
     limit: 12,
     total: 0
+  },
+  targetCompanyFilters: {
+    search: '',
+    region: '',
+    visa: '',
+    workMode: '',
+    industry: ''
   },
   contentWorkspace: {
     search: '',

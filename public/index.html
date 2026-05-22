@@ -223,7 +223,7 @@
     <dialog id="jobBoardDialog">
       <form id="jobBoardForm" method="dialog">
         <div class="dialog-header">
-          <h2 id="jobBoardDialogTitle">Track Job Board</h2>
+          <h2 id="jobBoardDialogTitle">Add Job Board</h2>
           <button class="icon-button" value="cancel" type="button" data-close-dialog>Close</button>
         </div>
         <div class="form-grid">
@@ -253,6 +253,103 @@
         <div class="dialog-actions">
           <button id="jobBoardResetButton" class="secondary" type="button">Clear</button>
           <button type="submit">Save Board</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="targetCompanyDialog">
+      <form id="targetCompanyForm" method="dialog">
+        <div class="dialog-header">
+          <h2 id="targetCompanyDialogTitle">Add Company</h2>
+          <button class="icon-button" value="cancel" type="button" data-close-dialog>Close</button>
+        </div>
+        <div class="form-grid">
+          <input name="id" type="hidden">
+          <label>
+            <span>Target Name</span>
+            <input name="name" required placeholder="Zalando">
+          </label>
+          <label>
+            <span>Region</span>
+            <input name="region" placeholder="Germany">
+          </label>
+          <label>
+            <span>Career URL</span>
+            <input name="career_url" type="url" placeholder="https://company.com/careers">
+          </label>
+          <label>
+            <span>LinkedIn URL</span>
+            <input name="linkedin_url" type="url" placeholder="https://www.linkedin.com/company/company">
+          </label>
+          <label>
+            <span>Company URL</span>
+            <input name="company_url" type="url" placeholder="https://company.com">
+          </label>
+          <label>
+            <span>Primary Location</span>
+            <input name="primary_location" placeholder="Berlin">
+          </label>
+          <label>
+            <span>Germany Offices</span>
+            <input name="germany_offices" placeholder="Berlin, Hamburg">
+          </label>
+          <label>
+            <span>Additional Offices</span>
+            <input name="additional_offices" placeholder="Amsterdam, London">
+          </label>
+          <label>
+            <span>Industry</span>
+            <input name="industry" placeholder="Fintech">
+          </label>
+          <label>
+            <span>Company Type</span>
+            <input name="company_type" placeholder="SaaS">
+          </label>
+          <label>
+            <span>Work Mode</span>
+            <input name="work_mode" placeholder="Hybrid">
+          </label>
+          <label>
+            <span>Employee Count</span>
+            <input name="employee_count" placeholder="1,000+">
+          </label>
+          <label>
+            <span>Visa Signal</span>
+            <input name="visa_signal" placeholder="Role-specific">
+          </label>
+          <label>
+            <span>Relocation Signal</span>
+            <input name="relocation_signal" placeholder="Relocation-friendly">
+          </label>
+          <label>
+            <span>Last Checked</span>
+            <input name="last_checked_date" type="text" inputmode="numeric" autocomplete="off" placeholder="DD-MM-YYYY" data-date-input>
+          </label>
+          <label class="checkbox inline-checkbox">
+            <input name="is_active" type="checkbox" checked>
+            <span>Active target</span>
+          </label>
+          <label class="wide">
+            <span>Description</span>
+            <textarea name="description" rows="3" placeholder="What the company does"></textarea>
+          </label>
+          <label class="wide">
+            <span>Fit Notes</span>
+            <textarea name="fit_notes" rows="3" placeholder="Stack fit, hiring pattern, application notes"></textarea>
+          </label>
+          <label>
+            <span>Source</span>
+            <input name="source" placeholder="Notion, HTML import">
+          </label>
+          <label>
+            <span>Source Notes</span>
+            <input name="source_notes" placeholder="Role-specific fields may change">
+          </label>
+        </div>
+        <p class="form-error" id="targetCompanyError" hidden></p>
+        <div class="dialog-actions">
+          <button id="targetCompanyResetButton" class="secondary" type="button">Clear</button>
+          <button type="submit">Save Company</button>
         </div>
       </form>
     </dialog>

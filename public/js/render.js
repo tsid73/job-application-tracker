@@ -29,6 +29,7 @@ export function renderHomeWorkspace() {
         <button class="secondary" type="button" data-view="reports">Reports</button>
         <button class="secondary" type="button" data-view="activity">Activity</button>
         <button class="secondary" type="button" data-view="boards">Job Boards</button>
+        <button class="secondary" type="button" data-view="companies">Company List</button>
         <button class="secondary" type="button" data-view="toolkit">Toolkit</button>
         <button class="secondary" type="button" data-view="settings">Settings</button>
       </nav>
@@ -142,9 +143,45 @@ export function renderHomeWorkspace() {
               <h3>Job Boards</h3>
               <p class="section-help">Keep active sourcing channels visible, recent, and easy to maintain.</p>
             </div>
-            <button id="jobBoardOpenButton" type="button">Track Job Board</button>
+            <button id="jobBoardOpenButton" type="button">Add Job Board</button>
           </div>
           <div id="jobBoardsList" class="board-list"></div>
+        </section>
+      </section>
+
+      <section id="companiesView" class="view-panel" hidden>
+        <section class="detail-section boards-surface">
+          <div class="section-heading boards-heading">
+            <div>
+              <h3>Company List</h3>
+              <p class="section-help">Track Germany and EU companies that frequently hire international engineers.</p>
+            </div>
+            <button id="targetCompanyOpenButton" type="button">Add Company</button>
+          </div>
+          <section class="toolbar target-company-toolbar" aria-label="Company filters">
+            <label>
+              <span>Keyword</span>
+              <input id="targetCompanySearchInput" type="search" placeholder="Company, stack, city">
+            </label>
+            <label>
+              <span>Region</span>
+              <select id="targetCompanyRegionFilter"></select>
+            </label>
+            <label>
+              <span>Visa</span>
+              <select id="targetCompanyVisaFilter"></select>
+            </label>
+            <label>
+              <span>Work Mode</span>
+              <select id="targetCompanyWorkModeFilter"></select>
+            </label>
+            <label>
+              <span>Industry</span>
+              <select id="targetCompanyIndustryFilter"></select>
+            </label>
+          </section>
+          <p id="targetCompaniesSummary" class="section-help"></p>
+          <div id="targetCompaniesList" class="board-list"></div>
         </section>
       </section>
 
@@ -385,6 +422,128 @@ export function renderJobBoards(els, jobBoards) {
     renderBoardSection('Active boards', 'Boards you are actively checking.', activeBoards, { fullWidth: true }),
     inactiveBoards.length ? renderBoardSection('Inactive boards', 'Boards paused for now but kept for reference.', inactiveBoards) : ''
   ].join('') || renderEmptyState('No job boards saved', 'Add sources you check regularly so your search routine stays visible and repeatable.', 'The app now seeds common boards automatically after migrations run.');
+}
+
+export function renderTargetCompanyFilters(els, companies, filters) {
+  renderSelectFilter(els.targetCompanyRegionFilter, companies, 'region', filters.region, 'All regions');
+  renderSelectFilter(els.targetCompanyVisaFilter, companies, 'visa_signal', filters.visa, 'All visa signals');
+  renderSelectFilter(els.targetCompanyWorkModeFilter, companies, 'work_mode', filters.workMode, 'All work modes');
+  renderSelectFilter(els.targetCompanyIndustryFilter, companies, 'industry', filters.industry, 'All industries');
+}
+
+export function renderTargetCompanies(els, companies, filters) {
+  const filtered = filterTargetCompanies(companies, filters);
+  const activeCompanies = filtered.filter((company) => company.is_active);
+  const inactiveCompanies = filtered.filter((company) => !company.is_active);
+  const visaFriendly = companies.filter((company) => /yes|strong|sponsor|relocat|international|blue card|frequent/i.test(`${company.visa_signal || ''} ${company.relocation_signal || ''}`)).length;
+
+  if (els.targetCompaniesSummary) {
+    els.targetCompaniesSummary.textContent = `${filtered.length} shown from ${companies.length} saved, ${visaFriendly} with stronger visa or relocation signals.`;
+  }
+
+  els.targetCompaniesList.innerHTML = [
+    renderTargetCompanySection('Active companies', 'Companies to review regularly for backend and international hiring openings.', activeCompanies, { fullWidth: true }),
+    inactiveCompanies.length ? renderTargetCompanySection('Inactive companies', 'Paused companies kept for future reference.', inactiveCompanies) : ''
+  ].join('') || renderEmptyState('No companies found', 'No target companies match the current filters.', 'Clear filters or add a company manually.');
+}
+
+function renderSelectFilter(select, companies, key, value, label) {
+  if (!select) return;
+  const values = [...new Set(companies.map((company) => company[key]).filter(Boolean))]
+    .sort((left, right) => String(left).localeCompare(String(right)));
+  select.innerHTML = [
+    `<option value="">${escapeHtml(label)}</option>`,
+    ...values.map((item) => `<option value="${escapeAttribute(item)}">${escapeHtml(item)}</option>`)
+  ].join('');
+  select.value = value || '';
+}
+
+function filterTargetCompanies(companies, filters) {
+  const query = String(filters.search || '').toLowerCase();
+  return companies.filter((company) => {
+    const haystack = [
+      company.name,
+      company.region,
+      company.primary_location,
+      company.germany_offices,
+      company.additional_offices,
+      company.industry,
+      company.company_type,
+      company.description,
+      company.work_mode,
+      company.visa_signal,
+      company.relocation_signal,
+      company.fit_notes,
+      company.source
+    ].filter(Boolean).join(' ').toLowerCase();
+
+    return (!query || haystack.includes(query))
+      && (!filters.region || company.region === filters.region)
+      && (!filters.visa || company.visa_signal === filters.visa)
+      && (!filters.workMode || company.work_mode === filters.workMode)
+      && (!filters.industry || company.industry === filters.industry);
+  });
+}
+
+function renderTargetCompanySection(title, description, companies, options = {}) {
+  if (!companies.length) return '';
+  return `
+    <section class="board-section${options.fullWidth ? ' board-section-wide' : ''}">
+      <div class="board-section-head">
+        <div>
+          <strong>${escapeHtml(title)}</strong>
+          <p>${escapeHtml(description)}</p>
+        </div>
+        <span class="board-section-count">${companies.length}</span>
+      </div>
+      <div class="board-section-grid${options.fullWidth ? ' board-section-grid-wide' : ''}">
+        ${companies.map((company) => `
+          <article class="board-card target-company-card ${company.is_active ? '' : 'is-inactive'} ${jobBoardFreshnessClass(company)}">
+            <div class="board-card-top">
+              <div>
+                <strong>${escapeHtml(company.name)}</strong>
+                <span>${escapeHtml([company.region, company.primary_location, company.industry].filter(Boolean).join(' · ') || 'No company context saved')}</span>
+              </div>
+              <span class="state ${company.is_active ? 'active-state' : 'archived-state'}">${company.is_active ? 'Active' : 'Inactive'}</span>
+            </div>
+            <div class="company-link-row">
+              ${company.career_url ? `<button class="button-link tertiary board-open-link" type="button" data-target-company-open="${company.id}" data-target-company-url="career">Careers</button>` : ''}
+              ${company.linkedin_url ? `<button class="button-link tertiary board-open-link" type="button" data-target-company-open="${company.id}" data-target-company-url="linkedin">LinkedIn</button>` : ''}
+              ${company.company_url ? `<button class="button-link tertiary board-open-link" type="button" data-target-company-open="${company.id}" data-target-company-url="company">Website</button>` : ''}
+              ${!company.career_url && !company.linkedin_url && !company.company_url ? '<span>No link saved</span>' : ''}
+            </div>
+            <div class="board-status-row">
+              <span class="board-freshness ${jobBoardFreshnessClass(company)}">${jobBoardFreshnessLabel(company)}</span>
+            </div>
+            <p>${escapeHtml(company.description || company.fit_notes || 'No notes yet.')}</p>
+            <dl class="company-signal-grid">
+              ${renderCompanySignal('Visa', company.visa_signal)}
+              ${renderCompanySignal('Relocation', company.relocation_signal)}
+              ${renderCompanySignal('Work', company.work_mode)}
+              ${renderCompanySignal('Employees', company.employee_count)}
+            </dl>
+            ${company.fit_notes ? `<p class="target-company-notes">${escapeHtml(company.fit_notes)}</p>` : ''}
+            <div class="board-meta">
+              <span>Last checked: ${company.last_checked_date ? formatDate(company.last_checked_date) : 'Never'}</span>
+            </div>
+            <div class="row-actions">
+              <button class="secondary" type="button" data-target-company-edit="${company.id}">Edit</button>
+              <button class="secondary" type="button" data-target-company-toggle="${company.id}" data-target-company-active="${company.is_active ? 'true' : 'false'}">${company.is_active ? 'Mark inactive' : 'Activate'}</button>
+            </div>
+          </article>
+        `).join('')}
+      </div>
+    </section>
+  `;
+}
+
+function renderCompanySignal(label, value) {
+  return `
+    <div>
+      <dt>${escapeHtml(label)}</dt>
+      <dd>${escapeHtml(value || 'Unclear')}</dd>
+    </div>
+  `;
 }
 
 function renderBoardSection(title, description, boards, options = {}) {

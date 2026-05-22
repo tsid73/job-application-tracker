@@ -255,6 +255,40 @@ export function createReadApi({ pool, audit }) {
       return { job_boards: result.rows };
     },
 
+    async getTargetCompanies() {
+      const result = await pool.query(
+        `
+          SELECT
+            id,
+            name,
+            company_url,
+            career_url,
+            linkedin_url,
+            region,
+            primary_location,
+            germany_offices,
+            additional_offices,
+            industry,
+            company_type,
+            description,
+            work_mode,
+            employee_count,
+            visa_signal,
+            relocation_signal,
+            fit_notes,
+            source,
+            source_notes,
+            to_char(last_checked_date, 'YYYY-MM-DD') AS last_checked_date,
+            is_active,
+            created_at,
+            updated_at
+          FROM target_companies
+          ORDER BY is_active DESC, lower(region) ASC, lower(name) ASC, id ASC
+        `
+      );
+      return { target_companies: result.rows };
+    },
+
     async getApplications(url) {
       const search = cleanString(url.searchParams.get('search')) || '';
       const status = cleanString(url.searchParams.get('status')) || '';

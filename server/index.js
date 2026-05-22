@@ -75,12 +75,16 @@ const routeApi = createApiRouter({
   getAudit: async (req, res, url) => sendJson(res, 200, await readApi.getAudit(url)),
   getSavedFilters: async (req, res) => sendJson(res, 200, await readApi.getSavedFilters()),
   getJobBoards: async (req, res) => sendJson(res, 200, await readApi.getJobBoards()),
+  getTargetCompanies: async (req, res) => sendJson(res, 200, await readApi.getTargetCompanies()),
   createSavedFilter,
   deleteSavedFilter,
   createJobBoard,
   updateJobBoard,
   checkJobBoard,
   deleteJobBoard,
+  createTargetCompany,
+  updateTargetCompany,
+  checkTargetCompany,
   exportApplicationsCsv,
   importApplicationsCsv,
   exportBackup,
@@ -235,6 +239,138 @@ function normalizeJobBoardInput(body) {
     last_checked_date: parseDate(body.last_checked_date, 'last_checked_date'),
     is_active: parseBoolean(body.is_active, 'is_active') ?? true
   };
+}
+
+async function createTargetCompany(req, res) {
+  const body = await readJson(req, 128 * 1024);
+  const data = normalizeTargetCompanyInput(body);
+  const result = await pool.query(
+    `
+      INSERT INTO target_companies (
+        name, company_url, career_url, linkedin_url, region, primary_location,
+        germany_offices, additional_offices, industry, company_type, description,
+        work_mode, employee_count, visa_signal, relocation_signal, fit_notes,
+        source, source_notes, last_checked_date, is_active
+      )
+      VALUES (
+        $1, $2, $3, $4, $5, $6,
+        $7, $8, $9, $10, $11,
+        $12, $13, $14, $15, $16,
+        $17, $18, $19, $20
+      )
+      RETURNING *, to_char(last_checked_date, 'YYYY-MM-DD') AS last_checked_date
+    `,
+    targetCompanyValues(data)
+  );
+  sendJson(res, 201, { target_company: result.rows[0] });
+}
+
+async function updateTargetCompany(req, res, id) {
+  const existing = await pool.query('SELECT * FROM target_companies WHERE id = $1', [id]);
+  if (!existing.rowCount) return sendError(res, 404, 'Target company not found');
+
+  const body = await readJson(req, 128 * 1024);
+  const data = normalizeTargetCompanyInput({ ...existing.rows[0], ...body });
+  const result = await pool.query(
+    `
+      UPDATE target_companies
+      SET name = $1,
+          company_url = $2,
+          career_url = $3,
+          linkedin_url = $4,
+          region = $5,
+          primary_location = $6,
+          germany_offices = $7,
+          additional_offices = $8,
+          industry = $9,
+          company_type = $10,
+          description = $11,
+          work_mode = $12,
+          employee_count = $13,
+          visa_signal = $14,
+          relocation_signal = $15,
+          fit_notes = $16,
+          source = $17,
+          source_notes = $18,
+          last_checked_date = $19,
+          is_active = $20
+      WHERE id = $21
+      RETURNING *, to_char(last_checked_date, 'YYYY-MM-DD') AS last_checked_date
+    `,
+    [...targetCompanyValues(data), id]
+  );
+  sendJson(res, 200, { target_company: result.rows[0] });
+}
+
+async function checkTargetCompany(req, res, id) {
+  const result = await pool.query(
+    `
+      UPDATE target_companies
+      SET last_checked_date = CURRENT_DATE
+      WHERE id = $1
+      RETURNING *, to_char(last_checked_date, 'YYYY-MM-DD') AS last_checked_date
+    `,
+    [id]
+  );
+  if (!result.rowCount) return sendError(res, 404, 'Target company not found');
+  sendJson(res, 200, { target_company: result.rows[0] });
+}
+
+function normalizeTargetCompanyInput(body) {
+  const name = cleanString(body.name);
+  if (!name) {
+    const error = new Error('Company name is required');
+    error.statusCode = 400;
+    throw error;
+  }
+
+  return {
+    name,
+    company_url: validateUrl(body.company_url),
+    career_url: validateUrl(body.career_url),
+    linkedin_url: validateUrl(body.linkedin_url),
+    region: cleanString(body.region),
+    primary_location: cleanString(body.primary_location),
+    germany_offices: cleanString(body.germany_offices),
+    additional_offices: cleanString(body.additional_offices),
+    industry: cleanString(body.industry),
+    company_type: cleanString(body.company_type),
+    description: cleanString(body.description),
+    work_mode: cleanString(body.work_mode),
+    employee_count: cleanString(body.employee_count),
+    visa_signal: cleanString(body.visa_signal),
+    relocation_signal: cleanString(body.relocation_signal),
+    fit_notes: cleanString(body.fit_notes),
+    source: cleanString(body.source),
+    source_notes: cleanString(body.source_notes),
+    last_checked_date: parseDate(body.last_checked_date, 'last_checked_date'),
+    is_active: parseBoolean(body.is_active, 'is_active') ?? true
+  };
+}
+
+function targetCompanyValues(data) {
+  return [
+    data.name,
+    data.company_url,
+    data.career_url,
+    data.linkedin_url,
+    data.region,
+    data.primary_location,
+    data.germany_offices,
+    data.additional_offices,
+    data.industry,
+    data.company_type,
+    data.description,
+    data.work_mode,
+    data.employee_count,
+    data.visa_signal,
+    data.relocation_signal,
+    data.fit_notes,
+    data.source,
+    data.source_notes,
+    data.last_checked_date,
+    data.is_active
+  ];
 }
 
 async function ensureApplicationExists(applicationId) {
@@ -1193,7 +1329,8 @@ async function readBackupData() {
     recruiter_questions: 'SELECT * FROM recruiter_questions ORDER BY id',
     hiring_feedback: 'SELECT * FROM hiring_feedback ORDER BY id',
     application_todos: 'SELECT * FROM application_todos ORDER BY id',
-    job_boards: 'SELECT * FROM job_boards ORDER BY id'
+    job_boards: 'SELECT * FROM job_boards ORDER BY id',
+    target_companies: 'SELECT * FROM target_companies ORDER BY id'
   };
 
   const entries = await Promise.all(
@@ -1233,6 +1370,7 @@ async function restoreBackupPayload(backup) {
         ai_documents,
         activity_logs,
         job_boards,
+        target_companies,
         saved_filters,
         applications,
         cv_versions
@@ -1256,7 +1394,8 @@ async function restoreBackupPayload(backup) {
       'recruiter_questions',
       'hiring_feedback',
       'application_todos',
-      'job_boards'
+      'job_boards',
+      'target_companies'
     ];
 
     for (const table of insertionOrder) {
@@ -1278,6 +1417,7 @@ async function restoreBackupPayload(backup) {
 async function insertBackupRows(client, table, rows) {
   if (!rows.length) return;
   const columns = Object.keys(rows[0]);
+  validateBackupTableColumns(table, rows, columns);
   const valueGroups = [];
   const values = [];
 
@@ -1292,6 +1432,59 @@ async function insertBackupRows(client, table, rows) {
     values
   );
 }
+
+function validateBackupTableColumns(table, rows, columns) {
+  const allowed = backupTableColumns[table];
+  if (!allowed) {
+    const error = new Error(`Backup table is not supported: ${table}`);
+    error.statusCode = 400;
+    throw error;
+  }
+
+  for (const column of columns) {
+    if (!allowed.has(column)) {
+      const error = new Error(`Backup contains an unsupported column for ${table}`);
+      error.statusCode = 400;
+      throw error;
+    }
+  }
+
+  for (const row of rows) {
+    if (!row || typeof row !== 'object' || Array.isArray(row)) {
+      const error = new Error(`Backup contains an invalid row for ${table}`);
+      error.statusCode = 400;
+      throw error;
+    }
+    for (const column of Object.keys(row)) {
+      if (!allowed.has(column)) {
+        const error = new Error(`Backup contains an unsupported column for ${table}`);
+        error.statusCode = 400;
+        throw error;
+      }
+    }
+  }
+}
+
+const backupTableColumns = {
+  applications: new Set(['id', 'company_name', 'job_link', 'job_description', 'status', 'applied_date', 'interview_date', 'notes', 'created_at', 'updated_at', 'archived_at', 'salary', 'location', 'recruiter', 'contact_person', 'role_title']),
+  cv_versions: new Set(['id', 'file_path', 'original_name', 'mime_type', 'file_size', 'version_label', 'is_latest', 'created_at', 'extracted_text', 'deleted_at', 'file_hash', 'storage_kind', 's3_bucket', 's3_key']),
+  application_cvs: new Set(['application_id', 'cv_id', 'linked_at']),
+  status_history: new Set(['id', 'application_id', 'from_status', 'to_status', 'changed_at']),
+  application_notes: new Set(['id', 'application_id', 'body', 'created_at']),
+  tags: new Set(['id', 'name']),
+  application_tags: new Set(['application_id', 'tag_id']),
+  ai_documents: new Set(['id', 'application_id', 'cv_id', 'document_type', 'title', 'content', 'file_path', 'created_at', 'provider_name', 'model_name', 'prompt_excerpt', 'source_context', 'storage_kind', 's3_bucket', 's3_key', 'deleted_at', 'version_group_id', 'provider_requested', 'generation_status']),
+  ai_generation_jobs: new Set(['id', 'application_id', 'cv_id', 'document_type', 'provider_requested', 'provider_used', 'status', 'title', 'request_manifest_path', 'request_manifest_s3_key', 'result_s3_key', 'error_message', 'retry_count', 'prompt_excerpt', 'source_context', 'document_id', 'created_at', 'started_at', 'completed_at']),
+  activity_logs: new Set(['id', 'application_id', 'action', 'details', 'created_at']),
+  saved_filters: new Set(['id', 'name', 'search', 'status', 'tag', 'archived', 'created_at', 'updated_at']),
+  audit_events: new Set(['id', 'application_id', 'target_type', 'target_id', 'action', 'details', 'actor_ip', 'actor_user_agent', 'created_at']),
+  application_preparation: new Set(['application_id', 'about_company', 'company_values', 'application_notes', 'created_at', 'updated_at']),
+  recruiter_questions: new Set(['id', 'application_id', 'question', 'sort_order', 'created_at', 'updated_at']),
+  hiring_feedback: new Set(['id', 'application_id', 'source_type', 'body', 'created_at']),
+  application_todos: new Set(['id', 'application_id', 'body', 'completed', 'due_date', 'created_at', 'updated_at']),
+  job_boards: new Set(['id', 'name', 'url', 'notes', 'last_checked_date', 'is_active', 'created_at', 'updated_at']),
+  target_companies: new Set(['id', 'name', 'company_url', 'career_url', 'linkedin_url', 'region', 'primary_location', 'germany_offices', 'additional_offices', 'industry', 'company_type', 'description', 'work_mode', 'employee_count', 'visa_signal', 'relocation_signal', 'fit_notes', 'source', 'source_notes', 'last_checked_date', 'is_active', 'created_at', 'updated_at'])
+};
 
 async function resetBackupSequences(client, data) {
   const sequences = [
@@ -1308,7 +1501,8 @@ async function resetBackupSequences(client, data) {
     ['recruiter_questions', 'recruiter_questions_id_seq'],
     ['hiring_feedback', 'hiring_feedback_id_seq'],
     ['application_todos', 'application_todos_id_seq'],
-    ['job_boards', 'job_boards_id_seq']
+    ['job_boards', 'job_boards_id_seq'],
+    ['target_companies', 'target_companies_id_seq']
   ];
 
   for (const [table, sequence] of sequences) {

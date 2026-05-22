@@ -33,6 +33,11 @@ export const els = {
   jobBoardDialogTitle: document.querySelector('#jobBoardDialogTitle'),
   jobBoardError: document.querySelector('#jobBoardError'),
   jobBoardResetButton: document.querySelector('#jobBoardResetButton'),
+  targetCompanyDialog: document.querySelector('#targetCompanyDialog'),
+  targetCompanyForm: document.querySelector('#targetCompanyForm'),
+  targetCompanyDialogTitle: document.querySelector('#targetCompanyDialogTitle'),
+  targetCompanyError: document.querySelector('#targetCompanyError'),
+  targetCompanyResetButton: document.querySelector('#targetCompanyResetButton'),
   appToast: document.querySelector('#appToast'),
   importCsvInput: document.querySelector('#importCsvInput'),
   restoreBackupInput: document.querySelector('#restoreBackupInput'),
@@ -57,6 +62,7 @@ const workspaceKeys = [
   'reportsView',
   'activityView',
   'boardsView',
+  'companiesView',
   'toolkitView',
   'settingsView',
   'remindersList',
@@ -70,6 +76,14 @@ const workspaceKeys = [
   'activityPagination',
   'jobBoardOpenButton',
   'jobBoardsList',
+  'targetCompanyOpenButton',
+  'targetCompanySearch',
+  'targetCompanyRegionFilter',
+  'targetCompanyVisaFilter',
+  'targetCompanyWorkModeFilter',
+  'targetCompanyIndustryFilter',
+  'targetCompaniesList',
+  'targetCompaniesSummary',
   'settingsExportCsvButton',
   'settingsImportCsvButton',
   'settingsBackupButton',
@@ -103,6 +117,7 @@ export function bindWorkspaceElements(root = els.workspaceRoot) {
   els.reportsView = root.querySelector('#reportsView');
   els.activityView = root.querySelector('#activityView');
   els.boardsView = root.querySelector('#boardsView');
+  els.companiesView = root.querySelector('#companiesView');
   els.toolkitView = root.querySelector('#toolkitView');
   els.settingsView = root.querySelector('#settingsView');
   els.remindersList = root.querySelector('#remindersList');
@@ -116,6 +131,14 @@ export function bindWorkspaceElements(root = els.workspaceRoot) {
   els.activityPagination = root.querySelector('#activityPagination');
   els.jobBoardOpenButton = root.querySelector('#jobBoardOpenButton');
   els.jobBoardsList = root.querySelector('#jobBoardsList');
+  els.targetCompanyOpenButton = root.querySelector('#targetCompanyOpenButton');
+  els.targetCompanySearch = root.querySelector('#targetCompanySearchInput');
+  els.targetCompanyRegionFilter = root.querySelector('#targetCompanyRegionFilter');
+  els.targetCompanyVisaFilter = root.querySelector('#targetCompanyVisaFilter');
+  els.targetCompanyWorkModeFilter = root.querySelector('#targetCompanyWorkModeFilter');
+  els.targetCompanyIndustryFilter = root.querySelector('#targetCompanyIndustryFilter');
+  els.targetCompaniesList = root.querySelector('#targetCompaniesList');
+  els.targetCompaniesSummary = root.querySelector('#targetCompaniesSummary');
   els.settingsExportCsvButton = root.querySelector('#settingsExportCsvButton');
   els.settingsImportCsvButton = root.querySelector('#settingsImportCsvButton');
   els.settingsBackupButton = root.querySelector('#settingsBackupButton');

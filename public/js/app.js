@@ -16,6 +16,8 @@ import {
   renderRouteLoadingState,
   renderReports,
   renderSavedFilters,
+  renderTargetCompanies,
+  renderTargetCompanyFilters,
   renderToolkit
 } from './render.js';
 
@@ -29,7 +31,7 @@ const aiEndpoints = {
 
 bindGlobalEvents();
 
-Promise.all([loadApplications(), loadCVs(), loadSavedFilters(), loadReminders(), loadNotifications(), loadJobBoards()])
+Promise.all([loadApplications(), loadCVs(), loadSavedFilters(), loadReminders(), loadNotifications(), loadJobBoards(), loadTargetCompanies()])
   .then(async () => {
     await loadAppConfig();
     await renderCurrentRoute();
@@ -113,6 +115,9 @@ function bindGlobalEvents() {
   els.jobBoardForm.addEventListener('submit', submitJobBoardForm);
   els.jobBoardResetButton.addEventListener('click', resetJobBoardForm);
   els.jobBoardForm.querySelectorAll('[data-date-input]').forEach(attachDateMask);
+  els.targetCompanyForm.addEventListener('submit', submitTargetCompanyForm);
+  els.targetCompanyResetButton.addEventListener('click', resetTargetCompanyForm);
+  els.targetCompanyForm.querySelectorAll('[data-date-input]').forEach(attachDateMask);
 
   document.addEventListener('click', (event) => {
     const link = event.target.closest('a[href^="/applications/"], a[href="/"]');
@@ -130,6 +135,7 @@ function bindGlobalEvents() {
 
 function bindHomeWorkspaceEvents() {
   els.jobBoardOpenButton?.addEventListener('click', () => openJobBoardDialog());
+  els.targetCompanyOpenButton?.addEventListener('click', () => openTargetCompanyDialog());
   els.search?.addEventListener('input', debounce(() => {
     state.filters.search = els.search.value.trim();
     els.savedFilterSelect.value = '';
@@ -169,6 +175,23 @@ function bindHomeWorkspaceEvents() {
     if (!button) return;
     state.activity.page = Number(button.dataset.activityPage);
     await loadActivity();
+  });
+  els.targetCompanySearch?.addEventListener('input', debounce(() => {
+    state.targetCompanyFilters.search = els.targetCompanySearch.value.trim();
+    renderTargetCompanies(els, state.targetCompanies, state.targetCompanyFilters);
+    bindTargetCompanyActions();
+  }, 250));
+  [
+    ['region', els.targetCompanyRegionFilter],
+    ['visa', els.targetCompanyVisaFilter],
+    ['workMode', els.targetCompanyWorkModeFilter],
+    ['industry', els.targetCompanyIndustryFilter]
+  ].forEach(([key, element]) => {
+    element?.addEventListener('change', () => {
+      state.targetCompanyFilters[key] = element.value;
+      renderTargetCompanies(els, state.targetCompanies, state.targetCompanyFilters);
+      bindTargetCompanyActions();
+    });
   });
   els.table?.addEventListener('change', updateInlineStatus);
   els.table?.addEventListener('click', async (event) => {
@@ -283,6 +306,7 @@ async function switchView(view) {
   els.reportsView.hidden = view !== 'reports';
   els.activityView.hidden = view !== 'activity';
   els.boardsView.hidden = view !== 'boards';
+  els.companiesView.hidden = view !== 'companies';
   els.toolkitView.hidden = view !== 'toolkit';
   els.settingsView.hidden = view !== 'settings';
 
@@ -304,6 +328,10 @@ async function switchView(view) {
   if (view === 'boards') {
     renderSectionLoading(els.jobBoardsList, 'Loading job boards');
     await loadJobBoards();
+  }
+  if (view === 'companies') {
+    renderSectionLoading(els.targetCompaniesList, 'Loading companies');
+    await loadTargetCompanies();
   }
   if (view === 'toolkit') renderToolkit(els);
   if (view === 'settings') bindSettingsActions();
@@ -356,6 +384,16 @@ async function loadJobBoards() {
   if (els.jobBoardsList) {
     renderJobBoards(els, state.jobBoards);
     bindJobBoardActions();
+  }
+}
+
+async function loadTargetCompanies() {
+  const payload = await api('/api/target-companies');
+  state.targetCompanies = payload.target_companies;
+  if (els.targetCompaniesList) {
+    renderTargetCompanyFilters(els, state.targetCompanies, state.targetCompanyFilters);
+    renderTargetCompanies(els, state.targetCompanies, state.targetCompanyFilters);
+    bindTargetCompanyActions();
   }
 }
 
@@ -469,6 +507,49 @@ async function submitJobBoardForm(event) {
     showToast(id ? 'Job board updated.' : 'Job board saved.');
   }, (error) => {
     setError(els.jobBoardError, error.message);
+  });
+}
+
+async function submitTargetCompanyForm(event) {
+  event.preventDefault();
+  setError(els.targetCompanyError, '');
+  const form = new FormData(els.targetCompanyForm);
+  const id = form.get('id');
+  const payload = {
+    name: form.get('name'),
+    company_url: form.get('company_url'),
+    career_url: form.get('career_url'),
+    linkedin_url: form.get('linkedin_url'),
+    region: form.get('region'),
+    primary_location: form.get('primary_location'),
+    germany_offices: form.get('germany_offices'),
+    additional_offices: form.get('additional_offices'),
+    industry: form.get('industry'),
+    company_type: form.get('company_type'),
+    description: form.get('description'),
+    work_mode: form.get('work_mode'),
+    employee_count: form.get('employee_count'),
+    visa_signal: form.get('visa_signal'),
+    relocation_signal: form.get('relocation_signal'),
+    fit_notes: form.get('fit_notes'),
+    source: form.get('source'),
+    source_notes: form.get('source_notes'),
+    last_checked_date: parseDisplayDateToIso(form.get('last_checked_date')),
+    is_active: els.targetCompanyForm.elements.is_active.checked
+  };
+
+  await withAsyncForm(els.targetCompanyForm, async () => {
+    await api(id ? `/api/target-companies/${id}` : '/api/target-companies', {
+      method: id ? 'PUT' : 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    els.targetCompanyDialog.close();
+    resetTargetCompanyForm();
+    await loadTargetCompanies();
+    showToast(id ? 'Company updated.' : 'Company saved.');
+  }, (error) => {
+    setError(els.targetCompanyError, error.message);
   });
 }
 
@@ -611,13 +692,110 @@ function bindJobBoardActions() {
   });
 }
 
+function bindTargetCompanyActions() {
+  els.targetCompaniesList?.querySelectorAll('[data-target-company-open]').forEach((button) => {
+    button.addEventListener('click', async () => {
+      const company = state.targetCompanies.find((item) => item.id === Number(button.dataset.targetCompanyOpen));
+      if (!company) return;
+      const url = button.dataset.targetCompanyUrl === 'linkedin'
+        ? company.linkedin_url
+        : button.dataset.targetCompanyUrl === 'company'
+          ? company.company_url
+          : company.career_url;
+      if (!url) return;
+      const openedTab = window.open(url, '_blank', 'noopener,noreferrer');
+      button.disabled = true;
+      try {
+        await api(`/api/target-companies/${company.id}/check`, { method: 'POST' });
+        await loadTargetCompanies();
+      } catch (error) {
+        setError(els.targetCompanyError, error.message);
+        if (!openedTab) window.open(url, '_blank', 'noopener,noreferrer');
+      } finally {
+        button.disabled = false;
+      }
+    });
+  });
+
+  els.targetCompaniesList?.querySelectorAll('[data-target-company-edit]').forEach((button) => {
+    button.addEventListener('click', () => {
+      const company = state.targetCompanies.find((item) => item.id === Number(button.dataset.targetCompanyEdit));
+      if (!company) return;
+      openTargetCompanyDialog(company);
+    });
+  });
+
+  els.targetCompaniesList?.querySelectorAll('[data-target-company-toggle]').forEach((button) => {
+    button.addEventListener('click', async () => {
+      const company = state.targetCompanies.find((item) => item.id === Number(button.dataset.targetCompanyToggle));
+      if (!company) return;
+      button.disabled = true;
+      try {
+        await api(`/api/target-companies/${company.id}`, {
+          method: 'PUT',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ ...company, is_active: !company.is_active })
+        });
+        await loadTargetCompanies();
+        showToast(company.is_active ? 'Company marked inactive.' : 'Company activated.');
+      } catch (error) {
+        setError(els.targetCompanyError, error.message);
+      } finally {
+        button.disabled = false;
+      }
+    });
+  });
+}
+
 function resetJobBoardForm() {
   els.jobBoardForm.reset();
   els.jobBoardForm.elements.id.value = '';
   els.jobBoardForm.elements.is_active.checked = true;
   els.jobBoardForm.elements.last_checked_date.value = '';
-  if (els.jobBoardDialogTitle) els.jobBoardDialogTitle.textContent = 'Track Job Board';
+  if (els.jobBoardDialogTitle) els.jobBoardDialogTitle.textContent = 'Add Job Board';
   setError(els.jobBoardError, '');
+}
+
+function resetTargetCompanyForm() {
+  els.targetCompanyForm.reset();
+  els.targetCompanyForm.elements.id.value = '';
+  els.targetCompanyForm.elements.is_active.checked = true;
+  els.targetCompanyForm.elements.last_checked_date.value = '';
+  if (els.targetCompanyDialogTitle) els.targetCompanyDialogTitle.textContent = 'Add Company';
+  setError(els.targetCompanyError, '');
+}
+
+function openTargetCompanyDialog(company = null) {
+  resetTargetCompanyForm();
+  if (company) {
+    els.targetCompanyDialogTitle.textContent = 'Edit Target Company';
+    for (const field of [
+      'id',
+      'name',
+      'company_url',
+      'career_url',
+      'linkedin_url',
+      'region',
+      'primary_location',
+      'germany_offices',
+      'additional_offices',
+      'industry',
+      'company_type',
+      'description',
+      'work_mode',
+      'employee_count',
+      'visa_signal',
+      'relocation_signal',
+      'fit_notes',
+      'source',
+      'source_notes'
+    ]) {
+      els.targetCompanyForm.elements[field].value = company[field] || '';
+    }
+    els.targetCompanyForm.elements.last_checked_date.value = formatIsoDateForDisplay(company.last_checked_date || '');
+    els.targetCompanyForm.elements.is_active.checked = Boolean(company.is_active);
+  }
+  els.targetCompanyDialog.showModal();
 }
 
 function openJobBoardDialog(board = null) {
@@ -1722,6 +1900,9 @@ function resetDialogState(dialog) {
   if (dialog === els.detailDialog) {
     els.detailContent.innerHTML = '';
   }
+  if (dialog === els.targetCompanyDialog) {
+    resetTargetCompanyForm();
+  }
 }
 
 function resetTransientUiState() {
@@ -1745,6 +1926,7 @@ function unmountInactiveHomeViews(activeView) {
     if (els.activityPagination) els.activityPagination.innerHTML = '';
   }
   if (activeView !== 'boards') clear(els.jobBoardsList);
+  if (activeView !== 'companies') clear(els.targetCompaniesList);
 }
 
 function renderSectionLoading(element, title) {

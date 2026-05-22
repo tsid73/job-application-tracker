@@ -51,6 +51,7 @@ html {
   .prep-card,
   .toolkit-card,
   .board-card,
+  .target-company-card,
   .notification-card,
   .kanban-card,
   .report-panel {
@@ -1529,6 +1530,53 @@ dialog::backdrop {
   border: 0;
 }
 
+.target-company-toolbar {
+  margin-bottom: 12px;
+}
+
+.company-link-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  margin-bottom: 10px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.company-signal-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin: 12px 0;
+}
+
+.company-signal-grid div {
+  min-width: 0;
+  padding: 9px 10px;
+  border: 1px solid rgba(20, 74, 102, 0.12);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.68);
+}
+
+.company-signal-grid dt {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.company-signal-grid dd {
+  margin: 4px 0 0;
+  overflow-wrap: anywhere;
+  font-weight: 700;
+}
+
+.target-company-notes {
+  color: var(--accent-dark);
+  font-size: 13px;
+}
+
 .board-freshness {
   display: inline-flex;
   align-items: center;
@@ -2908,7 +2956,8 @@ a {
   .toolkit-grid,
   .prep-grid,
   .prep-layout,
-  .signal-stack {
+  .signal-stack,
+  .company-signal-grid {
     grid-template-columns: 1fr;
   }
 
