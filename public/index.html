@@ -38,75 +38,95 @@
           <h2>New Application</h2>
           <button class="icon-button" value="cancel" type="button" data-close-dialog>Close</button>
         </div>
-        <div class="form-grid">
-          <label>
-            <span>Company Name</span>
-            <input name="company_name" required>
-          </label>
-          <label>
-            <span>Role</span>
-            <input name="role_title" placeholder="Frontend Developer">
-          </label>
-          <label>
-            <span>Job Link</span>
-            <input name="job_link" type="url">
-          </label>
-          <label>
-            <span>Status</span>
-            <select name="status">
-              <option value="applied">Applied</option>
-              <option value="interview_scheduled">Interview Scheduled</option>
-              <option value="offer">Offer</option>
-              <option value="accepted">Accepted</option>
-              <option value="rejected">Rejected</option>
-              <option value="withdrawn">Withdrawn</option>
-              <option value="ghosted">Ghosted</option>
-            </select>
-          </label>
-          <label>
-            <span>Salary</span>
-            <input name="salary" placeholder="$120k, 18 LPA">
-          </label>
-          <label>
-            <span>Location</span>
-            <input name="location" placeholder="Remote, Bengaluru">
-          </label>
-          <label>
-            <span>Recruiter</span>
-            <input name="recruiter" placeholder="Recruiter name or email">
-          </label>
-          <label>
-            <span>Contact Person</span>
-            <input name="contact_person" placeholder="Hiring manager">
-          </label>
-          <label>
-            <span>Date Applied</span>
-            <input name="applied_date" type="date">
-          </label>
-          <label>
-            <span>Interview Date</span>
-            <input name="interview_date" type="date">
-          </label>
-          <label>
-            <span>Tags</span>
-            <input name="tags" placeholder="Remote, Backend">
-          </label>
-          <label>
-            <span>Existing CV</span>
-            <select name="cv_id" id="applicationCvSelect"></select>
-          </label>
-          <label>
-            <span>Upload CV</span>
-            <input name="cv" type="file" accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document">
-          </label>
-          <label class="wide">
-            <span>Job Description</span>
-            <textarea name="job_description" rows="7"></textarea>
-          </label>
-          <label class="wide">
-            <span>Notes</span>
-            <textarea name="notes" rows="3"></textarea>
-          </label>
+        <div class="form-grid new-application-grid">
+          <fieldset class="form-section form-section-primary">
+            <legend>Basics</legend>
+            <label>
+              <span>Company Name</span>
+              <input name="company_name" required>
+            </label>
+            <label>
+              <span>Role</span>
+              <input name="role_title" placeholder="Frontend Developer">
+            </label>
+            <label>
+              <span>Status</span>
+              <select name="status">
+                <option value="applied">Applied</option>
+                <option value="interview_scheduled">Interview Scheduled</option>
+                <option value="offer">Offer</option>
+                <option value="accepted">Accepted</option>
+                <option value="rejected">Rejected</option>
+                <option value="withdrawn">Withdrawn</option>
+                <option value="ghosted">Ghosted</option>
+              </select>
+            </label>
+            <label>
+              <span>Date Applied</span>
+              <input name="applied_date" type="date">
+            </label>
+            <label>
+              <span>Job Link</span>
+              <input name="job_link" type="url">
+            </label>
+            <label>
+              <span>Location</span>
+              <input name="location" placeholder="Remote, Bengaluru">
+            </label>
+          </fieldset>
+          <fieldset class="form-section">
+            <legend>Tracking</legend>
+            <label>
+              <span>Interview Date</span>
+              <input name="interview_date" type="date">
+            </label>
+            <label>
+              <span>Next Action</span>
+              <input name="next_action" placeholder="Follow up, prep system design, wait">
+            </label>
+            <label>
+              <span>Next Action Due</span>
+              <input name="next_action_due_date" type="date">
+            </label>
+            <label>
+              <span>Tags</span>
+              <input name="tags" placeholder="Remote, Backend">
+            </label>
+            <label>
+              <span>Salary</span>
+              <input name="salary" placeholder="$120k, 18 LPA">
+            </label>
+            <label>
+              <span>Recruiter</span>
+              <input name="recruiter" placeholder="Recruiter name or email">
+            </label>
+            <label>
+              <span>Contact Person</span>
+              <input name="contact_person" placeholder="Hiring manager">
+            </label>
+          </fieldset>
+          <fieldset class="form-section">
+            <legend>CV</legend>
+            <label>
+              <span>Existing CV</span>
+              <select name="cv_id" id="applicationCvSelect"></select>
+            </label>
+            <label>
+              <span>Upload CV</span>
+              <input name="cv" type="file" accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document">
+            </label>
+          </fieldset>
+          <fieldset class="form-section form-section-wide">
+            <legend>Notes</legend>
+            <label class="wide">
+              <span>Job Description</span>
+              <textarea name="job_description" rows="7"></textarea>
+            </label>
+            <label class="wide">
+              <span>Notes</span>
+              <textarea name="notes" rows="3"></textarea>
+            </label>
+          </fieldset>
         </div>
         <p class="form-error" id="applicationError" hidden></p>
         <div class="dialog-actions">
@@ -126,11 +146,11 @@
           <input name="id" type="hidden">
           <label>
             <span>Company Name</span>
-            <input name="company_name" required>
+            <input name="company_name" required aria-label="Modify company">
           </label>
           <label>
             <span>Role</span>
-            <input name="role_title" placeholder="Frontend Developer">
+            <input name="role_title" placeholder="Frontend Developer" aria-label="Modify role">
           </label>
           <label>
             <span>Status</span>
@@ -168,9 +188,21 @@
             <span>Interview Date</span>
             <input name="interview_date" type="date">
           </label>
+          <label>
+            <span>Next Action</span>
+            <input name="next_action" placeholder="Follow up, prep, wait">
+          </label>
+          <label>
+            <span>Next Action Due</span>
+            <input name="next_action_due_date" type="date">
+          </label>
           <label class="wide">
             <span>Job Link</span>
-            <input name="job_link" type="url" placeholder="https://company.com/job">
+            <input name="job_link" type="url" placeholder="https://company.com/job" aria-label="Modify posting URL">
+          </label>
+          <label class="wide">
+            <span>Notes</span>
+            <textarea name="notes" rows="3"></textarea>
           </label>
         </div>
         <p class="form-error" id="applicationEditError" hidden></p>

@@ -18,6 +18,7 @@ import {
   renderSavedFilters,
   renderTargetCompanies,
   renderTargetCompanyFilters,
+  renderToday,
   renderToolkit
 } from './render.js';
 
@@ -95,6 +96,9 @@ function bindGlobalEvents() {
 
   els.saveFilterButton?.addEventListener('click', saveCurrentFilter);
   els.deleteFilterButton?.addEventListener('click', deleteCurrentSavedFilter);
+  els.quickExportCsvButton?.addEventListener('click', () => {
+    downloadApplicationsCsv();
+  });
 
   els.activitySearch?.addEventListener('input', debounce(() => {
     state.activity.search = els.activitySearch.value.trim();
@@ -252,7 +256,7 @@ function bindSettingsActions() {
   if (els.settingsExportCsvButton && els.settingsExportCsvButton.dataset.bound !== 'true') {
     els.settingsExportCsvButton.dataset.bound = 'true';
     els.settingsExportCsvButton.addEventListener('click', () => {
-      window.location.href = '/api/export/applications.csv';
+      downloadApplicationsCsv();
     });
   }
   if (els.settingsImportCsvButton && els.settingsImportCsvButton.dataset.bound !== 'true') {
@@ -293,16 +297,28 @@ function bindSettingsActions() {
   updateRestoreBackupSelection();
 }
 
+function downloadApplicationsCsv() {
+  const link = document.createElement('a');
+  link.href = '/api/export/applications.csv';
+  link.download = 'job-applications.csv';
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+}
+
 async function switchView(view) {
   state.view = view;
   els.workspaceRoot.querySelectorAll('[data-view]').forEach((button) => {
-    button.classList.toggle('is-active', button.dataset.view === view);
+    const isActive = button.dataset.view === view;
+    button.classList.toggle('is-active', isActive);
+    button.setAttribute('aria-pressed', isActive ? 'true' : 'false');
   });
 
   if (!els.listView) return;
   els.listView.hidden = view !== 'list';
   els.remindersView.hidden = view !== 'reminders';
   els.kanbanView.hidden = view !== 'kanban';
+  els.todayView.hidden = view !== 'today';
   els.reportsView.hidden = view !== 'reports';
   els.activityView.hidden = view !== 'activity';
   els.boardsView.hidden = view !== 'boards';
@@ -317,6 +333,7 @@ async function switchView(view) {
     await loadReminders();
   }
   if (view === 'kanban') renderKanban(els, state.applications, statusLabels);
+  if (view === 'today') renderToday(els, state);
   if (view === 'reports') {
     renderSectionLoading(els.reportsContent, 'Loading reports');
     await loadReports();
@@ -347,6 +364,7 @@ async function loadApplications() {
   const payload = await api(`/api/applications?${params.toString()}`);
   state.applications = payload.applications;
   if (els.table) renderApplications(els, state, statusOptions);
+  if (els.todayContent) renderToday(els, state);
   if (state.view === 'kanban' && els.kanbanBoard) renderKanban(els, state.applications, statusLabels);
 }
 
@@ -409,6 +427,7 @@ async function loadNotifications() {
     renderNotifications(els, state.notifications, state.notificationsExpanded);
     bindNotificationActions();
   }
+  if (els.todayContent) renderToday(els, state);
 }
 
 async function loadReports() {
@@ -575,6 +594,14 @@ async function updateInlineStatus(event) {
     return;
   }
 
+  let notes = application.notes || '';
+  if (event.target.dataset.field === 'status' && ['rejected', 'withdrawn', 'ghosted'].includes(status)) {
+    const reason = window.prompt('Add a short note for this status change?');
+    if (reason && reason.trim()) {
+      notes = [notes, `${statusLabels[status]}: ${reason.trim()}`].filter(Boolean).join('\n');
+    }
+  }
+
   try {
     event.target.disabled = true;
     await api(`/api/applications/${application.id}`, {
@@ -582,7 +609,8 @@ async function updateInlineStatus(event) {
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
         status,
-        interview_date: status === 'interview_scheduled' ? interviewDate : null
+        interview_date: status === 'interview_scheduled' ? interviewDate : null,
+        notes
       })
     });
     showToast('Save successful.');
@@ -1350,7 +1378,7 @@ function bindContentWorkspaceActions(applicationId, payload) {
 async function runAI(button, applicationId, options = {}) {
   const cvId = Number(button.dataset.cvId);
   if (!cvId) {
-    showToast('No CV is linked to this application.', 'warning');
+    showToast('Link or upload a CV before generating documents.', 'warning');
     return;
   }
 
@@ -1375,7 +1403,10 @@ async function runAI(button, applicationId, options = {}) {
       return;
     }
   } catch (error) {
-    showToast(error.message, 'error');
+    const message = error.message.includes('job description')
+      ? 'Add a job description or posting link before generating this document.'
+      : error.message;
+    showToast(message, 'error');
     return;
   } finally {
     setButtonBusy(button, false);
@@ -1590,7 +1621,10 @@ function openApplicationEditDialog(application) {
   els.applicationEditForm.elements.contact_person.value = application.contact_person || '';
   els.applicationEditForm.elements.applied_date.value = application.applied_date || '';
   els.applicationEditForm.elements.interview_date.value = application.interview_date || '';
+  els.applicationEditForm.elements.next_action.value = application.next_action || '';
+  els.applicationEditForm.elements.next_action_due_date.value = application.next_action_due_date || '';
   els.applicationEditForm.elements.job_link.value = application.job_link || '';
+  els.applicationEditForm.elements.notes.value = application.notes || '';
   els.applicationEditForm.querySelector('[data-archive-action]').hidden = Boolean(application.archived_at);
   els.applicationEditForm.querySelector('[data-restore-action]').hidden = !application.archived_at;
 
@@ -1641,6 +1675,16 @@ async function submitApplicationEditForm(event) {
   if (!current) return;
   setError(els.applicationEditError, '');
   const form = new FormData(els.applicationEditForm);
+  const status = form.get('status');
+  const interviewDate = form.get('interview_date');
+  if (status === 'interview_scheduled' && !interviewDate) {
+    setError(els.applicationEditError, 'Set an interview date before saving Interview Scheduled.');
+    return;
+  }
+  if (status !== 'interview_scheduled' && interviewDate) {
+    setError(els.applicationEditError, 'Clear the interview date or use Interview Scheduled status.');
+    return;
+  }
 
   await withAsyncForm(els.applicationEditForm, async () => {
     await api(`/api/applications/${form.get('id')}`, {
@@ -1649,16 +1693,18 @@ async function submitApplicationEditForm(event) {
       body: JSON.stringify({
         company_name: form.get('company_name'),
         role_title: form.get('role_title'),
-        status: form.get('status'),
+        status,
         applied_date: form.get('applied_date'),
-        interview_date: form.get('interview_date') || null,
+        interview_date: interviewDate || null,
+        next_action: form.get('next_action'),
+        next_action_due_date: form.get('next_action_due_date') || null,
         salary: form.get('salary'),
         location: form.get('location'),
         recruiter: form.get('recruiter'),
         contact_person: form.get('contact_person'),
         job_link: form.get('job_link'),
         job_description: current.job_description,
-        notes: current.notes,
+        notes: form.get('notes'),
         tags: state.currentApplication.tags || []
       })
     });
@@ -1920,6 +1966,7 @@ function unmountInactiveHomeViews(activeView) {
   };
   if (activeView !== 'reminders') clear(els.remindersList);
   if (activeView !== 'kanban') clear(els.kanbanBoard);
+  if (activeView !== 'today') clear(els.todayContent);
   if (activeView !== 'reports') clear(els.reportsContent);
   if (activeView !== 'activity') {
     clear(els.activityTable);

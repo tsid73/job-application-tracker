@@ -40,7 +40,7 @@ export function createReadApi({ pool, audit }) {
     },
 
     async getNotifications() {
-      const [upcomingInterviews, followUps, upcomingTodos] = await Promise.all([
+      const [upcomingInterviews, followUps, upcomingTodos, nextActions] = await Promise.all([
         pool.query(
           `
             SELECT
@@ -104,11 +104,29 @@ export function createReadApi({ pool, audit }) {
             ORDER BY t.due_date ASC, t.id ASC
             LIMIT 6
           `
+        ),
+        pool.query(
+          `
+            SELECT
+              id,
+              company_name,
+              status,
+              to_char(next_action_due_date, 'YYYY-MM-DD') AS due_date,
+              next_action_due_date - CURRENT_DATE AS days_remaining,
+              'next_action' AS type,
+              COALESCE(next_action, 'Next action due') AS message
+            FROM applications
+            WHERE archived_at IS NULL
+              AND next_action_due_date IS NOT NULL
+              AND next_action_due_date <= CURRENT_DATE + INTERVAL '7 days'
+            ORDER BY next_action_due_date ASC, id ASC
+            LIMIT 6
+          `
         )
       ]);
 
       return {
-        notifications: [...upcomingInterviews.rows, ...followUps.rows, ...upcomingTodos.rows]
+        notifications: [...upcomingInterviews.rows, ...nextActions.rows, ...followUps.rows, ...upcomingTodos.rows]
           .sort((left, right) => String(left.due_date || '').localeCompare(String(right.due_date || '')))
           .slice(0, 8)
       };
@@ -312,8 +330,13 @@ export function createReadApi({ pool, audit }) {
             a.location,
             a.recruiter,
             a.contact_person,
+            a.notes,
             to_char(a.applied_date, 'YYYY-MM-DD') AS applied_date,
             to_char(a.interview_date, 'YYYY-MM-DD') AS interview_date,
+            a.next_action,
+            to_char(a.next_action_due_date, 'YYYY-MM-DD') AS next_action_due_date,
+            to_char(a.updated_at, 'YYYY-MM-DD') AS last_touched_date,
+            CURRENT_DATE - a.updated_at::date AS days_since_touched,
             a.archived_at,
             CASE WHEN a.interview_date IS NULL THEN NULL ELSE a.interview_date - CURRENT_DATE END AS days_remaining,
             COALESCE(array_agg(DISTINCT t.name) FILTER (WHERE t.name IS NOT NULL), '{}') AS tags,
@@ -367,6 +390,8 @@ export function createReadApi({ pool, audit }) {
             contact_person,
             to_char(applied_date, 'YYYY-MM-DD') AS applied_date,
             to_char(interview_date, 'YYYY-MM-DD') AS interview_date,
+            next_action,
+            to_char(next_action_due_date, 'YYYY-MM-DD') AS next_action_due_date,
             notes,
             archived_at,
             created_at,

@@ -435,6 +435,8 @@ async function exportApplicationsCsv(req, res) {
         a.contact_person,
         to_char(a.applied_date, 'YYYY-MM-DD') AS applied_date,
         to_char(a.interview_date, 'YYYY-MM-DD') AS interview_date,
+        a.next_action,
+        to_char(a.next_action_due_date, 'YYYY-MM-DD') AS next_action_due_date,
         a.notes,
         CASE WHEN a.archived_at IS NULL THEN 'active' ELSE 'archived' END AS lifecycle,
         COALESCE(string_agg(DISTINCT t.name, ', '), '') AS tags
@@ -446,7 +448,7 @@ async function exportApplicationsCsv(req, res) {
     `
   );
 
-  const headers = ['company_name', 'role_title', 'job_link', 'job_description', 'status', 'salary', 'location', 'recruiter', 'contact_person', 'applied_date', 'interview_date', 'notes', 'lifecycle', 'tags'];
+  const headers = ['company_name', 'role_title', 'job_link', 'job_description', 'status', 'salary', 'location', 'recruiter', 'contact_person', 'applied_date', 'interview_date', 'next_action', 'next_action_due_date', 'notes', 'lifecycle', 'tags'];
   const csv = [
     headers.join(','),
     ...result.rows.map((row) => headers.map((key) => csvEscape(row[key])).join(','))
@@ -481,11 +483,11 @@ async function importApplicationsCsv(req, res) {
       await assertNoDuplicateApplication(client, data);
       const created = await client.query(
         `
-          INSERT INTO applications (company_name, role_title, job_link, job_description, status, salary, location, recruiter, contact_person, applied_date, interview_date, notes, archived_at)
-          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, CASE WHEN $13 = 'archived' THEN now() ELSE NULL END)
+          INSERT INTO applications (company_name, role_title, job_link, job_description, status, salary, location, recruiter, contact_person, applied_date, interview_date, notes, next_action, next_action_due_date, archived_at)
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, CASE WHEN $15 = 'archived' THEN now() ELSE NULL END)
           RETURNING id
         `,
-        [data.company_name, data.role_title, data.job_link, data.job_description, data.status, data.salary, data.location, data.recruiter, data.contact_person, data.applied_date, data.interview_date, data.notes, cleanString(fields.lifecycle)]
+        [data.company_name, data.role_title, data.job_link, data.job_description, data.status, data.salary, data.location, data.recruiter, data.contact_person, data.applied_date, data.interview_date, data.notes, data.next_action, data.next_action_due_date, cleanString(fields.lifecycle)]
       );
       const applicationId = created.rows[0].id;
       await client.query('INSERT INTO application_cvs (application_id, cv_id) VALUES ($1, $2)', [applicationId, latest.rows[0].id]);
@@ -633,9 +635,11 @@ async function createApplication(req, res) {
           contact_person,
           applied_date,
           interview_date,
-          notes
+          notes,
+          next_action,
+          next_action_due_date
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
         RETURNING id
       `,
       [
@@ -650,7 +654,9 @@ async function createApplication(req, res) {
         data.contact_person,
         data.applied_date,
         data.interview_date,
-        data.notes
+        data.notes,
+        data.next_action,
+        data.next_action_due_date
       ]
     );
 
@@ -701,8 +707,10 @@ async function updateApplication(req, res, id) {
             contact_person = $9,
             applied_date = $10,
             interview_date = $11,
-            notes = $12
-        WHERE id = $13
+            notes = $12,
+            next_action = $13,
+            next_action_due_date = $14
+        WHERE id = $15
       `,
       [
         data.company_name,
@@ -717,6 +725,8 @@ async function updateApplication(req, res, id) {
         data.applied_date,
         data.interview_date,
         data.notes,
+        data.next_action,
+        data.next_action_due_date,
         id
       ]
     );

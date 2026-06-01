@@ -4,9 +4,10 @@ Local-first job application tracker for private use. It runs with Node.js, a sta
 
 ## What It Does
 
-- Track applications, statuses, tags, reminders, and interview dates.
+- Track applications, statuses, tags, reminders, interview dates, next actions, and due dates.
 - Store CV versions and keep each application linked to the CV used.
 - Manage preparation notes, recruiter questions, feedback, and todos.
+- Use the Today view to review due next actions, upcoming interviews, stale applications, and priority reminders.
 - Track job boards and company lists for Germany/EU targets.
 - Generate optional AI artifacts such as CV drafts, cover letters, ATS checks, role-fit notes, and follow-up emails.
 - Export/import CSV and create full local backups.
