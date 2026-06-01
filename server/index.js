@@ -1591,7 +1591,7 @@ process.on('SIGINT', shutdown);
 async function startServer() {
   try {
     await applyMigrations(pool);
-    server.listen(config.port, () => {
+    server.listen(config.port, '0.0.0.0', () => {
       console.log(`Job tracker running at http://localhost:${config.port}`);
     });
   } catch (error) {

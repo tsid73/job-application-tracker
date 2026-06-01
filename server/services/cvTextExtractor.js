@@ -3,7 +3,6 @@ import { createRequire } from 'node:module';
 import JSZip from 'jszip';
 
 const require = createRequire(import.meta.url);
-const { PDFParse } = require('pdf-parse');
 
 export async function extractCVText(file) {
   const extension = extname(file.filename).toLowerCase();
@@ -22,6 +21,7 @@ export async function extractCVText(file) {
 async function extractPdfText(buffer) {
   let parser;
   try {
+    const { PDFParse } = require('pdf-parse');
     parser = new PDFParse({ data: buffer });
     const parsed = await parser.getText();
     return normalizeText(parsed.text || '');
