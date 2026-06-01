@@ -43,6 +43,8 @@ export function normalizeApplicationInput(fields) {
     contact_person: cleanString(fields.contact_person),
     applied_date: parseDate(fields.applied_date, 'applied_date') || today(),
     interview_date: status === 'interview_scheduled' ? interviewDate : null,
+    next_action: cleanString(fields.next_action),
+    next_action_due_date: parseDate(fields.next_action_due_date, 'next_action_due_date'),
     notes: cleanString(fields.notes),
     cv_id: Number(fields.cv_id) || null,
     cv_version_label: cleanString(fields.cv_version_label),

@@ -70,6 +70,8 @@ export function changedApplicationFields(previous, next) {
     ['recruiter', 'recruiter'],
     ['contact_person', 'contact person'],
     ['applied_date', 'applied date'],
+    ['next_action', 'next action'],
+    ['next_action_due_date', 'next action due date'],
     ['notes', 'notes']
   ];
 

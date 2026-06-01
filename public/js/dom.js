@@ -54,11 +54,13 @@ const workspaceKeys = [
   'savedFilterName',
   'saveFilterButton',
   'deleteFilterButton',
+  'quickExportCsvButton',
   'table',
   'empty',
   'listView',
   'remindersView',
   'kanbanView',
+  'todayView',
   'reportsView',
   'activityView',
   'boardsView',
@@ -67,6 +69,7 @@ const workspaceKeys = [
   'settingsView',
   'remindersList',
   'kanbanBoard',
+  'todayContent',
   'reportsContent',
   'toolkitContent',
   'settingsContent',
@@ -109,11 +112,13 @@ export function bindWorkspaceElements(root = els.workspaceRoot) {
   els.savedFilterName = root.querySelector('#savedFilterName');
   els.saveFilterButton = root.querySelector('#saveFilterButton');
   els.deleteFilterButton = root.querySelector('#deleteFilterButton');
+  els.quickExportCsvButton = root.querySelector('#quickExportCsvButton');
   els.table = root.querySelector('#applicationsTable');
   els.empty = root.querySelector('#emptyState');
   els.listView = root.querySelector('#listView');
   els.remindersView = root.querySelector('#remindersView');
   els.kanbanView = root.querySelector('#kanbanView');
+  els.todayView = root.querySelector('#todayView');
   els.reportsView = root.querySelector('#reportsView');
   els.activityView = root.querySelector('#activityView');
   els.boardsView = root.querySelector('#boardsView');
@@ -122,6 +127,7 @@ export function bindWorkspaceElements(root = els.workspaceRoot) {
   els.settingsView = root.querySelector('#settingsView');
   els.remindersList = root.querySelector('#remindersList');
   els.kanbanBoard = root.querySelector('#kanbanBoard');
+  els.todayContent = root.querySelector('#todayContent');
   els.reportsContent = root.querySelector('#reportsContent');
   els.toolkitContent = root.querySelector('#toolkitContent');
   els.settingsContent = root.querySelector('#settingsContent');

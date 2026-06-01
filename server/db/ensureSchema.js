@@ -19,7 +19,7 @@ export async function applyMigrations(pool, cwd = process.cwd()) {
     const sql = await readFile(join(migrationsDir, file), 'utf8');
     if (pool.exec) {
       await pool.exec(sql);
-      await pool.query('INSERT INTO schema_migrations (filename) VALUES ($1)', [file]);
+      await pool.query('INSERT INTO schema_migrations (filename) VALUES ($1) ON CONFLICT (filename) DO NOTHING', [file]);
       console.log(`Applied ${file}`);
       continue;
     }
@@ -28,7 +28,7 @@ export async function applyMigrations(pool, cwd = process.cwd()) {
     try {
       await client.query('BEGIN');
       await client.query(sql);
-      await client.query('INSERT INTO schema_migrations (filename) VALUES ($1)', [file]);
+      await client.query('INSERT INTO schema_migrations (filename) VALUES ($1) ON CONFLICT (filename) DO NOTHING', [file]);
       await client.query('COMMIT');
       console.log(`Applied ${file}`);
     } catch (error) {

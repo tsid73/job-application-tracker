@@ -7,6 +7,7 @@ import {
   formatBytes,
   formatDate,
   formatDateTime,
+  formatDays,
   formatMonthLabel,
   formatMonthTitle,
   isoDate,
@@ -23,15 +24,16 @@ export function renderHomeWorkspace() {
       <section id="notificationsPanel" class="notifications-panel" hidden></section>
 
       <nav class="view-tabs" aria-label="Views">
-        <button class="secondary is-active" type="button" data-view="list">List</button>
-        <button class="secondary" type="button" data-view="reminders">Reminders</button>
-        <button class="secondary" type="button" data-view="kanban">Kanban</button>
-        <button class="secondary" type="button" data-view="reports">Reports</button>
-        <button class="secondary" type="button" data-view="activity">Activity</button>
-        <button class="secondary" type="button" data-view="boards">Job Boards</button>
-        <button class="secondary" type="button" data-view="companies">Company List</button>
-        <button class="secondary" type="button" data-view="toolkit">Toolkit</button>
-        <button class="secondary" type="button" data-view="settings">Settings</button>
+        <button class="secondary is-active" type="button" data-view="list" aria-pressed="true">List</button>
+        <button class="secondary" type="button" data-view="reminders" aria-pressed="false">Reminders</button>
+        <button class="secondary" type="button" data-view="kanban" aria-pressed="false">Kanban</button>
+        <button class="secondary" type="button" data-view="today" aria-pressed="false">Today</button>
+        <button class="secondary" type="button" data-view="reports" aria-pressed="false">Reports</button>
+        <button class="secondary" type="button" data-view="activity" aria-pressed="false">Activity</button>
+        <button class="secondary" type="button" data-view="boards" aria-pressed="false">Job Boards</button>
+        <button class="secondary" type="button" data-view="companies" aria-pressed="false">Company List</button>
+        <button class="secondary" type="button" data-view="toolkit" aria-pressed="false">Toolkit</button>
+        <button class="secondary" type="button" data-view="settings" aria-pressed="false">Settings</button>
       </nav>
 
       <section id="listView" class="surface-panel">
@@ -78,6 +80,7 @@ export function renderHomeWorkspace() {
           <div class="toolbar-actions">
             <button id="saveFilterButton" class="secondary" type="button">Save Filter</button>
             <button id="deleteFilterButton" class="secondary" type="button">Delete Filter</button>
+            <button id="quickExportCsvButton" class="secondary" type="button">Export CSV</button>
           </div>
         </section>
         <section class="table-shell" aria-live="polite">
@@ -87,9 +90,11 @@ export function renderHomeWorkspace() {
                 <th>Company</th>
                 <th>Applied</th>
                 <th>Status</th>
+                <th>Next</th>
+                <th>Follow-up</th>
+                <th>Last Touched</th>
                 <th>State</th>
                 <th>Interview</th>
-                <th>Days</th>
                 <th>Tags</th>
                 <th>Actions</th>
               </tr>
@@ -108,6 +113,10 @@ export function renderHomeWorkspace() {
         <div id="kanbanBoard" class="kanban-board"></div>
       </section>
 
+      <section id="todayView" class="view-panel" hidden>
+        <div id="todayContent" class="today-grid"></div>
+      </section>
+
       <section id="reportsView" class="view-panel" hidden>
         <div id="reportsContent" class="reports-grid"></div>
       </section>
@@ -115,7 +124,7 @@ export function renderHomeWorkspace() {
       <section id="activityView" class="surface-panel" hidden>
         <section class="toolbar" aria-label="Activity filters">
           <label>
-            <span>Search Activity</span>
+            <span>Activity Query</span>
             <input id="activitySearchInput" type="search" placeholder="Company, action, detail">
           </label>
         </section>
@@ -293,9 +302,11 @@ export function renderApplications(els, state, statusOptions) {
           ${statusOptions}
         </select>
       </td>
+      <td>${renderNextAction(application)}</td>
+      <td>${renderFollowUpDue(application)}</td>
+      <td>${renderStaleSignal(application)}</td>
       <td>${application.archived_at ? '<span class="state archived-state">Archived</span>' : '<span class="state active-state">Active</span>'}</td>
       <td data-interview-cell>${renderInterviewControl(application)}</td>
-      <td>${renderDays(application.days_remaining)}</td>
       <td>${renderTags(application.tags)}</td>
       <td>
         <div class="row-actions">
@@ -310,6 +321,30 @@ export function renderApplications(els, state, statusOptions) {
   }
 }
 
+function renderNextAction(application) {
+  const action = application.next_action || recommendedNextAction(application);
+  return `
+    <div class="next-action-cell">
+      <strong>${escapeHtml(action)}</strong>
+      ${application.next_action_due_date ? `<span>${formatDate(application.next_action_due_date)}</span>` : ''}
+    </div>
+  `;
+}
+
+function renderFollowUpDue(application) {
+  const dueDate = application.next_action_due_date || suggestedFollowUpDate(application);
+  if (!dueDate) return '<span class="muted-text">Not set</span>';
+  return `<span class="${dueDateBadgeClass(dueDate)}">${formatDate(dueDate)}</span>`;
+}
+
+function renderStaleSignal(application) {
+  const days = Number(application.days_since_touched);
+  if (!Number.isFinite(days)) return '<span class="muted-text">Unknown</span>';
+  if (days >= 14) return `<span class="pill danger-pill">${days}d stale</span>`;
+  if (days >= 7) return `<span class="pill warning-pill">${days}d idle</span>`;
+  return `<span class="muted-text">${formatDate(application.last_touched_date)}</span>`;
+}
+
 export function renderNotifications(els, notifications, expanded = false) {
   els.notificationsPanel.hidden = notifications.length === 0;
   if (!notifications.length) {
@@ -317,15 +352,23 @@ export function renderNotifications(els, notifications, expanded = false) {
     return;
   }
 
+  const nextNotification = notifications[0];
+  const preview = nextNotification
+    ? `${nextNotification.company_name}: ${nextNotification.message}${nextNotification.due_date ? ` (${formatDate(nextNotification.due_date)})` : ''}`
+    : '';
+
   els.notificationsPanel.innerHTML = `
     <div class="notifications-shell ${expanded ? 'is-open' : 'is-closed'}">
       <div class="notifications-header">
         <button class="notifications-toggle" type="button" data-toggle-notifications aria-expanded="${expanded ? 'true' : 'false'}">
           <span class="notifications-toggle-copy">
             <strong>Priority reminders</strong>
-            <span>${expanded ? 'Hide reminders' : 'Show reminders'}</span>
+            <span>${expanded ? 'Hide reminders' : escapeHtml(preview)}</span>
           </span>
-          <span class="notifications-count">${notifications.length}</span>
+          <span class="notifications-action">
+            <span>${expanded ? 'Hide' : 'View'}</span>
+            <span class="notifications-count">${notifications.length}</span>
+          </span>
         </button>
       </div>
       <div class="notifications-grid" ${expanded ? '' : 'hidden'}>
@@ -341,6 +384,8 @@ export function renderNotifications(els, notifications, expanded = false) {
                 ? renderDays(item.days_remaining)
                 : item.type === 'todo'
                   ? renderDays(item.days_remaining)
+                  : item.type === 'next_action'
+                    ? `<span class="${daysClass(item.days_remaining)}">${formatDays(item.days_remaining)}</span>`
                   : `<span class="days-badge warning">${Number(item.days_remaining)} days since apply</span>`}
               <button class="secondary" type="button" data-notification-detail="${item.id}">Open</button>
             </div>
@@ -391,6 +436,75 @@ export function renderKanban(els, applications, statusLabels) {
   if (!applications.some((application) => !application.archived_at)) {
     els.kanbanBoard.innerHTML = renderEmptyState('Kanban is empty', 'Active applications will appear here and group automatically by stage.', 'Create an application or restore an archived one to populate this board.');
   }
+}
+
+export function renderToday(els, state) {
+  const active = state.applications.filter((item) => !item.archived_at);
+  const dueActions = active
+    .filter((item) => item.next_action_due_date && daysUntil(item.next_action_due_date) <= 7)
+    .sort((left, right) => String(left.next_action_due_date).localeCompare(String(right.next_action_due_date)));
+  const stale = active
+    .filter((item) => Number(item.days_since_touched) >= 7)
+    .sort((left, right) => Number(right.days_since_touched) - Number(left.days_since_touched));
+  const interviews = active
+    .filter((item) => item.status === 'interview_scheduled' && item.interview_date)
+    .sort((left, right) => String(left.interview_date).localeCompare(String(right.interview_date)));
+
+  els.todayContent.innerHTML = `
+    <section class="route-card today-card">
+      <div class="section-heading">
+        <div>
+          <div class="panel-kicker">Today</div>
+          <h3>Action Queue</h3>
+          <p class="section-help">Due next actions, interviews, and stale applications in one place.</p>
+        </div>
+      </div>
+      <div class="today-section-list">
+        ${renderTodaySection('Priority Reminders', state.notifications, (item) => `
+          <article class="today-item">
+            <strong>${escapeHtml(item.company_name)}</strong>
+            <span>${escapeHtml(item.message)}</span>
+            <a class="button-link tertiary" href="/applications/${item.id}">Open</a>
+          </article>
+        `)}
+        ${renderTodaySection('Next Actions', dueActions, (item) => `
+          <article class="today-item">
+            <strong>${escapeHtml(item.company_name)}</strong>
+            <span>${escapeHtml(item.next_action || recommendedNextAction(item))} · ${formatDate(item.next_action_due_date)}</span>
+            <a class="button-link tertiary" href="/applications/${item.id}">Open</a>
+          </article>
+        `)}
+        ${renderTodaySection('Upcoming Interviews', interviews, (item) => `
+          <article class="today-item">
+            <strong>${escapeHtml(item.company_name)}</strong>
+            <span>${formatDate(item.interview_date)} · ${formatDays(item.days_remaining)}</span>
+            <a class="button-link tertiary" href="/applications/${item.id}?tab=workflow">Prep</a>
+          </article>
+        `)}
+        ${renderTodaySection('Stale Applications', stale, (item) => `
+          <article class="today-item">
+            <strong>${escapeHtml(item.company_name)}</strong>
+            <span>${Number(item.days_since_touched)} days without updates</span>
+            <a class="button-link tertiary" href="/applications/${item.id}">Open</a>
+          </article>
+        `)}
+      </div>
+    </section>
+  `;
+}
+
+function renderTodaySection(title, items, renderItem) {
+  return `
+    <section class="today-section">
+      <div class="section-heading compact-heading">
+        <h4>${escapeHtml(title)}</h4>
+        <span class="pill subtle">${items.length}</span>
+      </div>
+      <div class="document-stack">
+        ${items.map(renderItem).join('') || '<p class="empty small">Nothing needs attention.</p>'}
+      </div>
+    </section>
+  `;
 }
 
 export function renderApplicationCVSelect(els, cvs) {
@@ -710,7 +824,7 @@ export function renderApplicationPage(els, payload, statusLabels, viewState) {
   const failedJobs = jobs.filter((item) => item.status === 'failed');
 
   const tabBodies = {
-    overview: renderOverviewTab({ application, primaryCv, tags, documents, jobs, statusLabels, selectedProvider: viewState.selectedProvider, capabilities: viewState.capabilities }),
+    overview: renderOverviewTab({ application, primaryCv, tags, documents, jobs, statusLabels, selectedProvider: viewState.selectedProvider, capabilities: viewState.capabilities, preparation, recruiterQuestions, feedbackEntries, todos }),
     workflow: renderWorkflowTab({ application, preparation, recruiterQuestions, feedbackEntries, todos }),
     content: renderContentSummaryTab({ application, primaryCvId: primaryCv?.id || '', queuedJobs, failedJobs, allDocuments: documents, allJobs: jobs, selectedProvider: viewState.selectedProvider, capabilities: viewState.capabilities, workspace: viewState.contentWorkspace }),
     history: renderHistoryTab({ application, history, notes, activity, auditEvents, statusLabels })
@@ -746,6 +860,7 @@ export function renderApplicationPage(els, payload, statusLabels, viewState) {
           ${renderInlineMeta('Recruiter', application.recruiter || 'Not set', !application.recruiter)}
           ${renderInlineMeta('Contact', application.contact_person || 'Not set', !application.contact_person)}
           ${renderInlineMeta('Salary', application.salary || 'Not set', !application.salary)}
+          ${renderInlineMeta('Next Action', application.next_action || recommendedNextAction(application))}
         </div>
       </section>
       <nav class="detail-tabbar" aria-label="Application sections">
@@ -795,10 +910,21 @@ const documentTypeDefinitions = [
   }
 ];
 
-function renderOverviewTab({ application, primaryCv, tags, documents, jobs, statusLabels, selectedProvider, capabilities }) {
+function renderOverviewTab({ application, primaryCv, tags, documents, jobs, statusLabels, selectedProvider, capabilities, preparation, recruiterQuestions, feedbackEntries, todos }) {
   const documentSlots = buildDocumentSlots(documents, jobs);
   return `
     <div class="tab-grid overview-grid">
+      <section class="route-card workflow-snapshot-card">
+        <div class="section-heading">
+          <div>
+            <div class="panel-kicker">Next Action</div>
+            <h3>Workflow Snapshot</h3>
+            <p class="section-help">Keep the current job-search action visible before generated assets.</p>
+          </div>
+          <a class="button-link tertiary" href="/applications/${application.id}?tab=workflow">Open workflow</a>
+        </div>
+        ${renderWorkflowSnapshot({ application, preparation, recruiterQuestions, feedbackEntries, todos, statusLabels })}
+      </section>
       <section class="route-card">
         <div class="section-heading">
           <div>
@@ -814,8 +940,9 @@ function renderOverviewTab({ application, primaryCv, tags, documents, jobs, stat
         })}
         <div class="document-card-meta toolbar-pills">
           <span class="pill subtle">Default: Gemini</span>
-          <span class="pill ${capabilities.awsEnabled ? 'success-pill' : 'danger-pill'}">${capabilities.awsEnabled ? 'AWS available' : 'AWS disabled'}</span>
+          <span class="pill ${capabilities.awsEnabled ? 'success-pill' : 'danger-pill'}">${capabilities.awsEnabled ? 'AWS available' : 'AWS disabled in settings'}</span>
         </div>
+        ${renderAiRecommendation(application)}
         <div class="artifact-grid">
           ${documentSlots.map((slot) => renderOverviewDocumentSlot(application.id, slot, primaryCv?.id || '')).join('')}
         </div>
@@ -860,6 +987,98 @@ function renderOverviewTab({ application, primaryCv, tags, documents, jobs, stat
       </section>
     </div>
   `;
+}
+
+function renderWorkflowSnapshot({ application, preparation, recruiterQuestions, feedbackEntries, todos, statusLabels }) {
+  const openTodos = todos.filter((item) => !item.completed);
+  const hasPreparation = Boolean(
+    preparation?.about_company ||
+    preparation?.company_values ||
+    preparation?.application_notes ||
+    recruiterQuestions.length ||
+    feedbackEntries.length
+  );
+  const nextStep = application.next_action || (application.interview_date
+    ? `Prepare for interview on ${formatDate(application.interview_date)}`
+    : openTodos[0]?.body || (hasPreparation ? 'Review preparation notes' : 'Add preparation notes'));
+
+  return `
+    <div class="workflow-snapshot">
+      <article>
+        <span>Status</span>
+        <strong>${escapeHtml(statusLabels[application.status] || application.status)}</strong>
+      </article>
+      <article>
+        <span>Next</span>
+        <strong>${escapeHtml(nextStep)}</strong>
+      </article>
+      <article>
+        <span>Prep</span>
+        <strong>${hasPreparation ? 'Started' : 'Not started'}</strong>
+      </article>
+      <article>
+        <span>Open Todos</span>
+        <strong>${openTodos.length}</strong>
+      </article>
+    </div>
+  `;
+}
+
+function recommendedNextAction(application) {
+  if (application.status === 'interview_scheduled') return 'Prepare interview';
+  if (application.status === 'offer') return 'Review offer';
+  if (application.status === 'rejected') return 'Record learning';
+  if (application.status === 'withdrawn') return 'Archive when done';
+  if (application.status === 'ghosted') return 'Send final follow-up';
+  return 'Follow up';
+}
+
+function suggestedFollowUpDate(application) {
+  if (application.status === 'interview_scheduled') return application.interview_date;
+  if (!application.applied_date || !['applied', 'ghosted'].includes(application.status)) return '';
+  const date = new Date(`${application.applied_date}T00:00:00`);
+  if (Number.isNaN(date.getTime())) return '';
+  date.setDate(date.getDate() + 7);
+  return isoDate(date);
+}
+
+function daysUntil(value) {
+  const date = new Date(`${String(value).slice(0, 10)}T00:00:00`);
+  if (Number.isNaN(date.getTime())) return Number.POSITIVE_INFINITY;
+  const today = new Date(`${isoDate(new Date())}T00:00:00`);
+  return Math.round((date.getTime() - today.getTime()) / 86400000);
+}
+
+function dueDateBadgeClass(value) {
+  const days = daysUntil(value);
+  if (days < 0) return 'pill danger-pill';
+  if (days <= 1) return 'pill warning-pill';
+  return 'pill info-pill';
+}
+
+function renderAiRecommendation(application) {
+  const recommendation = recommendedAiDocument(application);
+  return `
+    <div class="ai-recommendation">
+      <span class="pill info-pill">Recommended next: ${escapeHtml(recommendation)}</span>
+      <span>${escapeHtml(aiRecommendationReason(application))}</span>
+    </div>
+  `;
+}
+
+function recommendedAiDocument(application) {
+  if (application.status === 'interview_scheduled') return 'Role Fit';
+  if (application.status === 'ghosted') return 'Follow-up Email';
+  if (application.status === 'applied') return 'ATS Check';
+  if (application.status === 'offer') return 'Role Fit';
+  return 'Cover Letter';
+}
+
+function aiRecommendationReason(application) {
+  if (application.status === 'interview_scheduled') return 'Use the role-fit view to prepare strengths, gaps, and examples before the interview.';
+  if (application.status === 'ghosted') return 'A follow-up email is the most useful generated asset for this stage.';
+  if (application.status === 'applied') return 'An ATS check can catch missing keywords while the application is still active.';
+  return 'Generate only the document that helps the current application stage.';
 }
 
 function renderWorkflowTab({ application, preparation, recruiterQuestions, feedbackEntries, todos }) {
@@ -1181,8 +1400,9 @@ function renderInlineMeta(label, value, muted = false) {
 }
 
 function renderDetailTab(applicationId, key, label, activeTab, icon) {
+  const isActive = activeTab === key;
   return `
-    <a class="detail-tab${activeTab === key ? ' is-active' : ''}" href="/applications/${applicationId}?tab=${key}">
+    <a class="detail-tab${isActive ? ' is-active' : ''}" href="/applications/${applicationId}?tab=${key}" ${isActive ? 'aria-current="page"' : ''}>
       <span class="tab-icon" aria-hidden="true">${escapeHtml(icon || label.slice(0, 1))}</span>
       <span>${escapeHtml(label)}</span>
     </a>
@@ -1192,8 +1412,8 @@ function renderDetailTab(applicationId, key, label, activeTab, icon) {
 function renderSegmentedProviderControl({ selectedProvider, awsEnabled, attrName }) {
   return `
     <div class="provider-segmented" role="tablist" aria-label="AI provider">
-      <button class="${selectedProvider === 'gemini' ? 'is-active' : 'secondary'}" type="button" ${attrName}="gemini">Gemini</button>
-      <button class="${selectedProvider === 'aws' ? 'is-active' : 'secondary'}" type="button" ${attrName}="aws" ${awsEnabled ? '' : 'disabled'}>AWS</button>
+      <button class="${selectedProvider === 'gemini' ? 'is-active' : 'secondary'}" type="button" ${attrName}="gemini" role="tab" aria-selected="${selectedProvider === 'gemini' ? 'true' : 'false'}">Gemini</button>
+      <button class="${selectedProvider === 'aws' ? 'is-active' : 'secondary'}" type="button" ${attrName}="aws" role="tab" aria-selected="${selectedProvider === 'aws' ? 'true' : 'false'}" ${awsEnabled ? '' : 'disabled title="AWS provider is disabled in settings"'}>AWS</button>
     </div>
   `;
 }
