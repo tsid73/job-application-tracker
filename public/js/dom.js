@@ -55,6 +55,14 @@ const workspaceKeys = [
   'saveFilterButton',
   'deleteFilterButton',
   'quickExportCsvButton',
+  'quickExportIcsButton',
+  'bulkActionsBar',
+  'bulkCount',
+  'bulkArchiveButton',
+  'bulkRestoreButton',
+  'bulkDeleteButton',
+  'bulkClearButton',
+  'selectAllRows',
   'table',
   'empty',
   'listView',
@@ -62,6 +70,7 @@ const workspaceKeys = [
   'kanbanView',
   'todayView',
   'reportsView',
+  'statsView',
   'activityView',
   'boardsView',
   'companiesView',
@@ -71,6 +80,7 @@ const workspaceKeys = [
   'kanbanBoard',
   'todayContent',
   'reportsContent',
+  'statsContent',
   'toolkitContent',
   'settingsContent',
   'activitySearch',
@@ -113,6 +123,14 @@ export function bindWorkspaceElements(root = els.workspaceRoot) {
   els.saveFilterButton = root.querySelector('#saveFilterButton');
   els.deleteFilterButton = root.querySelector('#deleteFilterButton');
   els.quickExportCsvButton = root.querySelector('#quickExportCsvButton');
+  els.quickExportIcsButton = root.querySelector('#quickExportIcsButton');
+  els.bulkActionsBar = root.querySelector('#bulkActionsBar');
+  els.bulkCount = root.querySelector('#bulkCount');
+  els.bulkArchiveButton = root.querySelector('#bulkArchiveButton');
+  els.bulkRestoreButton = root.querySelector('#bulkRestoreButton');
+  els.bulkDeleteButton = root.querySelector('#bulkDeleteButton');
+  els.bulkClearButton = root.querySelector('#bulkClearButton');
+  els.selectAllRows = root.querySelector('#selectAllRows');
   els.table = root.querySelector('#applicationsTable');
   els.empty = root.querySelector('#emptyState');
   els.listView = root.querySelector('#listView');
@@ -120,6 +138,7 @@ export function bindWorkspaceElements(root = els.workspaceRoot) {
   els.kanbanView = root.querySelector('#kanbanView');
   els.todayView = root.querySelector('#todayView');
   els.reportsView = root.querySelector('#reportsView');
+  els.statsView = root.querySelector('#statsView');
   els.activityView = root.querySelector('#activityView');
   els.boardsView = root.querySelector('#boardsView');
   els.companiesView = root.querySelector('#companiesView');
@@ -129,6 +148,7 @@ export function bindWorkspaceElements(root = els.workspaceRoot) {
   els.kanbanBoard = root.querySelector('#kanbanBoard');
   els.todayContent = root.querySelector('#todayContent');
   els.reportsContent = root.querySelector('#reportsContent');
+  els.statsContent = root.querySelector('#statsContent');
   els.toolkitContent = root.querySelector('#toolkitContent');
   els.settingsContent = root.querySelector('#settingsContent');
   els.activitySearch = root.querySelector('#activitySearchInput');

@@ -11,10 +11,13 @@ Local-first job application tracker for private use. It runs with Node.js, a sta
 - Track job boards and company lists for Germany/EU targets.
 - Generate optional AI artifacts such as CV drafts, cover letters, ATS checks, role-fit notes, and follow-up emails.
 - Export/import CSV and create full local backups.
+- Export interview dates and next-action due dates as an `.ics` calendar file.
+- Review your funnel in the Stats view: interview/offer rates, response rate, time in stage, and interview rate by tag.
+- Select multiple applications for bulk archive, restore, or delete.
 
 ## Important Security Note
 
-This app has no built-in login. Run it on `localhost` or a trusted private network only. Do not expose it directly to the public internet without adding authentication, TLS, and deployment hardening.
+This app has no built-in login. By default the server binds to `127.0.0.1` and is only reachable from your own machine. Set `HOST=0.0.0.0` in `.env` only if you understand the risk: anyone who can reach the port can read and modify all data. Do not expose it directly to the public internet without adding authentication, TLS, and deployment hardening. If you run it behind a reverse proxy, set `TRUST_PROXY=true` so rate limiting uses the forwarded client address.
 
 Uploaded CVs, generated documents, backups, and `.env` values can contain private data. Do not commit `.env`, `data/`, `uploads/`, or backup files.
 

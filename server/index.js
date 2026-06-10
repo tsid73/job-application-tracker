@@ -5,7 +5,7 @@ import { statSync } from 'node:fs';
 import { config } from './config.js';
 import JSZip from 'jszip';
 import { pool } from './db/pool.js';
-import { sendError, sendHtmlError, sendJson, readJson, readMultipart, serveStatic } from './utils/http.js';
+import { securityHeaders, sendError, sendHtmlError, sendJson, readJson, readMultipart, serveStatic } from './utils/http.js';
 import { cleanString, parseBoolean, parseDate, parseInteger, validateFeedbackSource, validateStatus, validateUrl } from './utils/validation.js';
 import { createRequestGuard } from './utils/requestGuards.js';
 import { csvEscape, parseCsv, changedApplicationFields, dateForLog, buildPromptExcerpt, buildSourceContext, extractCandidateSignals, extractJobSignals } from './utils/text.js';
@@ -36,7 +36,7 @@ const server = http.createServer(async (req, res) => {
     }
 
     const url = new URL(req.url, `http://${req.headers.host}`);
-    enforceRequestGuards(req, url);
+    enforceRequestGuards(req, res, url);
 
     if (serveSpecialPublicFiles(req, res, url)) {
       return;
@@ -56,7 +56,8 @@ const server = http.createServer(async (req, res) => {
   } catch (error) {
     const statusCode = error.statusCode || 500;
     if (statusCode >= 500) console.error(error);
-    respondError(req, res, statusCode, error.message || 'Internal server error', statusCode >= 500 ? 'Refresh the page. If this keeps happening, check the server logs.' : '');
+    const message = statusCode >= 500 ? 'Internal server error' : (error.message || 'Request failed');
+    respondError(req, res, statusCode, message, statusCode >= 500 ? 'Refresh the page. If this keeps happening, check the server logs.' : '');
   }
 });
 
@@ -86,6 +87,8 @@ const routeApi = createApiRouter({
   updateTargetCompany,
   checkTargetCompany,
   exportApplicationsCsv,
+  exportCalendar,
+  getStats,
   importApplicationsCsv,
   exportBackup,
   importBackup,
@@ -455,11 +458,161 @@ async function exportApplicationsCsv(req, res) {
   ].join('\n');
 
   res.writeHead(200, {
+    ...securityHeaders,
     'content-type': 'text/csv; charset=utf-8',
-    'content-disposition': 'attachment; filename="job-applications.csv"',
-    'x-content-type-options': 'nosniff'
+    'content-disposition': 'attachment; filename="job-applications.csv"'
   });
   res.end(csv);
+}
+
+async function exportCalendar(req, res) {
+  const result = await pool.query(
+    `
+      SELECT id, company_name, role_title, next_action,
+        to_char(interview_date, 'YYYYMMDD') AS interview_day,
+        to_char(next_action_due_date, 'YYYYMMDD') AS due_day
+      FROM applications
+      WHERE archived_at IS NULL
+        AND (interview_date IS NOT NULL OR next_action_due_date IS NOT NULL)
+      ORDER BY id
+    `
+  );
+
+  const stamp = new Date().toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '');
+  const events = [];
+  for (const row of result.rows) {
+    const label = row.role_title ? `${row.company_name} (${row.role_title})` : row.company_name;
+    if (row.interview_day) {
+      events.push(...calendarEvent({
+        uid: `interview-${row.id}`,
+        day: row.interview_day,
+        stamp,
+        summary: `Interview - ${label}`,
+        description: `Interview for job application ${row.id}`
+      }));
+    }
+    if (row.due_day) {
+      events.push(...calendarEvent({
+        uid: `next-action-${row.id}`,
+        day: row.due_day,
+        stamp,
+        summary: `${row.next_action || 'Follow up'} - ${label}`,
+        description: `Next action for job application ${row.id}`
+      }));
+    }
+  }
+
+  const body = [
+    'BEGIN:VCALENDAR',
+    'VERSION:2.0',
+    'PRODID:-//Job Application Tracker//EN',
+    'CALSCALE:GREGORIAN',
+    ...events,
+    'END:VCALENDAR',
+    ''
+  ].join('\r\n');
+
+  res.writeHead(200, {
+    ...securityHeaders,
+    'content-type': 'text/calendar; charset=utf-8',
+    'content-disposition': 'attachment; filename="job-tracker.ics"',
+    'content-length': Buffer.byteLength(body)
+  });
+  res.end(body);
+}
+
+function calendarEvent({ uid, day, stamp, summary, description }) {
+  return [
+    'BEGIN:VEVENT',
+    `UID:${uid}@job-application-tracker`,
+    `DTSTAMP:${stamp}`,
+    `DTSTART;VALUE=DATE:${day}`,
+    `DTEND;VALUE=DATE:${nextCalendarDay(day)}`,
+    `SUMMARY:${icsEscape(summary)}`,
+    `DESCRIPTION:${icsEscape(description)}`,
+    'END:VEVENT'
+  ];
+}
+
+function nextCalendarDay(day) {
+  const date = new Date(Date.UTC(Number(day.slice(0, 4)), Number(day.slice(4, 6)) - 1, Number(day.slice(6, 8))));
+  date.setUTCDate(date.getUTCDate() + 1);
+  return `${date.getUTCFullYear()}${String(date.getUTCMonth() + 1).padStart(2, '0')}${String(date.getUTCDate()).padStart(2, '0')}`;
+}
+
+function icsEscape(value) {
+  return String(value || '')
+    .replace(/\\/g, '\\\\')
+    .replace(/;/g, '\\;')
+    .replace(/,/g, '\\,')
+    .replace(/\r?\n/g, '\\n');
+}
+
+async function getStats(req, res) {
+  const totals = await pool.query(
+    `
+      SELECT count(*)::int AS total,
+        count(*) FILTER (WHERE archived_at IS NULL)::int AS active,
+        count(*) FILTER (WHERE status = 'ghosted')::int AS ghosted
+      FROM applications
+    `
+  );
+
+  const funnel = await pool.query(
+    `
+      SELECT
+        count(DISTINCT application_id) FILTER (WHERE to_status = 'interview_scheduled')::int AS interviewed,
+        count(DISTINCT application_id) FILTER (WHERE to_status = 'offer')::int AS offers,
+        count(DISTINCT application_id) FILTER (WHERE to_status = 'accepted')::int AS accepted,
+        count(DISTINCT application_id) FILTER (WHERE to_status = 'rejected')::int AS rejected,
+        count(DISTINCT application_id) FILTER (WHERE to_status IN ('interview_scheduled', 'offer', 'accepted', 'rejected'))::int AS responded
+      FROM status_history
+    `
+  );
+
+  const timing = await pool.query(
+    `
+      SELECT
+        (SELECT round(avg(days))::int FROM (
+          SELECT min(sh.changed_at)::date - a.applied_date AS days
+          FROM applications a
+          JOIN status_history sh ON sh.application_id = a.id AND sh.to_status = 'interview_scheduled'
+          WHERE a.applied_date IS NOT NULL
+          GROUP BY a.id, a.applied_date
+        ) interview_days) AS avg_days_to_interview,
+        (SELECT round(avg(days))::int FROM (
+          SELECT min(sh.changed_at)::date - a.applied_date AS days
+          FROM applications a
+          JOIN status_history sh ON sh.application_id = a.id AND sh.to_status = 'rejected'
+          WHERE a.applied_date IS NOT NULL
+          GROUP BY a.id, a.applied_date
+        ) rejection_days) AS avg_days_to_rejection
+    `
+  );
+
+  const tags = await pool.query(
+    `
+      SELECT t.name AS tag,
+        count(DISTINCT a.id)::int AS applications,
+        count(DISTINCT a.id) FILTER (WHERE EXISTS (
+          SELECT 1 FROM status_history sh
+          WHERE sh.application_id = a.id AND sh.to_status = 'interview_scheduled'
+        ))::int AS interviewed
+      FROM tags t
+      JOIN application_tags at ON at.tag_id = t.id
+      JOIN applications a ON a.id = at.application_id
+      GROUP BY t.name
+      ORDER BY applications DESC, t.name
+      LIMIT 12
+    `
+  );
+
+  sendJson(res, 200, {
+    totals: totals.rows[0],
+    funnel: funnel.rows[0],
+    timing: timing.rows[0],
+    tags: tags.rows
+  });
 }
 
 async function importApplicationsCsv(req, res) {
@@ -522,10 +675,10 @@ async function exportBackup(req, res) {
 
   const payload = JSON.stringify(backup);
   res.writeHead(200, {
+    ...securityHeaders,
     'content-type': 'application/json; charset=utf-8',
     'content-disposition': `attachment; filename="job-tracker-backup-${Date.now()}.json"`,
-    'content-length': Buffer.byteLength(payload),
-    'x-content-type-options': 'nosniff'
+    'content-length': Buffer.byteLength(payload)
   });
   res.end(payload);
 }
@@ -592,10 +745,10 @@ async function exportApplicationArtifacts(req, res, id) {
 
   const payload = await zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE' });
   res.writeHead(200, {
+    ...securityHeaders,
     'content-type': 'application/zip',
     'content-disposition': `attachment; filename="${folderName}-artifacts.zip"`,
-    'content-length': payload.length,
-    'x-content-type-options': 'nosniff'
+    'content-length': payload.length
   });
   res.end(payload);
 }
@@ -1098,10 +1251,10 @@ async function downloadCV(req, res, id) {
   const absolutePath = storage.resolveSafe(cv.file_path);
   const stats = statSync(absolutePath);
   res.writeHead(200, {
+    ...securityHeaders,
     'content-type': cv.mime_type,
     'content-length': stats.size,
-    'content-disposition': `attachment; filename="${cv.original_name.replace(/"/g, '')}"`,
-    'x-content-type-options': 'nosniff'
+    'content-disposition': `attachment; filename="${cv.original_name.replace(/"/g, '')}"`
   });
   storage.open(cv.file_path).pipe(res);
 }
@@ -1153,10 +1306,10 @@ async function downloadAIDocument(req, res, id) {
   const doc = result.rows[0];
   const stats = statSync(storage.resolveSafe(doc.file_path));
   res.writeHead(200, {
+    ...securityHeaders,
     'content-type': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
     'content-length': stats.size,
-    'content-disposition': `attachment; filename="${doc.title.replace(/[^a-z0-9_-]+/gi, '-').slice(0, 80)}.docx"`,
-    'x-content-type-options': 'nosniff'
+    'content-disposition': `attachment; filename="${doc.title.replace(/[^a-z0-9_-]+/gi, '-').slice(0, 80)}.docx"`
   });
   storage.open(doc.file_path).pipe(res);
 }
@@ -1601,8 +1754,11 @@ process.on('SIGINT', shutdown);
 async function startServer() {
   try {
     await applyMigrations(pool);
-    server.listen(config.port, '0.0.0.0', () => {
-      console.log(`Job tracker running at http://localhost:${config.port}`);
+    server.listen(config.port, config.host, () => {
+      console.log(`Job tracker running at http://localhost:${config.port} (bound to ${config.host})`);
+      if (config.host !== '127.0.0.1' && config.host !== 'localhost') {
+        console.warn('Warning: the app has no authentication. Binding beyond localhost exposes all data to the network.');
+      }
     });
   } catch (error) {
     console.error(explainConnectionError(error).message);
@@ -1677,9 +1833,9 @@ function serveSpecialPublicFiles(req, res, url) {
 
 function sendPlainText(res, statusCode, body, contentType) {
   res.writeHead(statusCode, {
+    ...securityHeaders,
     'content-type': contentType,
     'content-length': Buffer.byteLength(body),
-    'x-content-type-options': 'nosniff',
     'x-robots-tag': 'noindex, nofollow, noarchive',
     'cache-control': 'no-store'
   });
@@ -1697,10 +1853,10 @@ function shouldServeAppShell(pathname) {
 async function serveAppShell(res) {
   const body = await readFile(spaIndexPath);
   res.writeHead(200, {
+    ...securityHeaders,
     'content-type': 'text/html; charset=utf-8',
     'content-length': body.length,
-    'cache-control': 'no-store',
-    'x-content-type-options': 'nosniff'
+    'cache-control': 'no-store'
   });
   res.end(body);
 }

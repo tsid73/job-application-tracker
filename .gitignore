@@ -13,6 +13,9 @@ uploads/**
 !uploads/ai/
 !uploads/ai/.gitkeep
 
+.tmp/
+test-results/
+
 *.log
 npm-debug.log*
 .DS_Store

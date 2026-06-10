@@ -18,6 +18,9 @@ const defaultAiRequestProvider = process.env.DEFAULT_AI_REQUEST_PROVIDER || (aiP
 
 export const config = {
   port: Number(process.env.PORT || 3000),
+  host: process.env.HOST || '127.0.0.1',
+  trustProxy: process.env.TRUST_PROXY === 'true',
+  maxConcurrentUploads: Number(process.env.MAX_CONCURRENT_UPLOADS || 2),
   dbClient: process.env.DB_CLIENT || 'pglite',
   databaseUrl: process.env.DATABASE_URL || 'postgres://postgres:postgres@localhost:5432/job_tracker',
   pgliteDataDir: process.env.PGLITE_DATA_DIR || 'data/pglite',

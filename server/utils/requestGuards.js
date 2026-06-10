@@ -1,7 +1,11 @@
+const SWEEP_INTERVAL_MS = 60_000;
+
 export function createRequestGuard({ config }) {
   const rateLimitStore = new Map();
+  let nextSweepAt = Date.now() + SWEEP_INTERVAL_MS;
+  let activeUploads = 0;
 
-  return function enforceRequestGuards(req, url) {
+  return function enforceRequestGuards(req, res, url) {
     const contentLength = Number(req.headers['content-length'] || 0);
     const pathname = url.pathname;
 
@@ -11,12 +15,32 @@ export function createRequestGuard({ config }) {
       throw error;
     }
 
+    if (req.method !== 'GET' && req.method !== 'HEAD' && isUploadPath(pathname)) {
+      if (activeUploads >= config.maxConcurrentUploads) {
+        const error = new Error('Too many concurrent uploads. Try again in a moment.');
+        error.statusCode = 429;
+        throw error;
+      }
+      activeUploads += 1;
+      res.once('close', () => {
+        activeUploads = Math.max(0, activeUploads - 1);
+      });
+    }
+
     const limit = resolveRateLimit(pathname, config);
     if (!limit) return;
 
-    const ip = String(req.headers['x-forwarded-for'] || req.socket.remoteAddress || 'local').split(',')[0].trim();
+    const ip = clientAddress(req, config);
     const bucketKey = `${limit.name}:${ip}`;
     const now = Date.now();
+
+    if (now >= nextSweepAt) {
+      for (const [key, bucket] of rateLimitStore) {
+        if (bucket.resetAt <= now) rateLimitStore.delete(key);
+      }
+      nextSweepAt = now + SWEEP_INTERVAL_MS;
+    }
+
     const current = rateLimitStore.get(bucketKey);
 
     if (!current || current.resetAt <= now) {
@@ -34,11 +58,26 @@ export function createRequestGuard({ config }) {
   };
 }
 
+function clientAddress(req, config) {
+  if (config.trustProxy) {
+    const forwarded = String(req.headers['x-forwarded-for'] || '').split(',')[0].trim();
+    if (forwarded) return forwarded;
+  }
+  return req.socket.remoteAddress || 'local';
+}
+
+function isUploadPath(pathname) {
+  return pathname === '/api/cv'
+    || pathname === '/api/applications'
+    || pathname === '/api/import/applications'
+    || pathname === '/api/import/backup';
+}
+
 function resolveRateLimit(pathname, config) {
   if (pathname.startsWith('/api/ai/')) {
     return { name: 'ai_requests', windowMs: config.aiRateLimitWindowMs, max: config.aiRateLimitMax };
   }
-  if (pathname === '/api/cv' || pathname === '/api/applications' || pathname === '/api/import/applications' || pathname === '/api/import/backup') {
+  if (isUploadPath(pathname)) {
     return { name: 'uploads', windowMs: config.uploadRateLimitWindowMs, max: config.uploadRateLimitMax };
   }
   if (pathname.startsWith('/api/')) {

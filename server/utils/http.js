@@ -10,12 +10,19 @@ const textTypes = new Map([
   ['.ico', 'image/x-icon']
 ]);
 
+export const securityHeaders = {
+  'x-content-type-options': 'nosniff',
+  'content-security-policy': "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'",
+  'referrer-policy': 'no-referrer',
+  'x-frame-options': 'DENY'
+};
+
 export function sendJson(res, statusCode, body) {
   const payload = JSON.stringify(body);
   res.writeHead(statusCode, {
+    ...securityHeaders,
     'content-type': 'application/json; charset=utf-8',
-    'content-length': Buffer.byteLength(payload),
-    'x-content-type-options': 'nosniff'
+    'content-length': Buffer.byteLength(payload)
   });
   res.end(payload);
 }
@@ -26,9 +33,9 @@ export function sendError(res, statusCode, message, details) {
 
 export function sendHtml(res, statusCode, html) {
   res.writeHead(statusCode, {
+    ...securityHeaders,
     'content-type': 'text/html; charset=utf-8',
     'content-length': Buffer.byteLength(html),
-    'x-content-type-options': 'nosniff',
     'x-robots-tag': 'noindex, nofollow, noarchive',
     'cache-control': 'no-store'
   });
@@ -234,9 +241,9 @@ export function serveStatic(req, res, publicDir) {
 
     const contentType = textTypes.get(extname(absolutePath)) || 'application/octet-stream';
     res.writeHead(200, {
+      ...securityHeaders,
       'content-type': contentType,
       'content-length': fileStat.size,
-      'x-content-type-options': 'nosniff',
       'x-robots-tag': 'noindex, nofollow, noarchive',
       'cache-control': 'no-store'
     });

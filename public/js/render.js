@@ -29,6 +29,7 @@ export function renderHomeWorkspace() {
         <button class="secondary" type="button" data-view="kanban" aria-pressed="false">Kanban</button>
         <button class="secondary" type="button" data-view="today" aria-pressed="false">Today</button>
         <button class="secondary" type="button" data-view="reports" aria-pressed="false">Reports</button>
+        <button class="secondary" type="button" data-view="stats" aria-pressed="false">Stats</button>
         <button class="secondary" type="button" data-view="activity" aria-pressed="false">Activity</button>
         <button class="secondary" type="button" data-view="boards" aria-pressed="false">Job Boards</button>
         <button class="secondary" type="button" data-view="companies" aria-pressed="false">Company List</button>
@@ -81,12 +82,14 @@ export function renderHomeWorkspace() {
             <button id="saveFilterButton" class="secondary" type="button">Save Filter</button>
             <button id="deleteFilterButton" class="secondary" type="button">Delete Filter</button>
             <button id="quickExportCsvButton" class="secondary" type="button">Export CSV</button>
+            <button id="quickExportIcsButton" class="secondary" type="button">Calendar (.ics)</button>
           </div>
         </section>
         <section class="table-shell" aria-live="polite">
           <table>
             <thead>
               <tr>
+                <th class="select-col"><input type="checkbox" id="selectAllRows" aria-label="Select all applications"></th>
                 <th>Company</th>
                 <th>Applied</th>
                 <th>Status</th>
@@ -103,6 +106,15 @@ export function renderHomeWorkspace() {
           </table>
           <div id="emptyState" class="empty" hidden>No applications match the current filters.</div>
         </section>
+        <div id="bulkActionsBar" class="bulk-bar" hidden>
+          <strong id="bulkCount">0 selected</strong>
+          <div class="row-actions">
+            <button id="bulkArchiveButton" class="secondary" type="button">Archive Selected</button>
+            <button id="bulkRestoreButton" class="secondary" type="button">Restore Selected</button>
+            <button id="bulkDeleteButton" class="secondary danger" type="button">Delete Selected</button>
+            <button id="bulkClearButton" class="secondary" type="button">Clear Selection</button>
+          </div>
+        </div>
       </section>
 
       <section id="remindersView" class="view-panel" hidden>
@@ -119,6 +131,10 @@ export function renderHomeWorkspace() {
 
       <section id="reportsView" class="view-panel" hidden>
         <div id="reportsContent" class="reports-grid"></div>
+      </section>
+
+      <section id="statsView" class="view-panel" hidden>
+        <div id="statsContent" class="reports-grid"></div>
       </section>
 
       <section id="activityView" class="surface-panel" hidden>
@@ -243,6 +259,55 @@ export function renderReports(els, report, statusLabels) {
   `;
 }
 
+export function renderStats(els, stats) {
+  const total = Number(stats.totals.total || 0);
+  const funnelRows = [
+    { label: 'Applied', count: total },
+    { label: 'Interview', count: Number(stats.funnel.interviewed || 0) },
+    { label: 'Offer', count: Number(stats.funnel.offers || 0) },
+    { label: 'Accepted', count: Number(stats.funnel.accepted || 0) }
+  ];
+  const funnelMax = Math.max(1, ...funnelRows.map((row) => row.count));
+  const rate = (part, whole) => (whole ? `${Math.round((Number(part || 0) / whole) * 100)}%` : '0%');
+  const tagMax = Math.max(1, ...stats.tags.map((row) => Number(row.applications || 0)));
+
+  els.statsContent.innerHTML = `
+    <section class="report-panel">
+      <div class="panel-kicker">Funnel</div>
+      <h3>Application Funnel</h3>
+      ${funnelRows.map((row) => reportRow(row.label, row.count, funnelMax)).join('')}
+      <p class="section-help">Interview rate ${rate(stats.funnel.interviewed, total)} · Offer rate ${rate(stats.funnel.offers, total)} of ${total} applications.</p>
+    </section>
+    <section class="report-panel">
+      <div class="panel-kicker">Outcomes</div>
+      <h3>Responses</h3>
+      ${reportRow('Responded', Number(stats.funnel.responded || 0), Math.max(1, total))}
+      ${reportRow('Rejected', Number(stats.funnel.rejected || 0), Math.max(1, total))}
+      ${reportRow('Ghosted', Number(stats.totals.ghosted || 0), Math.max(1, total))}
+      <p class="section-help">Response rate ${rate(stats.funnel.responded, total)} — any recorded interview, offer, acceptance, or rejection.</p>
+    </section>
+    <section class="report-panel">
+      <div class="panel-kicker">Velocity</div>
+      <h3>Time in Stage</h3>
+      <div class="stat-figures">
+        <article>
+          <strong>${stats.timing.avg_days_to_interview ?? '—'}</strong>
+          <span>avg days from applied to interview</span>
+        </article>
+        <article>
+          <strong>${stats.timing.avg_days_to_rejection ?? '—'}</strong>
+          <span>avg days from applied to rejection</span>
+        </article>
+      </div>
+    </section>
+    <section class="report-panel">
+      <div class="panel-kicker">Channels</div>
+      <h3>Interview Rate by Tag</h3>
+      ${stats.tags.map((row) => reportRow(`${row.tag} · ${rate(row.interviewed, Number(row.applications || 0))} interviews`, Number(row.applications || 0), tagMax)).join('') || '<p>No tagged applications yet.</p>'}
+    </section>
+  `;
+}
+
 export function renderActivity(els, state, payload) {
   state.activity.total = payload.total;
   els.activityEmpty.hidden = payload.activity.length !== 0;
@@ -286,39 +351,44 @@ export function renderApplications(els, state, statusOptions) {
   }
 
   for (const application of state.applications) {
-    const row = document.createElement('tr');
-    row.dataset.id = application.id;
-    row.className = application.archived_at ? 'archived' : '';
-    row.innerHTML = `
-      <td>
-        <div class="company-cell">
-          <strong>${escapeHtml(application.company_name)}</strong>
-          <span>${escapeHtml([application.role_title, application.location, application.salary, application.recruiter].filter(Boolean).join(' · ') || application.cv_name || 'No CV')}</span>
-        </div>
-      </td>
-      <td>${formatDate(application.applied_date)}</td>
-      <td>
-        <select data-field="status" aria-label="Status for ${escapeHtml(application.company_name)}">
-          ${statusOptions}
-        </select>
-      </td>
-      <td>${renderNextAction(application)}</td>
-      <td>${renderFollowUpDue(application)}</td>
-      <td>${renderStaleSignal(application)}</td>
-      <td>${application.archived_at ? '<span class="state archived-state">Archived</span>' : '<span class="state active-state">Active</span>'}</td>
-      <td data-interview-cell>${renderInterviewControl(application)}</td>
-      <td>${renderTags(application.tags)}</td>
-      <td>
-        <div class="row-actions">
-          ${application.archived_at ? `<button class="secondary" type="button" data-restore-row-id="${application.id}">Restore</button>` : `<button class="secondary" type="button" data-archive-row-id="${application.id}">Archive</button>`}
-          <button class="secondary" type="button" data-detail-id="${application.id}">Open</button>
-        </div>
-      </td>
-    `;
-
-    row.querySelector('[data-field="status"]').value = application.status;
-    els.table.appendChild(row);
+    els.table.appendChild(buildApplicationRow(application, statusOptions, state.selectedIds?.has(application.id)));
   }
+}
+
+export function buildApplicationRow(application, statusOptions, selected = false) {
+  const row = document.createElement('tr');
+  row.dataset.id = application.id;
+  row.className = application.archived_at ? 'archived' : '';
+  row.innerHTML = `
+    <td class="select-col"><input type="checkbox" data-select-id="${application.id}" aria-label="Select ${escapeHtml(application.company_name)}"${selected ? ' checked' : ''}></td>
+    <td>
+      <div class="company-cell">
+        <strong>${escapeHtml(application.company_name)}</strong>
+        <span>${escapeHtml([application.role_title, application.location, application.salary, application.recruiter].filter(Boolean).join(' · ') || application.cv_name || 'No CV')}</span>
+      </div>
+    </td>
+    <td>${formatDate(application.applied_date)}</td>
+    <td>
+      <select data-field="status" aria-label="Status for ${escapeHtml(application.company_name)}">
+        ${statusOptions}
+      </select>
+    </td>
+    <td>${renderNextAction(application)}</td>
+    <td>${renderFollowUpDue(application)}</td>
+    <td>${renderStaleSignal(application)}</td>
+    <td>${application.archived_at ? '<span class="state archived-state">Archived</span>' : '<span class="state active-state">Active</span>'}</td>
+    <td data-interview-cell>${renderInterviewControl(application)}</td>
+    <td>${renderTags(application.tags)}</td>
+    <td>
+      <div class="row-actions">
+        ${application.archived_at ? `<button class="secondary" type="button" data-restore-row-id="${application.id}">Restore</button>` : `<button class="secondary" type="button" data-archive-row-id="${application.id}">Archive</button>`}
+        <button class="secondary" type="button" data-detail-id="${application.id}">Open</button>
+      </div>
+    </td>
+  `;
+
+  row.querySelector('[data-field="status"]').value = application.status;
+  return row;
 }
 
 function renderNextAction(application) {

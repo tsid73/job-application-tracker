@@ -26,6 +26,7 @@ export const state = {
     tag: '',
     archived: 'false'
   },
+  selectedIds: new Set(),
   notifications: [],
   notificationsExpanded: false,
   calendarDate: new Date(),

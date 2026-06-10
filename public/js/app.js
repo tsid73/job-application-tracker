@@ -2,6 +2,7 @@ import { bindWorkspaceElements, els } from './dom.js';
 import { state, statusLabels, statusOptions } from './state.js';
 import { api, attachDateMask, debounce, escapeAttribute, escapeHtml, formatDateTime, formatIsoDateForDisplay, localToday, parseDisplayDateToIso, renderDateInput, setError } from './utils.js';
 import {
+  buildApplicationRow,
   renderActivity,
   renderApplicationCVSelect,
   renderDocumentContent,
@@ -15,6 +16,7 @@ import {
   renderNotifications,
   renderRouteLoadingState,
   renderReports,
+  renderStats,
   renderSavedFilters,
   renderTargetCompanies,
   renderTargetCompanyFilters,
@@ -169,6 +171,33 @@ function bindHomeWorkspaceEvents() {
   });
   els.saveFilterButton?.addEventListener('click', saveCurrentFilter);
   els.deleteFilterButton?.addEventListener('click', deleteCurrentSavedFilter);
+  els.quickExportCsvButton?.addEventListener('click', downloadApplicationsCsv);
+  els.quickExportIcsButton?.addEventListener('click', downloadCalendarIcs);
+  els.selectAllRows?.addEventListener('change', () => {
+    if (els.selectAllRows.checked) {
+      state.applications.forEach((item) => state.selectedIds.add(item.id));
+    } else {
+      state.selectedIds.clear();
+    }
+    syncSelectionCheckboxes();
+    updateSelectionUI();
+  });
+  els.bulkArchiveButton?.addEventListener('click', () => runBulkAction('archive'));
+  els.bulkRestoreButton?.addEventListener('click', () => runBulkAction('restore'));
+  els.bulkDeleteButton?.addEventListener('click', () => runBulkAction('delete'));
+  els.bulkClearButton?.addEventListener('click', () => {
+    state.selectedIds.clear();
+    syncSelectionCheckboxes();
+    updateSelectionUI();
+  });
+  els.table?.addEventListener('change', (event) => {
+    const checkbox = event.target.closest('[data-select-id]');
+    if (!checkbox) return;
+    const id = Number(checkbox.dataset.selectId);
+    if (checkbox.checked) state.selectedIds.add(id);
+    else state.selectedIds.delete(id);
+    updateSelectionUI();
+  });
   els.activitySearch?.addEventListener('input', debounce(() => {
     state.activity.search = els.activitySearch.value.trim();
     state.activity.page = 1;
@@ -306,6 +335,69 @@ function downloadApplicationsCsv() {
   link.remove();
 }
 
+function downloadCalendarIcs() {
+  const link = document.createElement('a');
+  link.href = '/api/export/calendar.ics';
+  link.download = 'job-tracker.ics';
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+}
+
+function syncSelectionCheckboxes() {
+  els.table?.querySelectorAll('[data-select-id]').forEach((checkbox) => {
+    checkbox.checked = state.selectedIds.has(Number(checkbox.dataset.selectId));
+  });
+}
+
+function updateSelectionUI() {
+  const visible = new Set(state.applications.map((item) => item.id));
+  for (const id of [...state.selectedIds]) {
+    if (!visible.has(id)) state.selectedIds.delete(id);
+  }
+  const count = state.selectedIds.size;
+  if (els.bulkActionsBar) {
+    els.bulkActionsBar.hidden = count === 0;
+    if (els.bulkCount) els.bulkCount.textContent = `${count} selected`;
+  }
+  if (els.selectAllRows) {
+    els.selectAllRows.checked = count > 0 && count === state.applications.length;
+    els.selectAllRows.indeterminate = count > 0 && count < state.applications.length;
+  }
+}
+
+async function runBulkAction(action) {
+  const ids = [...state.selectedIds];
+  if (!ids.length) return;
+
+  const perform = async () => {
+    for (const id of ids) {
+      if (action === 'archive') await api(`/api/applications/${id}/archive`, { method: 'POST' });
+      if (action === 'restore') await api(`/api/applications/${id}/restore`, { method: 'POST' });
+      if (action === 'delete') await api(`/api/applications/${id}`, { method: 'DELETE' });
+    }
+    state.selectedIds.clear();
+    await Promise.all([loadApplications(), loadReminders(), loadNotifications()]);
+  };
+
+  if (action === 'delete') {
+    await runConfirmedAction({
+      title: 'Delete applications',
+      body: `Permanently delete ${ids.length} application${ids.length === 1 ? '' : 's'}? This cannot be undone.`,
+      acceptLabel: 'Delete',
+      triggerButton: els.bulkDeleteButton,
+      successMessage: 'Applications deleted.',
+      onConfirm: perform
+    });
+    return;
+  }
+
+  await withAsyncButton(action === 'archive' ? els.bulkArchiveButton : els.bulkRestoreButton, async () => {
+    await perform();
+    showToast(action === 'archive' ? 'Applications archived.' : 'Applications restored.', 'info');
+  });
+}
+
 async function switchView(view) {
   state.view = view;
   els.workspaceRoot.querySelectorAll('[data-view]').forEach((button) => {
@@ -320,6 +412,7 @@ async function switchView(view) {
   els.kanbanView.hidden = view !== 'kanban';
   els.todayView.hidden = view !== 'today';
   els.reportsView.hidden = view !== 'reports';
+  if (els.statsView) els.statsView.hidden = view !== 'stats';
   els.activityView.hidden = view !== 'activity';
   els.boardsView.hidden = view !== 'boards';
   els.companiesView.hidden = view !== 'companies';
@@ -338,6 +431,10 @@ async function switchView(view) {
     renderSectionLoading(els.reportsContent, 'Loading reports');
     await loadReports();
   }
+  if (view === 'stats') {
+    renderSectionLoading(els.statsContent, 'Loading stats');
+    await loadStats();
+  }
   if (view === 'activity') {
     renderSectionLoading(els.activityTable, 'Loading activity');
     await loadActivity();
@@ -354,18 +451,36 @@ async function switchView(view) {
   if (view === 'settings') bindSettingsActions();
 }
 
-async function loadApplications() {
+function applicationQueryParams() {
   const params = new URLSearchParams();
   if (state.filters.search) params.set('search', state.filters.search);
   if (state.filters.status) params.set('status', state.filters.status);
   if (state.filters.tag) params.set('tag', state.filters.tag);
   params.set('archived', state.filters.archived);
+  return params;
+}
 
-  const payload = await api(`/api/applications?${params.toString()}`);
+async function loadApplications() {
+  const payload = await api(`/api/applications?${applicationQueryParams().toString()}`);
   state.applications = payload.applications;
   if (els.table) renderApplications(els, state, statusOptions);
+  updateSelectionUI();
   if (els.todayContent) renderToday(els, state);
   if (state.view === 'kanban' && els.kanbanBoard) renderKanban(els, state.applications, statusLabels);
+}
+
+async function refreshApplicationRow(id) {
+  const payload = await api(`/api/applications?${applicationQueryParams().toString()}`);
+  state.applications = payload.applications;
+  const row = els.table?.querySelector(`tr[data-id="${id}"]`);
+  const application = state.applications.find((item) => item.id === id);
+  if (!row || !application) {
+    if (els.table) renderApplications(els, state, statusOptions);
+    updateSelectionUI();
+    return;
+  }
+  row.replaceWith(buildApplicationRow(application, statusOptions, state.selectedIds.has(id)));
+  updateSelectionUI();
 }
 
 async function loadAppConfig() {
@@ -433,6 +548,11 @@ async function loadNotifications() {
 async function loadReports() {
   const payload = await api('/api/reports');
   if (els.reportsContent) renderReports(els, payload, statusLabels);
+}
+
+async function loadStats() {
+  const payload = await api('/api/stats');
+  if (els.statsContent) renderStats(els, payload);
 }
 
 async function loadActivity() {
@@ -614,7 +734,7 @@ async function updateInlineStatus(event) {
       })
     });
     showToast('Save successful.');
-    await Promise.all([loadApplications(), loadReminders()]);
+    await Promise.all([refreshApplicationRow(application.id), loadReminders()]);
   } catch (error) {
     showToast(error.message, 'error');
     await loadApplications();
@@ -927,6 +1047,7 @@ function bindHomeWorkspaceElements() {
   bindJobBoardActions();
   if (state.view === 'kanban') renderKanban(els, state.applications, statusLabels);
   if (state.view === 'reports') loadReports();
+  if (state.view === 'stats') loadStats();
   if (state.view === 'activity') loadActivity();
   if (state.view === 'reminders') loadReminders();
 }
@@ -1968,6 +2089,7 @@ function unmountInactiveHomeViews(activeView) {
   if (activeView !== 'kanban') clear(els.kanbanBoard);
   if (activeView !== 'today') clear(els.todayContent);
   if (activeView !== 'reports') clear(els.reportsContent);
+  if (activeView !== 'stats') clear(els.statsContent);
   if (activeView !== 'activity') {
     clear(els.activityTable);
     if (els.activityPagination) els.activityPagination.innerHTML = '';
