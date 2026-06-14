@@ -1,4 +1,4 @@
-import { cleanString, validateStatus } from '../utils/validation.js';
+import { cleanString, validateStatus, validateUrl } from '../utils/validation.js';
 
 const meaningfulActivityActions = [
   'created',
@@ -368,6 +368,62 @@ export function createReadApi({ pool, audit }) {
             a.id DESC
         `,
         [search, status, tag, archived]
+      );
+
+      return { applications: result.rows };
+    },
+
+    async lookupApplications(url) {
+      const companyName = cleanString(url.searchParams.get('company_name'));
+      const roleTitle = cleanString(url.searchParams.get('role_title'));
+      const jobLink = validateUrl(url.searchParams.get('job_link'));
+
+      if (!companyName && !jobLink) {
+        const error = new Error('company_name or job_link is required');
+        error.statusCode = 400;
+        throw error;
+      }
+
+      const params = [];
+      const conditions = [];
+
+      if (companyName) {
+        params.push(companyName);
+        conditions.push(`lower(trim(a.company_name)) = lower(trim($${params.length}))`);
+      }
+
+      if (roleTitle) {
+        params.push(roleTitle);
+        conditions.push(`lower(trim(coalesce(a.role_title, ''))) = lower(trim($${params.length}))`);
+      }
+
+      if (jobLink) {
+        params.push(jobLink);
+        conditions.push(`a.job_link = $${params.length}`);
+      }
+
+      const result = await pool.query(
+        `
+          SELECT
+            a.id,
+            a.company_name,
+            a.role_title,
+            a.job_link,
+            a.status,
+            to_char(a.applied_date, 'YYYY-MM-DD') AS applied_date,
+            to_char(a.interview_date, 'YYYY-MM-DD') AS interview_date,
+            a.next_action,
+            to_char(a.next_action_due_date, 'YYYY-MM-DD') AS next_action_due_date,
+            a.archived_at,
+            COALESCE(array_agg(DISTINCT t.name) FILTER (WHERE t.name IS NOT NULL), '{}') AS tags
+          FROM applications a
+          LEFT JOIN application_tags at ON at.application_id = a.id
+          LEFT JOIN tags t ON t.id = at.tag_id
+          WHERE ${conditions.join(' AND ')}
+          GROUP BY a.id
+          ORDER BY a.archived_at DESC NULLS LAST, a.applied_date DESC, a.id DESC
+        `,
+        params
       );
 
       return { applications: result.rows };

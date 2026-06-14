@@ -25,6 +25,7 @@ export function createApiRouter(handlers) {
     route('GET', '/api/export/backup', handlers.exportBackup),
     route('POST', '/api/import/backup', handlers.importBackup),
     route('GET', '/api/applications', handlers.getApplications),
+    route('GET', '/api/applications/lookup', handlers.lookupApplications),
     route('POST', '/api/applications', handlers.createApplication),
     route('GET', /^\/api\/applications\/\d+$/, handlers.getApplication, pathId),
     route('PUT', /^\/api\/applications\/\d+$/, handlers.updateApplication, pathId),
