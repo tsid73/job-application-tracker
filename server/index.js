@@ -93,6 +93,7 @@ const routeApi = createApiRouter({
   exportBackup,
   importBackup,
   getApplications: async (req, res, url) => sendJson(res, 200, await readApi.getApplications(url)),
+  lookupApplications: async (req, res, url) => sendJson(res, 200, await readApi.lookupApplications(url)),
   createApplication,
   getApplication: async (req, res, id) => sendJson(res, 200, await readApi.getApplication(id)),
   updateApplication,

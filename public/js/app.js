@@ -392,10 +392,15 @@ async function runBulkAction(action) {
     return;
   }
 
-  await withAsyncButton(action === 'archive' ? els.bulkArchiveButton : els.bulkRestoreButton, async () => {
-    await perform();
-    showToast(action === 'archive' ? 'Applications archived.' : 'Applications restored.', 'info');
-  });
+  try {
+    await withAsyncButton(action === 'archive' ? els.bulkArchiveButton : els.bulkRestoreButton, async () => {
+      await perform();
+      showToast(action === 'archive' ? 'Applications archived.' : 'Applications restored.', 'info');
+    });
+  } catch (error) {
+    showToast(error.message, 'error');
+    await loadApplications();
+  }
 }
 
 async function switchView(view) {
