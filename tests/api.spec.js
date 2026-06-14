@@ -32,7 +32,7 @@ test('application REST API supports workflow CRUD and lookup', async ({ request 
       applied_date: '2026-06-14',
       next_action: 'Follow up',
       next_action_due_date: '2026-06-21',
-      tags: 'Backend, GPT Workflow',
+      tags: 'Backend, Integration',
       cv_id: cvId,
       notes: 'Created from API workflow test.'
     }
@@ -58,7 +58,7 @@ test('application REST API supports workflow CRUD and lookup', async ({ request 
     status: 'applied',
     applied_date: '2026-06-14'
   });
-  expect(lookupPayload.applications[0].tags).toEqual(expect.arrayContaining(['Backend', 'GPT Workflow']));
+  expect(lookupPayload.applications[0].tags).toEqual(expect.arrayContaining(['Backend', 'Integration']));
 
   const missingLookupResponse = await request.get('/api/applications/lookup');
   expect(missingLookupResponse.status()).toBe(400);
