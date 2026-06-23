@@ -472,6 +472,12 @@ async function loadApplications() {
   updateSelectionUI();
   if (els.todayContent) renderToday(els, state);
   if (state.view === 'kanban' && els.kanbanBoard) renderKanban(els, state.applications, statusLabels);
+  if (els.summary) {
+    const interviews = state.applications.filter((item) => item.status === 'interview_scheduled').length;
+    const archived = state.applications.filter((item) => item.archived_at).length;
+    const viewName = { true: 'archived', all: 'total', closed: 'closed', false: 'active' }[state.filters.archived] || 'active';
+    els.summary.textContent = `${state.applications.length} ${viewName}, ${interviews} interviews scheduled, ${archived} archived shown`;
+  }
 }
 
 async function refreshApplicationRow(id) {
