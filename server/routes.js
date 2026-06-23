@@ -33,6 +33,7 @@ export function createApiRouter(handlers) {
     route('POST', /^\/api\/applications\/\d+\/archive$/, handlers.archiveApplication, pathId),
     route('POST', /^\/api\/applications\/\d+\/restore$/, handlers.restoreApplication, pathId),
     route('POST', /^\/api\/applications\/\d+\/notes$/, handlers.createNote, pathId),
+    route('DELETE', /^\/api\/notes\/\d+$/, handlers.deleteNote, pathId),
     route('PUT', /^\/api\/applications\/\d+\/preparation$/, handlers.updatePreparation, pathId),
     route('POST', /^\/api\/applications\/\d+\/recruiter-questions$/, handlers.createRecruiterQuestion, pathId),
     route('POST', /^\/api\/applications\/\d+\/feedback$/, handlers.createFeedbackEntry, pathId),

@@ -1,5 +1,5 @@
 import { bindWorkspaceElements, els } from './dom.js';
-import { state, statusLabels, statusOptions } from './state.js';
+import { state, statusLabels, statusOptions, isClosedStatus } from './state.js';
 import { api, attachDateMask, debounce, escapeAttribute, escapeHtml, formatDateTime, formatIsoDateForDisplay, localToday, parseDisplayDateToIso, renderDateInput, setError } from './utils.js';
 import {
   buildApplicationRow,
@@ -720,12 +720,22 @@ async function updateInlineStatus(event) {
   }
 
   let notes = application.notes || '';
-  if (event.target.dataset.field === 'status' && ['rejected', 'withdrawn', 'ghosted'].includes(status)) {
-    const reason = window.prompt('Add a short note for this status change?');
-    if (reason && reason.trim()) {
+  if (event.target.dataset.field === 'status' && isClosedStatus(status)) {
+    const reason = await promptForOptionalText({
+      title: `${statusLabels[status]} — add a note`,
+      label: 'Reason (optional)',
+      submitLabel: 'Save'
+    });
+    if (reason === false) {
+      await loadApplications();
+      return;
+    }
+    if (reason) {
       notes = [notes, `${statusLabels[status]}: ${reason.trim()}`].filter(Boolean).join('\n');
     }
   }
+
+  const closingApplication = event.target.dataset.field === 'status' && isClosedStatus(status);
 
   try {
     event.target.disabled = true;
@@ -735,6 +745,8 @@ async function updateInlineStatus(event) {
       body: JSON.stringify({
         status,
         interview_date: status === 'interview_scheduled' ? interviewDate : null,
+        next_action: closingApplication ? '' : application.next_action,
+        next_action_due_date: closingApplication ? null : application.next_action_due_date,
         notes
       })
     });
@@ -1034,7 +1046,7 @@ function bindHomeWorkspaceElements() {
   if (els.summary) {
     const interviews = state.applications.filter((item) => item.status === 'interview_scheduled').length;
     const archived = state.applications.filter((item) => item.archived_at).length;
-    const viewName = state.filters.archived === 'true' ? 'archived' : state.filters.archived === 'all' ? 'total' : 'active';
+    const viewName = { true: 'archived', all: 'total', closed: 'closed', false: 'active' }[state.filters.archived] || 'active';
     els.summary.textContent = `${state.applications.length} ${viewName}, ${interviews} interviews scheduled, ${archived} archived shown`;
   }
   if (els.search) els.search.value = state.filters.search;
@@ -1142,6 +1154,22 @@ function bindApplicationPageActions(payload) {
       });
       showToast('Note saved.');
       await Promise.all([loadNotifications(), renderCurrentRoute()]);
+    });
+  });
+
+  root.querySelectorAll('[data-note-delete]').forEach((button) => {
+    button.addEventListener('click', async () => {
+      await runConfirmedAction({
+        title: 'Delete note',
+        body: 'Remove this note?',
+        acceptLabel: 'Delete',
+        triggerButton: button,
+        successMessage: 'Note deleted.',
+        onConfirm: async () => {
+          await api(`/api/notes/${button.dataset.noteDelete}`, { method: 'DELETE' });
+          await renderCurrentRoute();
+        }
+      });
     });
   });
 
@@ -2131,6 +2159,27 @@ async function promptForText({ title, label, value = '', submitLabel = 'Save' })
       els.editorDialog.close();
     };
     els.editorDialog.addEventListener('close', () => resolve(result), { once: true });
+    els.editorDialog.showModal();
+    els.editorDialogInput.focus();
+  });
+}
+
+async function promptForOptionalText({ title, label, submitLabel = 'Save' }) {
+  return new Promise((resolve) => {
+    let submitted = false;
+    els.editorDialogTitle.textContent = title;
+    els.editorDialogLabel.textContent = label;
+    els.editorDialogInput.value = '';
+    els.editorDialogSubmit.textContent = submitLabel;
+    setError(els.editorDialogError, '');
+    els.editorDialogForm.onsubmit = (event) => {
+      event.preventDefault();
+      submitted = true;
+      els.editorDialog.close();
+    };
+    els.editorDialog.addEventListener('close', () => {
+      resolve(submitted ? els.editorDialogInput.value.trim() : false);
+    }, { once: true });
     els.editorDialog.showModal();
     els.editorDialogInput.focus();
   });

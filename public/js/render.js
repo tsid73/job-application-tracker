@@ -17,6 +17,7 @@ import {
   renderTags,
   reportRow
 } from './utils.js';
+import { isClosedStatus } from './state.js';
 
 export function renderHomeWorkspace() {
   return `
@@ -64,6 +65,7 @@ export function renderHomeWorkspace() {
             <span>View</span>
             <select id="archiveFilter">
               <option value="false">Active</option>
+              <option value="closed">Closed</option>
               <option value="true">Archived</option>
               <option value="all">All</option>
             </select>
@@ -356,9 +358,10 @@ export function renderApplications(els, state, statusOptions) {
 }
 
 export function buildApplicationRow(application, statusOptions, selected = false) {
+  const closed = !application.archived_at && isClosedStatus(application.status);
   const row = document.createElement('tr');
   row.dataset.id = application.id;
-  row.className = application.archived_at ? 'archived' : '';
+  row.className = application.archived_at ? 'archived' : closed ? 'closed' : '';
   row.innerHTML = `
     <td class="select-col"><input type="checkbox" data-select-id="${application.id}" aria-label="Select ${escapeHtml(application.company_name)}"${selected ? ' checked' : ''}></td>
     <td>
@@ -369,15 +372,15 @@ export function buildApplicationRow(application, statusOptions, selected = false
     </td>
     <td>${formatDate(application.applied_date)}</td>
     <td>
-      <select data-field="status" aria-label="Status for ${escapeHtml(application.company_name)}">
+      <select data-field="status" aria-label="Status for ${escapeHtml(application.company_name)}"${closed ? ' disabled' : ''}>
         ${statusOptions}
       </select>
     </td>
-    <td>${renderNextAction(application)}</td>
-    <td>${renderFollowUpDue(application)}</td>
+    <td>${closed ? '' : renderNextAction(application)}</td>
+    <td>${closed ? '' : renderFollowUpDue(application)}</td>
     <td>${renderStaleSignal(application)}</td>
-    <td>${application.archived_at ? '<span class="state archived-state">Archived</span>' : '<span class="state active-state">Active</span>'}</td>
-    <td data-interview-cell>${renderInterviewControl(application)}</td>
+    <td>${application.archived_at ? '<span class="state archived-state">Archived</span>' : closed ? '<span class="state closed-state">Closed</span>' : '<span class="state active-state">Active</span>'}</td>
+    <td data-interview-cell>${closed ? '' : renderInterviewControl(application)}</td>
     <td>${renderTags(application.tags)}</td>
     <td>
       <div class="row-actions">
@@ -900,23 +903,26 @@ export function renderApplicationPage(els, payload, statusLabels, viewState) {
     history: renderHistoryTab({ application, history, notes, activity, auditEvents, statusLabels })
   };
 
+  const closed = !application.archived_at && isClosedStatus(application.status);
+
   els.workspaceRoot.innerHTML = `
-    <section class="workspace-view workspace-view-application" data-workspace-view="application">
+    <section class="workspace-view workspace-view-application${closed ? ' is-closed' : ''}" data-workspace-view="application">
     <div id="applicationPageContent" class="route-page-shell">
       <section class="application-hero-card application-hero-compact">
         <div class="hero-main-row">
           <div class="hero-copy-group">
             <a class="button-link tertiary back-pill" href="/">Tracker</a>
             <div class="hero-badge-row">
-              <span class="state ${application.archived_at ? 'archived-state' : 'active-state'}">${application.archived_at ? 'Archived' : statusLabels[application.status] || application.status}</span>
-              ${application.interview_date ? `<span class="days-badge">${escapeHtml(formatDate(application.interview_date))}</span>` : ''}
+              <span class="state ${application.archived_at ? 'archived-state' : closed ? 'closed-state' : 'active-state'}">${application.archived_at ? 'Archived' : statusLabels[application.status] || application.status}</span>
+              ${closed ? '<span class="state closed-state">Closed</span>' : ''}
+              ${application.interview_date && !closed ? `<span class="days-badge">${escapeHtml(formatDate(application.interview_date))}</span>` : ''}
             </div>
             <h1>${escapeHtml(application.role_title || 'Application Detail')}</h1>
             <p class="hero-company-line">${escapeHtml(application.company_name)}</p>
             ${renderTags(tags)}
           </div>
           <div class="page-header-actions application-hero-actions">
-            <button class="secondary" type="button" data-edit-application="${application.id}">Edit Application</button>
+            ${closed ? '' : `<button class="secondary" type="button" data-edit-application="${application.id}">Edit Application</button>`}
             ${application.archived_at
               ? `<button class="secondary" type="button" data-restore-application="${application.id}">Restore</button>`
               : `<button class="secondary" type="button" data-archive-application="${application.id}">Archive</button>`}
@@ -1400,7 +1406,7 @@ function renderHistoryTab({ application, history, notes, activity, auditEvents, 
         </div>
         <div class="notes-list">
           ${application.notes ? `<div class="note-item">${escapeHtml(application.notes)}</div>` : ''}
-          ${notes.length ? notes.map((note) => `<div class="note-item">${escapeHtml(note.body)}</div>`).join('') : application.notes ? '' : '<p>No notes yet.</p>'}
+          ${notes.length ? notes.map((note) => `<div class="note-item"><span>${escapeHtml(note.body)}</span><button type="button" class="icon-button" data-note-delete="${note.id}" title="Delete note">&times;</button></div>`).join('') : application.notes ? '' : '<p>No notes yet.</p>'}
         </div>
         <form class="note-form" data-note-form="${application.id}">
           <textarea name="body" rows="3" placeholder="Add note"></textarea>

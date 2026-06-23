@@ -65,6 +65,12 @@ export const statusLabels = {
   ghosted: 'Ghosted'
 };
 
+export const closedStatuses = new Set(['rejected', 'withdrawn', 'ghosted']);
+
+export function isClosedStatus(status) {
+  return closedStatuses.has(status);
+}
+
 export const statusOptions = Object.entries(statusLabels)
   .map(([value, label]) => `<option value="${value}">${label}</option>`)
   .join('');

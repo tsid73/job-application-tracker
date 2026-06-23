@@ -165,7 +165,7 @@ export function parseDisplayDateToIso(value) {
   const iso = `${year}-${month}-${day}`;
   const date = new Date(`${iso}T00:00:00`);
   if (Number.isNaN(date.getTime())) return String(value || '').trim();
-  if (date.getUTCFullYear() !== Number(year) || date.getUTCMonth() + 1 !== Number(month) || date.getUTCDate() !== Number(day)) {
+  if (date.getFullYear() !== Number(year) || date.getMonth() + 1 !== Number(month) || date.getDate() !== Number(day)) {
     return String(value || '').trim();
   }
   return iso;

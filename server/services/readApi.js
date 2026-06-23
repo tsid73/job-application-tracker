@@ -72,7 +72,7 @@ export function createReadApi({ pool, audit }) {
               'No recent update. Consider a follow-up.' AS message
             FROM applications
             WHERE archived_at IS NULL
-              AND status IN ('applied', 'ghosted')
+              AND status = 'applied'
               AND applied_date <= CURRENT_DATE - INTERVAL '7 days'
               AND NOT EXISTS (
                 SELECT 1
@@ -98,6 +98,7 @@ export function createReadApi({ pool, audit }) {
             FROM application_todos t
             JOIN applications a ON a.id = t.application_id
             WHERE a.archived_at IS NULL
+              AND a.status NOT IN ('rejected', 'withdrawn', 'ghosted')
               AND t.completed = FALSE
               AND t.due_date IS NOT NULL
               AND t.due_date <= CURRENT_DATE + INTERVAL '3 days'
@@ -117,6 +118,7 @@ export function createReadApi({ pool, audit }) {
               COALESCE(next_action, 'Next action due') AS message
             FROM applications
             WHERE archived_at IS NULL
+              AND status NOT IN ('rejected', 'withdrawn', 'ghosted')
               AND next_action_due_date IS NOT NULL
               AND next_action_due_date <= CURRENT_DATE + INTERVAL '7 days'
             ORDER BY next_action_due_date ASC, id ASC
@@ -313,8 +315,8 @@ export function createReadApi({ pool, audit }) {
       const tag = cleanString(url.searchParams.get('tag')) || '';
       const archived = cleanString(url.searchParams.get('archived')) || 'false';
       if (status) validateStatus(status);
-      if (!['false', 'true', 'all'].includes(archived)) {
-        const error = new Error('archived must be false, true, or all');
+      if (!['false', 'true', 'all', 'closed'].includes(archived)) {
+        const error = new Error('archived must be false, true, all, or closed');
         error.statusCode = 400;
         throw error;
       }
@@ -357,7 +359,8 @@ export function createReadApi({ pool, audit }) {
             AND (
               $4 = 'all'
               OR ($4 = 'true' AND a.archived_at IS NOT NULL)
-              OR ($4 = 'false' AND a.archived_at IS NULL)
+              OR ($4 = 'closed' AND a.archived_at IS NULL AND a.status IN ('rejected', 'withdrawn', 'ghosted'))
+              OR ($4 = 'false' AND a.archived_at IS NULL AND a.status NOT IN ('rejected', 'withdrawn', 'ghosted'))
             )
           GROUP BY a.id, c.original_name
           ORDER BY

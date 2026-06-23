@@ -101,6 +101,7 @@ const routeApi = createApiRouter({
   archiveApplication,
   restoreApplication,
   createNote,
+  deleteNote,
   updatePreparation,
   createRecruiterQuestion,
   updateRecruiterQuestion,
@@ -842,6 +843,13 @@ async function updateApplication(req, res, id) {
   const body = await readJson(req, 256 * 1024);
   const previous = current.rows[0];
   const data = normalizeApplicationInput({ ...current.rows[0], ...body });
+
+  const closedStatuses = ['rejected', 'withdrawn', 'ghosted'];
+  if (closedStatuses.includes(data.status) && previous.status !== data.status) {
+    data.next_action = '';
+    data.next_action_due_date = null;
+  }
+
   const client = await pool.connect();
 
   try {
@@ -997,6 +1005,13 @@ async function createNote(req, res, applicationId) {
   );
   await pool.query('INSERT INTO activity_logs (application_id, action, details) VALUES ($1, $2, $3)', [applicationId, 'note_added', note.slice(0, 500)]);
   sendJson(res, 201, { note: result.rows[0] });
+}
+
+async function deleteNote(req, res, id) {
+  const result = await pool.query('DELETE FROM application_notes WHERE id = $1 RETURNING id, application_id, body', [id]);
+  if (!result.rowCount) return sendError(res, 404, 'Note not found');
+  await logActivity(pool, result.rows[0].application_id, 'note_deleted', result.rows[0].body.slice(0, 120));
+  sendJson(res, 200, { ok: true });
 }
 
 async function updatePreparation(req, res, applicationId) {

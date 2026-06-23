@@ -548,6 +548,11 @@ tr.archived {
   background: rgba(236, 238, 241, 0.72);
 }
 
+tr.closed {
+  color: var(--muted);
+  background: rgba(253, 232, 232, 0.4);
+}
+
 tr:last-child td {
   border-bottom: 0;
 }
@@ -615,6 +620,12 @@ tr:last-child td {
 .archived-state {
   color: #4b5563;
   background: #e5e7eb;
+}
+
+.closed-state {
+  color: #7c2d2d;
+  background: #fde8e8;
+  border-color: rgba(153, 27, 27, 0.18);
 }
 
 .days-badge.soon {
@@ -1773,6 +1784,18 @@ dialog::backdrop {
   border-radius: 12px;
   padding: 10px;
   background: rgba(255, 255, 255, 0.82);
+}
+
+.note-item {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.note-item > span {
+  flex: 1;
+  white-space: pre-wrap;
 }
 
 .history-timeline {
@@ -3367,5 +3390,28 @@ a {
 }
 
 .bulk-bar[hidden] {
+  display: none;
+}
+
+.is-closed form[data-preparation-form],
+.is-closed form[data-question-form],
+.is-closed form[data-feedback-form],
+.is-closed form[data-todo-form],
+.is-closed form[data-note-form] {
+  display: none;
+}
+
+.is-closed [data-question-edit],
+.is-closed [data-question-delete],
+.is-closed [data-question-move],
+.is-closed [data-feedback-delete],
+.is-closed [data-todo-edit],
+.is-closed [data-todo-delete],
+.is-closed [data-todo-toggle],
+.is-closed [data-note-delete] {
+  display: none;
+}
+
+.is-closed .ai-gen-btn {
   display: none;
 }
