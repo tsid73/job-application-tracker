@@ -28,7 +28,6 @@ export function renderHomeWorkspace() {
         <button class="secondary is-active" type="button" data-view="list" aria-pressed="true">List</button>
         <button class="secondary" type="button" data-view="reminders" aria-pressed="false">Reminders</button>
         <button class="secondary" type="button" data-view="kanban" aria-pressed="false">Kanban</button>
-        <button class="secondary" type="button" data-view="today" aria-pressed="false">Today</button>
         <button class="secondary" type="button" data-view="reports" aria-pressed="false">Reports</button>
         <button class="secondary" type="button" data-view="stats" aria-pressed="false">Stats</button>
         <button class="secondary" type="button" data-view="activity" aria-pressed="false">Activity</button>
@@ -125,10 +124,6 @@ export function renderHomeWorkspace() {
 
       <section id="kanbanView" class="view-panel" hidden>
         <div id="kanbanBoard" class="kanban-board"></div>
-      </section>
-
-      <section id="todayView" class="view-panel" hidden>
-        <div id="todayContent" class="today-grid"></div>
       </section>
 
       <section id="reportsView" class="view-panel" hidden>
@@ -230,15 +225,16 @@ export function renderReports(els, report, statusLabels) {
     <section class="report-panel report-panel-status">
       <div class="panel-kicker">Snapshot</div>
       <h3>Status</h3>
-      ${report.status_counts.map((row) => reportRow(statusLabels[row.status] || row.status, Number(row.count), maxCount(report.status_counts))).join('') || '<p>No status data.</p>'}
+      ${report.status_counts.map((row) => reportRow(statusLabels[row.status] || row.status, Number(row.count), maxCount(report.status_counts), { status: row.status })).join('') || '<p>No status data.</p>'}
     </section>
     <section class="report-panel report-panel-lifecycle">
       <div class="panel-kicker">Portfolio</div>
       <h3>Lifecycle</h3>
       ${[
-        { label: 'Active', count: Number(report.lifecycle_counts.active || 0) },
-        { label: 'Archived', count: Number(report.lifecycle_counts.archived || 0) }
-      ].map((row) => reportRow(row.label, row.count, Number(report.lifecycle_counts.total || 1))).join('')}
+        { label: 'Active', count: Number(report.lifecycle_counts.active || 0), jump: { view: 'false' } },
+        { label: 'Closed', count: Number(report.lifecycle_counts.closed || 0), jump: { view: 'closed' } },
+        { label: 'Archived', count: Number(report.lifecycle_counts.archived || 0), jump: { view: 'true' } }
+      ].map((row) => reportRow(row.label, row.count, Number(report.lifecycle_counts.total || 1), row.jump)).join('')}
     </section>
     <section class="report-panel report-panel-monthly">
       <div class="panel-kicker">Velocity</div>
@@ -262,7 +258,7 @@ export function renderReports(els, report, statusLabels) {
 }
 
 export function renderStats(els, stats) {
-  const total = Number(stats.totals.total || 0);
+  const total = Number(stats.totals.active || 0);
   const funnelRows = [
     { label: 'Applied', count: total },
     { label: 'Interview', count: Number(stats.funnel.interviewed || 0) },
@@ -286,7 +282,7 @@ export function renderStats(els, stats) {
       ${reportRow('Responded', Number(stats.funnel.responded || 0), Math.max(1, total))}
       ${reportRow('Rejected', Number(stats.funnel.rejected || 0), Math.max(1, total))}
       ${reportRow('Ghosted', Number(stats.totals.ghosted || 0), Math.max(1, total))}
-      <p class="section-help">Response rate ${rate(stats.funnel.responded, total)} — any recorded interview, offer, acceptance, or rejection.</p>
+      <p class="section-help">Response rate ${rate(stats.funnel.responded, total)} — any recorded interview, offer, or acceptance.</p>
     </section>
     <section class="report-panel">
       <div class="panel-kicker">Velocity</div>
@@ -338,7 +334,7 @@ export function renderApplications(els, state, statusOptions) {
 
   const interviews = state.applications.filter((item) => item.status === 'interview_scheduled').length;
   const archived = state.applications.filter((item) => item.archived_at).length;
-  const viewName = state.filters.archived === 'true' ? 'archived' : state.filters.archived === 'all' ? 'total' : 'active';
+  const viewName = { true: 'archived', all: 'total', closed: 'closed', false: 'active' }[state.filters.archived] || 'active';
   els.summary.textContent = `${state.applications.length} ${viewName}, ${interviews} interviews scheduled, ${archived} archived shown`;
   if (!state.applications.length) {
     els.empty.innerHTML = renderEmptyState(
@@ -509,75 +505,6 @@ export function renderKanban(els, applications, statusLabels) {
   if (!applications.some((application) => !application.archived_at)) {
     els.kanbanBoard.innerHTML = renderEmptyState('Kanban is empty', 'Active applications will appear here and group automatically by stage.', 'Create an application or restore an archived one to populate this board.');
   }
-}
-
-export function renderToday(els, state) {
-  const active = state.applications.filter((item) => !item.archived_at);
-  const dueActions = active
-    .filter((item) => item.next_action_due_date && daysUntil(item.next_action_due_date) <= 7)
-    .sort((left, right) => String(left.next_action_due_date).localeCompare(String(right.next_action_due_date)));
-  const stale = active
-    .filter((item) => Number(item.days_since_touched) >= 7)
-    .sort((left, right) => Number(right.days_since_touched) - Number(left.days_since_touched));
-  const interviews = active
-    .filter((item) => item.status === 'interview_scheduled' && item.interview_date)
-    .sort((left, right) => String(left.interview_date).localeCompare(String(right.interview_date)));
-
-  els.todayContent.innerHTML = `
-    <section class="route-card today-card">
-      <div class="section-heading">
-        <div>
-          <div class="panel-kicker">Today</div>
-          <h3>Action Queue</h3>
-          <p class="section-help">Due next actions, interviews, and stale applications in one place.</p>
-        </div>
-      </div>
-      <div class="today-section-list">
-        ${renderTodaySection('Priority Reminders', state.notifications, (item) => `
-          <article class="today-item">
-            <strong>${escapeHtml(item.company_name)}</strong>
-            <span>${escapeHtml(item.message)}</span>
-            <a class="button-link tertiary" href="/applications/${item.id}">Open</a>
-          </article>
-        `)}
-        ${renderTodaySection('Next Actions', dueActions, (item) => `
-          <article class="today-item">
-            <strong>${escapeHtml(item.company_name)}</strong>
-            <span>${escapeHtml(item.next_action || recommendedNextAction(item))} · ${formatDate(item.next_action_due_date)}</span>
-            <a class="button-link tertiary" href="/applications/${item.id}">Open</a>
-          </article>
-        `)}
-        ${renderTodaySection('Upcoming Interviews', interviews, (item) => `
-          <article class="today-item">
-            <strong>${escapeHtml(item.company_name)}</strong>
-            <span>${formatDate(item.interview_date)} · ${formatDays(item.days_remaining)}</span>
-            <a class="button-link tertiary" href="/applications/${item.id}?tab=workflow">Prep</a>
-          </article>
-        `)}
-        ${renderTodaySection('Stale Applications', stale, (item) => `
-          <article class="today-item">
-            <strong>${escapeHtml(item.company_name)}</strong>
-            <span>${Number(item.days_since_touched)} days without updates</span>
-            <a class="button-link tertiary" href="/applications/${item.id}">Open</a>
-          </article>
-        `)}
-      </div>
-    </section>
-  `;
-}
-
-function renderTodaySection(title, items, renderItem) {
-  return `
-    <section class="today-section">
-      <div class="section-heading compact-heading">
-        <h4>${escapeHtml(title)}</h4>
-        <span class="pill subtle">${items.length}</span>
-      </div>
-      <div class="document-stack">
-        ${items.map(renderItem).join('') || '<p class="empty small">Nothing needs attention.</p>'}
-      </div>
-    </section>
-  `;
 }
 
 export function renderApplicationCVSelect(els, cvs) {
@@ -886,8 +813,7 @@ export function renderApplicationPage(els, payload, statusLabels, viewState) {
     preparation,
     recruiter_questions: recruiterQuestions,
     feedback_entries: feedbackEntries,
-    todos,
-    audit_events: auditEvents
+    todos
   } = payload;
 
   const activeTab = viewState.activeTab || 'overview';
@@ -900,7 +826,7 @@ export function renderApplicationPage(els, payload, statusLabels, viewState) {
     overview: renderOverviewTab({ application, primaryCv, tags, documents, jobs, statusLabels, selectedProvider: viewState.selectedProvider, capabilities: viewState.capabilities, preparation, recruiterQuestions, feedbackEntries, todos }),
     workflow: renderWorkflowTab({ application, preparation, recruiterQuestions, feedbackEntries, todos }),
     content: renderContentSummaryTab({ application, primaryCvId: primaryCv?.id || '', queuedJobs, failedJobs, allDocuments: documents, allJobs: jobs, selectedProvider: viewState.selectedProvider, capabilities: viewState.capabilities, workspace: viewState.contentWorkspace }),
-    history: renderHistoryTab({ application, history, notes, activity, auditEvents, statusLabels })
+    history: renderHistoryTab({ application, history, notes, activity, statusLabels })
   };
 
   const closed = !application.archived_at && isClosedStatus(application.status);
@@ -1157,6 +1083,25 @@ function aiRecommendationReason(application) {
   return 'Generate only the document that helps the current application stage.';
 }
 
+function renderResearchField(name, label, placeholder, value) {
+  const hasContent = Boolean(value);
+  return `
+    <label class="research-field">
+      <span>${escapeHtml(label)}</span>
+      ${hasContent ? `
+        <div class="research-preview" data-research-preview="${name}">
+          <p class="research-preview-text">${escapeHtml(value)}</p>
+          <div class="research-field-actions">
+            <button type="button" class="secondary" data-research-view="${name}" data-research-label="${escapeAttribute(label)}">View</button>
+            <button type="button" class="secondary" data-research-edit="${name}">Edit</button>
+          </div>
+        </div>
+      ` : ''}
+      <textarea name="${name}" rows="4" placeholder="${escapeAttribute(placeholder)}"${hasContent ? ' hidden' : ''}>${escapeHtml(value)}</textarea>
+    </label>
+  `;
+}
+
 function renderWorkflowTab({ application, preparation, recruiterQuestions, feedbackEntries, todos }) {
   return `
     <div class="tab-grid workflow-grid">
@@ -1169,18 +1114,9 @@ function renderWorkflowTab({ application, preparation, recruiterQuestions, feedb
           </div>
         </div>
         <form class="prep-form prep-research-form" data-preparation-form="${application.id}">
-          <label>
-            <span>About The Company</span>
-            <textarea name="about_company" rows="4" placeholder="Products, market, competitors, roadmap, team shape">${escapeHtml(preparation?.about_company || '')}</textarea>
-          </label>
-          <label>
-            <span>Company Values</span>
-            <textarea name="company_values" rows="4" placeholder="Culture signals, values, leadership principles">${escapeHtml(preparation?.company_values || '')}</textarea>
-          </label>
-          <label>
-            <span>Application Notes</span>
-            <textarea name="application_notes" rows="4" placeholder="Fit summary, risks, strengths, stories to prepare">${escapeHtml(preparation?.application_notes || '')}</textarea>
-          </label>
+          ${renderResearchField('about_company', 'About The Company', 'Products, market, competitors, roadmap, team shape', preparation?.about_company || '')}
+          ${renderResearchField('company_values', 'Company Values', 'Culture signals, values, leadership principles', preparation?.company_values || '')}
+          ${renderResearchField('application_notes', 'Application Notes', 'Fit summary, risks, strengths, stories to prepare', preparation?.application_notes || '')}
           <div class="inline-actions">
             <button type="submit">Save Research</button>
           </div>
@@ -1394,7 +1330,7 @@ function renderContentSummaryTab({ application, primaryCvId, queuedJobs, failedJ
   `;
 }
 
-function renderHistoryTab({ application, history, notes, activity, auditEvents, statusLabels }) {
+function renderHistoryTab({ application, history, notes, activity, statusLabels }) {
   return `
     <div class="tab-grid history-grid">
       <section class="route-card">
@@ -1433,17 +1369,6 @@ function renderHistoryTab({ application, history, notes, activity, auditEvents, 
         </div>
         <div class="history-list">
           ${history.map((item) => `<div class="history-item">${item.from_status ? statusLabels[item.from_status] : 'Created'} to ${statusLabels[item.to_status]}<br><small>${formatDateTime(item.changed_at)}</small></div>`).join('') || renderInlineEmpty('No status changes yet', 'The first status transition will appear here.')}
-        </div>
-      </section>
-      <section class="route-card">
-        <div class="section-heading">
-          <div>
-            <div class="panel-kicker">Audit</div>
-            <h3>Protected Actions</h3>
-          </div>
-        </div>
-        <div class="history-list">
-          ${auditEvents.map((item) => `<div class="history-item">${escapeHtml(formatAction(item.action))}<br><small>${escapeHtml(item.details || '')} · ${escapeHtml(item.actor_ip || 'local')} · ${formatDateTime(item.created_at)}</small></div>`).join('') || renderInlineEmpty('No audit events', 'Destructive or protected actions will appear here.')}
         </div>
       </section>
     </div>
@@ -1794,7 +1719,7 @@ function renderOverviewDocumentSlot(applicationId, slot, cvId) {
         <div class="document-type-line">
           <span class="document-type-icon" aria-hidden="true">${renderDocumentTypeIcon(slot.type)}</span>
           <div>
-            <div class="panel-kicker">${escapeHtml(slot.status === 'ready' || slot.status === 'updating' ? 'Generated Asset' : slot.status === 'generating' ? 'Generating' : slot.status === 'failed' ? 'Needs Attention' : 'Missing')}</div>
+            <div class="panel-kicker">${escapeHtml(slot.status === 'ready' || slot.status === 'updating' ? 'Generated Asset' : slot.status === 'generating' ? 'Generating' : slot.status === 'failed' ? 'Needs Attention' : 'Not Generated')}</div>
             <h4>${escapeHtml(slot.title)}</h4>
           </div>
         </div>
@@ -1885,7 +1810,7 @@ function renderSlotStatusBadge(slot) {
   if (slot.status === 'updating') return '<span class="pill info-pill">Regenerating</span>';
   if (slot.status === 'generating') return '<span class="pill info-pill">Generating</span>';
   if (slot.status === 'failed') return '<span class="pill danger-pill">Failed</span>';
-  return '<span class="pill subtle">Missing</span>';
+  return '<span class="pill subtle">Not Generated</span>';
 }
 
 function renderSlotMetadata(slot) {

@@ -68,7 +68,6 @@ const workspaceKeys = [
   'listView',
   'remindersView',
   'kanbanView',
-  'todayView',
   'reportsView',
   'statsView',
   'activityView',
@@ -78,7 +77,6 @@ const workspaceKeys = [
   'settingsView',
   'remindersList',
   'kanbanBoard',
-  'todayContent',
   'reportsContent',
   'statsContent',
   'toolkitContent',
@@ -136,7 +134,6 @@ export function bindWorkspaceElements(root = els.workspaceRoot) {
   els.listView = root.querySelector('#listView');
   els.remindersView = root.querySelector('#remindersView');
   els.kanbanView = root.querySelector('#kanbanView');
-  els.todayView = root.querySelector('#todayView');
   els.reportsView = root.querySelector('#reportsView');
   els.statsView = root.querySelector('#statsView');
   els.activityView = root.querySelector('#activityView');
@@ -146,7 +143,6 @@ export function bindWorkspaceElements(root = els.workspaceRoot) {
   els.settingsView = root.querySelector('#settingsView');
   els.remindersList = root.querySelector('#remindersList');
   els.kanbanBoard = root.querySelector('#kanbanBoard');
-  els.todayContent = root.querySelector('#todayContent');
   els.reportsContent = root.querySelector('#reportsContent');
   els.statsContent = root.querySelector('#statsContent');
   els.toolkitContent = root.querySelector('#toolkitContent');

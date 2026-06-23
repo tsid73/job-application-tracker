@@ -20,7 +20,6 @@ import {
   renderSavedFilters,
   renderTargetCompanies,
   renderTargetCompanyFilters,
-  renderToday,
   renderToolkit
 } from './render.js';
 
@@ -262,6 +261,13 @@ function bindHomeWorkspaceEvents() {
     }
     if (detail) navigateTo(`/applications/${detail.dataset.calendarDetail}`);
   });
+  [els.reportsContent, els.statsContent].forEach((container) => {
+    container?.addEventListener('click', (event) => {
+      const row = event.target.closest('[data-jump-status], [data-jump-view]');
+      if (!row) return;
+      jumpToFilteredList({ status: row.dataset.jumpStatus, view: row.dataset.jumpView });
+    });
+  });
   els.notificationsPanel?.addEventListener('click', async (event) => {
     const toggle = event.target.closest('[data-toggle-notifications]');
     const detail = event.target.closest('[data-notification-detail]');
@@ -415,7 +421,6 @@ async function switchView(view) {
   els.listView.hidden = view !== 'list';
   els.remindersView.hidden = view !== 'reminders';
   els.kanbanView.hidden = view !== 'kanban';
-  els.todayView.hidden = view !== 'today';
   els.reportsView.hidden = view !== 'reports';
   if (els.statsView) els.statsView.hidden = view !== 'stats';
   els.activityView.hidden = view !== 'activity';
@@ -431,7 +436,6 @@ async function switchView(view) {
     await loadReminders();
   }
   if (view === 'kanban') renderKanban(els, state.applications, statusLabels);
-  if (view === 'today') renderToday(els, state);
   if (view === 'reports') {
     renderSectionLoading(els.reportsContent, 'Loading reports');
     await loadReports();
@@ -456,6 +460,22 @@ async function switchView(view) {
   if (view === 'settings') bindSettingsActions();
 }
 
+async function jumpToFilteredList({ status = '', view = '' } = {}) {
+  // Status counts reflect current status across every lifecycle, so widen the
+  // archive view to 'all' to guarantee the filtered list matches the count.
+  state.filters.status = status || '';
+  state.filters.archived = view || (status ? 'all' : 'false');
+  state.filters.search = '';
+  state.filters.tag = '';
+  if (els.statusFilter) els.statusFilter.value = state.filters.status;
+  if (els.archiveFilter) els.archiveFilter.value = state.filters.archived;
+  if (els.search) els.search.value = '';
+  if (els.tagFilter) els.tagFilter.value = '';
+  if (els.savedFilterSelect) els.savedFilterSelect.value = '';
+  await switchView('list');
+  await loadApplications();
+}
+
 function applicationQueryParams() {
   const params = new URLSearchParams();
   if (state.filters.search) params.set('search', state.filters.search);
@@ -470,14 +490,7 @@ async function loadApplications() {
   state.applications = payload.applications;
   if (els.table) renderApplications(els, state, statusOptions);
   updateSelectionUI();
-  if (els.todayContent) renderToday(els, state);
   if (state.view === 'kanban' && els.kanbanBoard) renderKanban(els, state.applications, statusLabels);
-  if (els.summary) {
-    const interviews = state.applications.filter((item) => item.status === 'interview_scheduled').length;
-    const archived = state.applications.filter((item) => item.archived_at).length;
-    const viewName = { true: 'archived', all: 'total', closed: 'closed', false: 'active' }[state.filters.archived] || 'active';
-    els.summary.textContent = `${state.applications.length} ${viewName}, ${interviews} interviews scheduled, ${archived} archived shown`;
-  }
 }
 
 async function refreshApplicationRow(id) {
@@ -553,7 +566,6 @@ async function loadNotifications() {
     renderNotifications(els, state.notifications, state.notificationsExpanded);
     bindNotificationActions();
   }
-  if (els.todayContent) renderToday(els, state);
 }
 
 async function loadReports() {
@@ -1129,14 +1141,14 @@ function bindApplicationPageActions(payload) {
         </div>
         <p class="description">${escapeHtml(application.job_description || 'Add a job description to improve tailored output, ATS checks, and role-fit analysis.')}</p>
         <div class="document-card-actions modal-quick-actions">
-          <button type="button" data-modal-ai="fit" data-cv-id="${payload.cvs[0]?.id || ''}">Role Fit Summary</button>
-          <button class="secondary" type="button" data-modal-ai="ats" data-cv-id="${payload.cvs[0]?.id || ''}">ATS Skill Extraction</button>
-          <button class="secondary" type="button" data-modal-ai="cv" data-cv-id="${payload.cvs[0]?.id || ''}">Compare With Resume</button>
-          <button class="secondary" type="button" data-modal-ai="letter" data-cv-id="${payload.cvs[0]?.id || ''}">Interview Topic Draft</button>
+          <button type="button" data-ai="fit" data-cv-id="${payload.cvs[0]?.id || ''}">Role Fit Summary</button>
+          <button class="secondary" type="button" data-ai="ats" data-cv-id="${payload.cvs[0]?.id || ''}">ATS Check</button>
+          <button class="secondary" type="button" data-ai="cv" data-cv-id="${payload.cvs[0]?.id || ''}">Tailored CV</button>
+          <button class="secondary" type="button" data-ai="letter" data-cv-id="${payload.cvs[0]?.id || ''}">Cover Letter</button>
         </div>
       </section>
     `);
-    els.detailContent.querySelectorAll('[data-modal-ai]').forEach((button) => {
+    els.detailContent.querySelectorAll('[data-ai]').forEach((button) => {
       button.addEventListener('click', () => {
         els.detailDialog.close();
         runAI(button, application.id);
@@ -1200,6 +1212,31 @@ function bindApplicationPageActions(payload) {
       });
       showToast('Research notes saved.');
       await renderCurrentRoute();
+    });
+  });
+
+  root.querySelectorAll('[data-research-edit]').forEach((button) => {
+    button.addEventListener('click', () => {
+      const field = button.closest('.research-field');
+      const preview = field?.querySelector('[data-research-preview]');
+      const textarea = field?.querySelector('textarea');
+      if (!textarea) return;
+      if (preview) preview.hidden = true;
+      textarea.hidden = false;
+      textarea.focus();
+    });
+  });
+
+  root.querySelectorAll('[data-research-view]').forEach((button) => {
+    button.addEventListener('click', () => {
+      const field = button.closest('.research-field');
+      const textarea = field?.querySelector('textarea');
+      if (!textarea) return;
+      openDetailDialog(button.dataset.researchLabel || 'Notes', `
+        <section class="route-card detail-dialog-card">
+          <p class="description research-view-body">${escapeHtml(textarea.value)}</p>
+        </section>
+      `);
     });
   });
 
@@ -2126,7 +2163,6 @@ function unmountInactiveHomeViews(activeView) {
   };
   if (activeView !== 'reminders') clear(els.remindersList);
   if (activeView !== 'kanban') clear(els.kanbanBoard);
-  if (activeView !== 'today') clear(els.todayContent);
   if (activeView !== 'reports') clear(els.reportsContent);
   if (activeView !== 'stats') clear(els.statsContent);
   if (activeView !== 'activity') {

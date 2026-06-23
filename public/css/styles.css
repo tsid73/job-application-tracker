@@ -984,6 +984,29 @@ tr:last-child td {
   margin: 9px 0;
 }
 
+button.report-row {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  padding: 4px 6px;
+  margin: 5px 0;
+  border-radius: 8px;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.12s ease;
+}
+
+button.report-row span {
+  text-align: left;
+}
+
+button.report-row:hover,
+button.report-row:focus-visible {
+  background: var(--accent-tint);
+}
+
 .report-bar {
   height: 10px;
   overflow: hidden;
@@ -1373,6 +1396,40 @@ dialog::backdrop {
 .todo-form {
   display: grid;
   gap: 10px;
+}
+
+.research-field {
+  display: grid;
+  gap: 6px;
+}
+
+.research-preview {
+  display: grid;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.78);
+}
+
+.research-preview-text {
+  margin: 0;
+  white-space: pre-wrap;
+  color: var(--text);
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.research-field-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.research-view-body {
+  white-space: pre-wrap;
 }
 
 .prep-layout {
@@ -2188,47 +2245,6 @@ a {
   gap: 8px;
   align-items: center;
   margin: 12px 0;
-  color: var(--muted);
-  font-size: 13px;
-}
-
-.today-grid {
-  display: grid;
-  gap: 16px;
-}
-
-.today-section-list {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 14px;
-}
-
-.today-section {
-  display: grid;
-  gap: 10px;
-  min-width: 0;
-}
-
-.compact-heading {
-  margin-bottom: 0;
-}
-
-.compact-heading h4 {
-  margin: 0;
-}
-
-.today-item {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr) auto;
-  gap: 10px;
-  align-items: center;
-  padding: 10px 12px;
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  background: rgba(255, 255, 255, 0.78);
-}
-
-.today-item span {
   color: var(--muted);
   font-size: 13px;
 }
@@ -3068,8 +3084,6 @@ a {
   .history-grid,
   .content-summary-grid,
   .workflow-snapshot,
-  .today-section-list,
-  .today-item,
   .document-detail-layout,
   .application-hero-card,
   .hero-inline-meta,

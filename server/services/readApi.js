@@ -156,7 +156,8 @@ export function createReadApi({ pool, audit }) {
         pool.query(
           `
             SELECT
-              count(*) FILTER (WHERE archived_at IS NULL)::int AS active,
+              count(*) FILTER (WHERE archived_at IS NULL AND status NOT IN ('rejected', 'withdrawn', 'ghosted'))::int AS active,
+              count(*) FILTER (WHERE archived_at IS NULL AND status IN ('rejected', 'withdrawn', 'ghosted'))::int AS closed,
               count(*) FILTER (WHERE archived_at IS NOT NULL)::int AS archived,
               count(*)::int AS total
             FROM applications

@@ -67,14 +67,19 @@ export function formatDateTime(value) {
   return date.toLocaleString(undefined, { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' });
 }
 
-export function reportRow(label, value, max) {
+export function reportRow(label, value, max, jump = null) {
   const percent = max ? Math.max(3, Math.round((value / max) * 100)) : 0;
+  const jumpAttrs = jump
+    ? `${jump.status ? ` data-jump-status="${escapeHtml(jump.status)}"` : ''}${jump.view ? ` data-jump-view="${escapeHtml(jump.view)}"` : ''}`
+    : '';
+  const tag = jump ? 'button' : 'div';
+  const typeAttr = jump ? ' type="button"' : '';
   return `
-    <div class="report-row">
+    <${tag}${typeAttr} class="report-row${jump ? ' report-row-jump' : ''}"${jumpAttrs}>
       <span>${escapeHtml(label)}</span>
       <div class="report-bar"><i style="width:${percent}%"></i></div>
       <strong>${value}</strong>
-    </div>
+    </${tag}>
   `;
 }
 
