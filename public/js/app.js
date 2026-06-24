@@ -23,6 +23,8 @@ import {
   renderToolkit
 } from './render.js';
 
+const SIDEBAR_COLLAPSED_KEY = 'jat:sidebar-collapsed';
+
 const aiEndpoints = {
   cv: '/api/ai/generate-cv',
   letter: '/api/ai/generate-cover-letter',
@@ -41,8 +43,6 @@ Promise.all([loadApplications(), loadCVs(), loadSavedFilters(), loadReminders(),
   .catch((error) => {
     els.summary.textContent = error.message;
   });
-
-const SIDEBAR_COLLAPSED_KEY = 'jat:sidebar-collapsed';
 
 function initSidebarControls() {
   const layout = document.querySelector('.app-layout');
