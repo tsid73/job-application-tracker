@@ -42,6 +42,40 @@ Promise.all([loadApplications(), loadCVs(), loadSavedFilters(), loadReminders(),
     els.summary.textContent = error.message;
   });
 
+const SIDEBAR_COLLAPSED_KEY = 'jat:sidebar-collapsed';
+
+function initSidebarControls() {
+  const layout = document.querySelector('.app-layout');
+  const toggle = document.getElementById('sidebarToggle');
+  const openButton = document.getElementById('sidebarOpen');
+  if (!layout) return;
+
+  if (localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === '1') {
+    layout.classList.add('is-collapsed');
+    toggle?.setAttribute('aria-expanded', 'false');
+  }
+
+  toggle?.addEventListener('click', () => {
+    const collapsed = layout.classList.toggle('is-collapsed');
+    toggle.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+    localStorage.setItem(SIDEBAR_COLLAPSED_KEY, collapsed ? '1' : '0');
+  });
+
+  openButton?.addEventListener('click', () => {
+    layout.classList.toggle('sidebar-open');
+  });
+
+  document.addEventListener('click', (event) => {
+    if (!layout.classList.contains('sidebar-open')) return;
+    if (event.target.closest('.sidebar') || event.target.closest('#sidebarOpen')) return;
+    layout.classList.remove('sidebar-open');
+  });
+}
+
+function closeMobileSidebar() {
+  document.querySelector('.app-layout')?.classList.remove('sidebar-open');
+}
+
 function bindGlobalEvents() {
   document.querySelector('#newApplicationButton').addEventListener('click', openApplicationDialog);
   document.querySelector('#cvManagerButton').addEventListener('click', openCVDialog);
@@ -56,12 +90,14 @@ function bindGlobalEvents() {
     });
   });
 
-  document.querySelectorAll('[data-view]').forEach((button) => {
+  document.querySelectorAll('.sidebar [data-view]').forEach((button) => {
     button.addEventListener('click', () => {
       if (location.pathname !== '/') navigateTo('/');
       switchView(button.dataset.view);
     });
   });
+
+  initSidebarControls();
 
   els.search?.addEventListener('input', debounce(() => {
     state.filters.search = els.search.value.trim();
@@ -278,12 +314,6 @@ function bindHomeWorkspaceEvents() {
     }
     if (detail) navigateTo(`/applications/${detail.dataset.notificationDetail}`);
   });
-  els.workspaceRoot.querySelectorAll('[data-view]').forEach((button) => {
-    button.addEventListener('click', () => {
-      if (location.pathname !== '/') navigateTo('/');
-      switchView(button.dataset.view);
-    });
-  });
   bindSettingsActions();
 }
 
@@ -411,11 +441,12 @@ async function runBulkAction(action) {
 
 async function switchView(view) {
   state.view = view;
-  els.workspaceRoot.querySelectorAll('[data-view]').forEach((button) => {
+  document.querySelectorAll('.sidebar [data-view]').forEach((button) => {
     const isActive = button.dataset.view === view;
     button.classList.toggle('is-active', isActive);
     button.setAttribute('aria-pressed', isActive ? 'true' : 'false');
   });
+  closeMobileSidebar();
 
   if (!els.listView) return;
   els.listView.hidden = view !== 'list';

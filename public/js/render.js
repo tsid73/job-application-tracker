@@ -24,19 +24,6 @@ export function renderHomeWorkspace() {
     <section class="workspace-view workspace-view-home" data-workspace-view="home">
       <section id="notificationsPanel" class="notifications-panel" hidden></section>
 
-      <nav class="view-tabs" aria-label="Views">
-        <button class="secondary is-active" type="button" data-view="list" aria-pressed="true">List</button>
-        <button class="secondary" type="button" data-view="reminders" aria-pressed="false">Reminders</button>
-        <button class="secondary" type="button" data-view="kanban" aria-pressed="false">Kanban</button>
-        <button class="secondary" type="button" data-view="reports" aria-pressed="false">Reports</button>
-        <button class="secondary" type="button" data-view="stats" aria-pressed="false">Stats</button>
-        <button class="secondary" type="button" data-view="activity" aria-pressed="false">Activity</button>
-        <button class="secondary" type="button" data-view="boards" aria-pressed="false">Job Boards</button>
-        <button class="secondary" type="button" data-view="companies" aria-pressed="false">Company List</button>
-        <button class="secondary" type="button" data-view="toolkit" aria-pressed="false">Toolkit</button>
-        <button class="secondary" type="button" data-view="settings" aria-pressed="false">Settings</button>
-      </nav>
-
       <section id="listView" class="surface-panel">
         <section class="toolbar" aria-label="Filters">
           <label>
@@ -379,10 +366,13 @@ export function buildApplicationRow(application, statusOptions, selected = false
     <td data-interview-cell>${closed ? '' : renderInterviewControl(application)}</td>
     <td>${renderTags(application.tags)}</td>
     <td>
-      <div class="row-actions">
-        ${application.archived_at ? `<button class="secondary" type="button" data-restore-row-id="${application.id}">Restore</button>` : `<button class="secondary" type="button" data-archive-row-id="${application.id}">Archive</button>`}
-        <button class="secondary" type="button" data-detail-id="${application.id}">Open</button>
-      </div>
+      <details class="inline-menu row-menu">
+        <summary class="icon-button row-menu-trigger" aria-label="Actions for ${escapeHtml(application.company_name)}">⋯</summary>
+        <div class="inline-menu-list">
+          <button class="secondary" type="button" data-detail-id="${application.id}">Open</button>
+          ${application.archived_at ? `<button class="secondary" type="button" data-restore-row-id="${application.id}">Restore</button>` : `<button class="secondary" type="button" data-archive-row-id="${application.id}">Archive</button>`}
+        </div>
+      </details>
     </td>
   `;
 

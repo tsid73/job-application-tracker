@@ -9,27 +9,54 @@
     <link rel="stylesheet" href="/css/styles.css">
   </head>
   <body>
-    <div class="ambient ambient-one" aria-hidden="true"></div>
-    <div class="ambient ambient-two" aria-hidden="true"></div>
-    <div class="app-shell">
-      <header class="topbar">
-        <div class="topbar-copy">
-          <span class="eyebrow">Application Command Center</span>
-          <h1>Job Applications</h1>
-          <p class="hero-copy">Track applications, CV versions, reminders, reports, and AI outputs in one local workspace.</p>
-          <p id="summary">Loading</p>
+    <div class="app-layout">
+      <aside class="sidebar" id="sidebar">
+        <div class="sidebar-brand">
+          <button id="sidebarToggle" class="sidebar-toggle" type="button" aria-label="Collapse sidebar" aria-expanded="true">
+            <span class="sidebar-toggle-bars" aria-hidden="true"></span>
+          </button>
+          <div class="sidebar-brand-copy">
+            <b>Job Applications</b>
+            <small>Command center</small>
+          </div>
         </div>
-        <div class="topbar-actions">
+
+        <nav class="sidebar-nav" aria-label="Sections">
+          <div class="nav-group-label">Pipeline</div>
+          <button class="nav-item is-active" type="button" data-view="list" aria-pressed="true"><span class="nav-ic" aria-hidden="true">☰</span><span class="nav-text">List</span></button>
+          <button class="nav-item" type="button" data-view="kanban" aria-pressed="false"><span class="nav-ic" aria-hidden="true">▦</span><span class="nav-text">Kanban</span></button>
+          <button class="nav-item" type="button" data-view="reports" aria-pressed="false"><span class="nav-ic" aria-hidden="true">◔</span><span class="nav-text">Reports</span></button>
+          <button class="nav-item" type="button" data-view="stats" aria-pressed="false"><span class="nav-ic" aria-hidden="true">▲</span><span class="nav-text">Stats</span></button>
+
+          <div class="nav-group-label">Workspace</div>
+          <button class="nav-item" type="button" data-view="reminders" aria-pressed="false"><span class="nav-ic" aria-hidden="true">◷</span><span class="nav-text">Reminders</span></button>
+          <button class="nav-item" type="button" data-view="activity" aria-pressed="false"><span class="nav-ic" aria-hidden="true">≡</span><span class="nav-text">Activity</span></button>
+          <button class="nav-item" type="button" data-view="boards" aria-pressed="false"><span class="nav-ic" aria-hidden="true">⊞</span><span class="nav-text">Job Boards</span></button>
+          <button class="nav-item" type="button" data-view="companies" aria-pressed="false"><span class="nav-ic" aria-hidden="true">⌂</span><span class="nav-text">Company List</span></button>
+          <button class="nav-item" type="button" data-view="toolkit" aria-pressed="false"><span class="nav-ic" aria-hidden="true">✦</span><span class="nav-text">Toolkit</span></button>
+          <button class="nav-item" type="button" data-view="settings" aria-pressed="false"><span class="nav-ic" aria-hidden="true">⚙</span><span class="nav-text">Settings</span></button>
+        </nav>
+
+        <div class="sidebar-footer">
           <input id="importCsvInput" type="file" accept=".csv,text/csv" hidden>
           <input id="restoreBackupInput" type="file" accept=".json,application/json" hidden>
-          <button id="cvManagerButton" class="secondary" type="button">CVs</button>
-          <button id="newApplicationButton" type="button">New Application</button>
+          <button id="cvManagerButton" class="secondary sidebar-btn" type="button"><span class="nav-ic" aria-hidden="true">▤</span><span class="nav-text">CVs</span></button>
+          <button id="newApplicationButton" class="sidebar-btn primary-btn" type="button"><span class="nav-ic" aria-hidden="true">＋</span><span class="nav-text">New Application</span></button>
         </div>
-      </header>
+      </aside>
 
-      <main>
-        <section id="workspaceRoot" class="workspace-root" aria-live="polite"></section>
-      </main>
+      <div class="content">
+        <header class="content-header">
+          <button id="sidebarOpen" class="sidebar-open" type="button" aria-label="Open menu">☰</button>
+          <div class="content-header-copy">
+            <h1>Applications</h1>
+            <p id="summary">Loading</p>
+          </div>
+        </header>
+        <main>
+          <section id="workspaceRoot" class="workspace-root" aria-live="polite"></section>
+        </main>
+      </div>
     </div>
 
     <dialog id="applicationDialog">
