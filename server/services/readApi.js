@@ -344,6 +344,8 @@ export function createReadApi({ pool, audit }) {
       const status = cleanString(url.searchParams.get('status')) || '';
       const tag = cleanString(url.searchParams.get('tag')) || '';
       const archived = cleanString(url.searchParams.get('archived')) || 'false';
+      const dateFrom = cleanString(url.searchParams.get('dateFrom')) || '';
+      const dateTo = cleanString(url.searchParams.get('dateTo')) || '';
       if (status) validateStatus(status);
       if (!['false', 'true', 'all', 'closed'].includes(archived)) {
         const error = new Error('archived must be false, true, all, or closed');
@@ -392,6 +394,8 @@ export function createReadApi({ pool, audit }) {
               OR ($4 = 'closed' AND a.archived_at IS NULL AND a.status IN ('rejected', 'withdrawn', 'ghosted'))
               OR ($4 = 'false' AND a.archived_at IS NULL AND a.status NOT IN ('rejected', 'withdrawn', 'ghosted'))
             )
+            AND ($5 = '' OR a.applied_date >= $5::date)
+            AND ($6 = '' OR a.applied_date <= $6::date)
           GROUP BY a.id, c.original_name
           ORDER BY
             a.archived_at DESC NULLS LAST,
@@ -400,7 +404,7 @@ export function createReadApi({ pool, audit }) {
             a.applied_date DESC,
             a.id DESC
         `,
-        [search, status, tag, archived]
+        [search, status, tag, archived, dateFrom, dateTo]
       );
 
       return { applications: result.rows };

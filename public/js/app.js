@@ -180,6 +180,37 @@ function bindHomeWorkspaceEvents() {
     els.savedFilterSelect.value = '';
     loadApplications();
   });
+  els.dateFromFilter?.addEventListener('change', () => {
+    state.filters.dateFrom = els.dateFromFilter.value;
+    els.savedFilterSelect.value = '';
+    loadApplications();
+  });
+  els.dateToFilter?.addEventListener('change', () => {
+    state.filters.dateTo = els.dateToFilter.value;
+    els.savedFilterSelect.value = '';
+    loadApplications();
+  });
+  els.resetFiltersButton?.addEventListener('click', () => {
+    state.filters.search = '';
+    state.filters.status = '';
+    state.filters.tag = '';
+    state.filters.archived = 'false';
+    state.filters.dateFrom = '';
+    state.filters.dateTo = '';
+    if (els.search) els.search.value = '';
+    if (els.statusFilter) els.statusFilter.value = '';
+    if (els.tagFilter) els.tagFilter.value = '';
+    if (els.archiveFilter) els.archiveFilter.value = 'false';
+    if (els.dateFromFilter) els.dateFromFilter.value = '';
+    if (els.dateToFilter) els.dateToFilter.value = '';
+    if (els.savedFilterSelect) els.savedFilterSelect.value = '';
+    loadApplications();
+  });
+  els.activityResetButton?.addEventListener('click', () => {
+    state.activity.search = '';
+    if (els.activitySearchInput) els.activitySearchInput.value = '';
+    loadActivity();
+  });
   els.savedFilterSelect?.addEventListener('change', async () => {
     const id = Number(els.savedFilterSelect.value);
     const savedFilter = state.savedFilters.find((item) => item.id === id);
@@ -340,9 +371,15 @@ function bindHomeWorkspaceEvents() {
   });
   [els.reportsContent, els.statsContent].forEach((container) => {
     container?.addEventListener('click', (event) => {
-      const row = event.target.closest('[data-jump-status], [data-jump-view]');
+      const row = event.target.closest('[data-jump-status], [data-jump-view], [data-jump-month]');
       if (!row) return;
-      jumpToFilteredList({ status: row.dataset.jumpStatus, view: row.dataset.jumpView });
+      jumpToFilteredList({ 
+        status: row.dataset.jumpStatus, 
+        view: row.dataset.jumpView,
+        month: row.dataset.jumpMonth,
+        dateFrom: row.dataset.jumpDateFrom,
+        dateTo: row.dataset.jumpDateTo
+      });
     });
   });
   els.notificationsPanel?.addEventListener('click', async (event) => {
@@ -562,17 +599,32 @@ async function switchView(view) {
   if (view === 'settings') bindSettingsActions();
 }
 
-async function jumpToFilteredList({ status = '', view = '' } = {}) {
+async function jumpToFilteredList({ status = '', view = '', dateFrom = '', dateTo = '', month = '' } = {}) {
   // Status counts reflect current status across every lifecycle, so widen the
   // archive view to 'all' to guarantee the filtered list matches the count.
   state.filters.status = status || '';
   state.filters.archived = view || (status ? 'all' : 'false');
   state.filters.search = '';
   state.filters.tag = '';
+  
+  if (month) {
+    const year = parseInt(month.split('-')[0], 10);
+    const m = parseInt(month.split('-')[1], 10);
+    const firstDay = new Date(year, m - 1, 1);
+    const lastDay = new Date(year, m, 0);
+    state.filters.dateFrom = `${year}-${String(m).padStart(2, '0')}-01`;
+    state.filters.dateTo = `${year}-${String(m).padStart(2, '0')}-${String(lastDay.getDate()).padStart(2, '0')}`;
+  } else {
+    state.filters.dateFrom = dateFrom || '';
+    state.filters.dateTo = dateTo || '';
+  }
+
   if (els.statusFilter) els.statusFilter.value = state.filters.status;
   if (els.archiveFilter) els.archiveFilter.value = state.filters.archived;
   if (els.search) els.search.value = '';
   if (els.tagFilter) els.tagFilter.value = '';
+  if (els.dateFromFilter) els.dateFromFilter.value = state.filters.dateFrom;
+  if (els.dateToFilter) els.dateToFilter.value = state.filters.dateTo;
   if (els.savedFilterSelect) els.savedFilterSelect.value = '';
   await switchView('list');
   await loadApplications();
@@ -583,6 +635,8 @@ function applicationQueryParams() {
   if (state.filters.search) params.set('search', state.filters.search);
   if (state.filters.status) params.set('status', state.filters.status);
   if (state.filters.tag) params.set('tag', state.filters.tag);
+  if (state.filters.dateFrom) params.set('dateFrom', state.filters.dateFrom);
+  if (state.filters.dateTo) params.set('dateTo', state.filters.dateTo);
   params.set('archived', state.filters.archived);
   return params;
 }

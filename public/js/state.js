@@ -24,7 +24,9 @@ export const state = {
     search: '',
     status: '',
     tag: '',
-    archived: 'false'
+    archived: 'false',
+    dateFrom: '',
+    dateTo: ''
   },
   selectedIds: new Set(),
   notifications: [],

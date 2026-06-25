@@ -62,6 +62,17 @@ export function renderHomeWorkspace() {
                 <option value="all">All</option>
               </select>
             </label>
+            <label>
+              <span>From</span>
+              <input id="dateFromFilter" type="date">
+            </label>
+            <label>
+              <span>To</span>
+              <input id="dateToFilter" type="date">
+            </label>
+            <button id="resetFiltersButton" class="icon-button" type="button" aria-label="Clear filters" title="Clear filters" style="align-self: flex-end; margin-bottom: 4px;">
+              <i class="bi bi-x-circle"></i>
+            </button>
             <label style="display: none !important;" hidden>
               <span>Saved Filter</span>
               <select id="savedFilterSelect">
@@ -134,6 +145,9 @@ export function renderHomeWorkspace() {
               <span>Activity Query</span>
               <input id="activitySearchInput" type="search" placeholder="Company, action, detail">
             </label>
+            <button id="activityResetButton" class="icon-button" type="button" aria-label="Clear filters" title="Clear filters" style="align-self: flex-end; margin-bottom: 4px;">
+              <i class="bi bi-x-circle"></i>
+            </button>
             <button id="activityDeleteButton" class="secondary text-danger" type="button" disabled style="margin-left: auto;">
               <i class="bi bi-trash"></i> Delete Selected
             </button>
@@ -242,18 +256,18 @@ export function renderReports(els, report, statusLabels) {
     <section class="report-panel report-panel-monthly">
       <div class="panel-kicker">Velocity</div>
       <h3>Monthly Applications</h3>
-      ${report.monthly_counts.map((row) => reportRow(formatMonthLabel(row.month), Number(row.count), maxCount(report.monthly_counts))).join('') || '<p>No monthly data.</p>'}
+      ${report.monthly_counts.map((row) => reportRow(formatMonthLabel(row.month), Number(row.count), maxCount(report.monthly_counts), { month: row.month })).join('') || '<p>No monthly data.</p>'}
     </section>
     <section class="report-panel report-panel-upcoming">
       <div class="panel-kicker">Watchlist</div>
       <h3>Upcoming Interviews</h3>
       <div class="upcoming-list">
         ${report.upcoming_interviews.map((item) => `
-          <article class="upcoming-card ${daysClass(item.days_remaining).replace('days-badge', '').trim()}">
+          <button type="button" class="upcoming-card ${daysClass(item.days_remaining).replace('days-badge', '').trim()}" data-jump-status="interview_scheduled" data-jump-date-from="${escapeAttribute(item.interview_date)}" data-jump-date-to="${escapeAttribute(item.interview_date)}">
             <strong>${escapeHtml(item.company_name)}</strong>
             <span>${formatDate(item.interview_date)}</span>
             ${renderDays(item.days_remaining)}
-          </article>
+          </button>
         `).join('') || '<p>No upcoming interviews.</p>'}
       </div>
     </section>
