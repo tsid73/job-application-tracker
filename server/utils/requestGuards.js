@@ -27,7 +27,7 @@ export function createRequestGuard({ config }) {
       });
     }
 
-    const limit = resolveRateLimit(pathname, config);
+    const limit = resolveRateLimit(req, pathname, config);
     if (!limit) return;
 
     const ip = clientAddress(req, config);
@@ -73,11 +73,11 @@ function isUploadPath(pathname) {
     || pathname === '/api/import/backup';
 }
 
-function resolveRateLimit(pathname, config) {
+function resolveRateLimit(req, pathname, config) {
   if (pathname.startsWith('/api/ai/')) {
     return { name: 'ai_requests', windowMs: config.aiRateLimitWindowMs, max: config.aiRateLimitMax };
   }
-  if (isUploadPath(pathname)) {
+  if (req.method !== 'GET' && req.method !== 'HEAD' && isUploadPath(pathname)) {
     return { name: 'uploads', windowMs: config.uploadRateLimitWindowMs, max: config.uploadRateLimitMax };
   }
   if (pathname.startsWith('/api/')) {

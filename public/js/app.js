@@ -335,6 +335,20 @@ function bindHomeWorkspaceEvents() {
       bindTargetCompanyActions();
     });
   });
+  els.targetCompanyResetButton?.addEventListener('click', () => {
+    state.targetCompanyFilters.search = '';
+    state.targetCompanyFilters.region = '';
+    state.targetCompanyFilters.visa = '';
+    state.targetCompanyFilters.workMode = '';
+    state.targetCompanyFilters.industry = '';
+    if (els.targetCompanySearch) els.targetCompanySearch.value = '';
+    if (els.targetCompanyRegionFilter) els.targetCompanyRegionFilter.value = '';
+    if (els.targetCompanyVisaFilter) els.targetCompanyVisaFilter.value = '';
+    if (els.targetCompanyWorkModeFilter) els.targetCompanyWorkModeFilter.value = '';
+    if (els.targetCompanyIndustryFilter) els.targetCompanyIndustryFilter.value = '';
+    renderTargetCompanies(els, state.targetCompanies, state.targetCompanyFilters);
+    bindTargetCompanyActions();
+  });
   els.targetCompanyFilterToggle?.addEventListener('click', () => {
     if (els.targetCompanyFilterPanel) {
       els.targetCompanyFilterPanel.hidden = !els.targetCompanyFilterPanel.hidden;
@@ -617,7 +631,7 @@ async function jumpToFilteredList({ status = '', view = '', dateFrom = '', dateT
   // Status counts reflect current status across every lifecycle, so widen the
   // archive view to 'all' to guarantee the filtered list matches the count.
   state.filters.status = status || '';
-  state.filters.archived = view || (status ? 'all' : 'false');
+  state.filters.archived = view || (status || month || dateFrom ? 'all' : 'false');
   state.filters.search = '';
   state.filters.tag = '';
   

@@ -102,6 +102,7 @@ const workspaceKeys = [
   'targetCompanyVisaFilter',
   'targetCompanyWorkModeFilter',
   'targetCompanyIndustryFilter',
+  'targetCompanyResetButton',
   'targetCompaniesList',
   'targetCompaniesSummary',
   'settingsExportCsvButton',
@@ -182,6 +183,7 @@ export function bindWorkspaceElements(root = els.workspaceRoot) {
   els.targetCompanyVisaFilter = root.querySelector('#targetCompanyVisaFilter');
   els.targetCompanyWorkModeFilter = root.querySelector('#targetCompanyWorkModeFilter');
   els.targetCompanyIndustryFilter = root.querySelector('#targetCompanyIndustryFilter');
+  els.targetCompanyResetButton = root.querySelector('#targetCompanyResetButton');
   els.targetCompaniesList = root.querySelector('#targetCompaniesList');
   els.targetCompaniesSummary = root.querySelector('#targetCompaniesSummary');
   els.settingsExportCsvButton = root.querySelector('#settingsExportCsvButton');

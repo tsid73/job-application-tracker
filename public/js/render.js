@@ -218,6 +218,9 @@ export function renderHomeWorkspace() {
               <span>Industry</span>
               <select id="targetCompanyIndustryFilter"></select>
             </label>
+            <button id="targetCompanyResetButton" class="icon-button" type="button" aria-label="Clear filters" title="Clear filters" style="align-self: flex-end; margin-bottom: 4px;">
+              <i class="bi bi-x-circle"></i>
+            </button>
           </section>
           <p id="targetCompaniesSummary" class="section-help"></p>
           <div id="targetCompaniesList" class="board-list"></div>
