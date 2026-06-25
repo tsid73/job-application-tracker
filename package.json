@@ -5,8 +5,8 @@
   "type": "module",
   "main": "server/index.js",
   "scripts": {
-    "start": "node server/index.js",
-    "dev": "node --watch server/index.js",
+    "start": "node --env-file=.env.production server/index.js",
+    "dev": "node --watch --env-file=.env.development server/index.js",
     "migrate": "node server/db/migrate.js",
     "seed": "node server/db/seed.js",
     "check": "node --check server/index.js && node --check server/db/migrate.js && node --check server/db/seed.js",

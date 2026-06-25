@@ -31,27 +31,53 @@ Uploaded CVs, generated documents, backups, and `.env` values can contain privat
 
 ```bash
 npm install
-cp .env.example .env
+# Set up development environment
+cp .env.example .env.development
 npm run migrate
 npm run seed
-npm start
 ```
 
-Open:
-
-```text
-http://localhost:3000
-```
-
-For development with auto-reload:
-
+Start the application in Development mode (port 3001, isolated data):
 ```bash
 npm run dev
 ```
 
+Start the application in Production mode (port 3000, isolated data):
+```bash
+npm run start
+```
+
+## Environment Isolation
+
+This project uses isolated environments to ensure that development testing never corrupts your real job applications. We use Node 20's native `--env-file` feature.
+
+### 1. Production (`.env.production`)
+Loaded when you run `npm start`.
+```text
+PORT=3000
+DB_CLIENT=pglite
+PGLITE_DATA_DIR=data/production/pglite
+UPLOAD_DIR=uploads/production
+FILE_STORAGE_MODE=local
+AI_PROVIDER=gemini
+```
+
+### 2. Development (`.env.development`)
+Loaded when you run `npm run dev`.
+```text
+PORT=3001
+DB_CLIENT=pglite
+PGLITE_DATA_DIR=data/development/pglite
+UPLOAD_DIR=uploads/development
+FILE_STORAGE_MODE=local
+AI_PROVIDER=mock
+```
+
+Because `PGLITE_DATA_DIR` and `UPLOAD_DIR` are scoped to their respective environments, you can freely generate mock applications or run migrations in development without any fear of impacting your production records.
+
 ## Default Local Setup
 
-The default `.env.example` is local and safe for onboarding:
+The default `.env.example` provides safe development defaults:
 
 ```text
 DB_CLIENT=pglite
@@ -59,7 +85,7 @@ FILE_STORAGE_MODE=local
 AI_PROVIDER=mock
 ```
 
-`AI_PROVIDER=mock` avoids external AI calls.
+`AI_PROVIDER=mock` avoids external AI calls. The `.env` fallback is still supported if neither `--env-file` provides a variable.
 
 ## Common Commands
 
