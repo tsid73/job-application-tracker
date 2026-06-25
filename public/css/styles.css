@@ -196,34 +196,40 @@ button.secondary {
   box-shadow: none;
 }
 
-button.icon-button {
+.icon-button {
   background: var(--card);
   color: var(--text);
-  border-color: var(--line);
+  border: 1px solid var(--line);
   box-shadow: none;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border-radius: 6px;
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  cursor: pointer;
+  text-decoration: none;
+  box-sizing: border-box;
 }
 
 /* Compact icon-only button sizing */
+.icon-button-compact,
 .board-actions-grid button,
 .company-card-actions button,
 .company-card-links button,
 .row-actions button,
 .bulk-bar button.icon-button,
 .toolbar button.icon-button {
-  width: 28px;
-  height: 28px;
+  width: 28px !important;
+  height: 28px !important;
   min-height: 28px !important;
   padding: 0 !important;
-  border-radius: 6px;
-  font-size: 14px;
+  border-radius: 6px !important;
+  font-size: 14px !important;
 }
 
 button.secondary:hover,
-button.icon-button:hover {
+.icon-button:hover {
   background: #f1f4f8;
 }
 

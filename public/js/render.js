@@ -529,12 +529,18 @@ export function renderApplicationCVSelect(els, cvs) {
 
 export function renderCVs(els, cvs) {
   els.cvList.innerHTML = cvs.map((cv) => `
-    <div class="cv-item">
-      <strong>${escapeHtml(cv.original_name)}</strong>
-      ${cv.is_latest ? '<span class="tag">Latest</span>' : ''}
-      <p>${escapeHtml(cv.version_label || 'Unlabeled')} · ${formatBytes(Number(cv.file_size))}</p>
-      <a href="/api/cv/${cv.id}/download">Download</a>
-      <button class="secondary" type="button" data-delete-cv-id="${cv.id}">Delete</button>
+    <div class="cv-item" style="display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 8px;">
+      <div class="cv-item-info">
+        <strong>${escapeHtml(cv.original_name)}</strong>
+        ${cv.is_latest ? '<span class="pill info-pill" style="margin-left: 6px;">Latest</span>' : ''}
+        <p style="margin: 4px 0 0 0; font-size: 12px; color: var(--muted);">
+          <span class="cv-version-label" data-cv-id="${cv.id}" style="cursor: pointer; text-decoration: underline; font-weight: 500;" title="Click to edit label">${escapeHtml(cv.version_label || 'Add label')}</span> · ${formatBytes(Number(cv.file_size))}
+        </p>
+      </div>
+      <div class="cv-item-actions" style="display: flex; gap: 8px;">
+        <a class="button-link secondary" href="/api/cv/${cv.id}/download" style="min-height: 28px; padding: 4px 10px; font-size: 12px; border-radius: 6px;"><i class="bi bi-download"></i> Download</a>
+        <button class="secondary text-danger" type="button" data-delete-cv-id="${cv.id}" style="min-height: 28px; padding: 4px 10px; font-size: 12px; border-radius: 6px;"><i class="bi bi-trash"></i> Delete</button>
+      </div>
     </div>
   `).join('') || renderEmptyState('No CV library yet', 'Upload a baseline CV so each application can preserve the exact version used.', 'A latest CV is required for quick application entry and AI generation.');
 }
@@ -687,12 +693,8 @@ function renderBoardSection(title, description, boards, options = {}) {
 function renderSettingsPanel() {
   return `
     <section class="route-card settings-card">
-      <div class="section-heading">
-        <div>
-          <div class="panel-kicker">Settings</div>
-          <h3>Data Management</h3>
-          <p class="section-help">Keep import, export, backup, and restore in one operational workspace.</p>
-        </div>
+      <div style="margin-bottom: 20px;">
+        <p class="section-help" style="margin: 0; font-size: 14px; color: var(--muted);">Keep import, export, backup, and restore in one operational workspace.</p>
       </div>
       <div class="settings-action-grid">
         <article class="document-summary-card settings-action-card">
@@ -950,7 +952,6 @@ function renderOverviewTab({ application, primaryCv, tags, documents, jobs, stat
             <strong>${escapeHtml(primaryCv.original_name)}</strong>
             <p>${escapeHtml(primaryCv.version_label || 'Unlabeled')} · ${escapeHtml(formatBytes(Number(primaryCv.file_size || 0)))}</p>
             <div class="document-card-meta">
-              <span class="pill subtle">${primaryCv.storage_kind === 'dual' ? 'Local + S3' : 'Local only'}</span>
               <span class="pill info-pill">${primaryCv.extracted_text_length ? 'Text extracted' : 'No extracted text'}</span>
             </div>
             <div class="document-card-actions">
@@ -1130,10 +1131,10 @@ function renderWorkflowTab({ application, preparation, recruiterQuestions, feedb
                 <p>${escapeHtml(item.question)}</p>
               </div>
               <div class="row-actions compact-actions">
-                <button class="secondary" type="button" data-question-move="${item.id}" data-direction="up" ${index === 0 ? 'disabled' : ''}>Up</button>
-                <button class="secondary" type="button" data-question-move="${item.id}" data-direction="down" ${index === recruiterQuestions.length - 1 ? 'disabled' : ''}>Down</button>
-                <button class="secondary" type="button" data-question-edit="${item.id}">Edit</button>
-                <button class="secondary" type="button" data-question-delete="${item.id}">Delete</button>
+                <button class="icon-button text-muted" type="button" data-question-move="${item.id}" data-direction="up" ${index === 0 ? 'disabled' : ''} title="Move Up"><i class="bi bi-arrow-up"></i></button>
+                <button class="icon-button text-muted" type="button" data-question-move="${item.id}" data-direction="down" ${index === recruiterQuestions.length - 1 ? 'disabled' : ''} title="Move Down"><i class="bi bi-arrow-down"></i></button>
+                <button class="icon-button text-primary" type="button" data-question-edit="${item.id}" title="Edit"><i class="bi bi-pencil"></i></button>
+                <button class="icon-button text-danger" type="button" data-question-delete="${item.id}" title="Delete"><i class="bi bi-trash"></i></button>
               </div>
             </article>
           `).join('') || '<p class="empty small">No recruiter questions yet.</p>'}
@@ -1241,7 +1242,7 @@ function renderContentSummaryTab({ application, primaryCv, queuedJobs, failedJob
           </div>
         </div>
         ${recentDocumentId ? '<div class="document-card-meta"><span class="pill info-pill">Recent update available in the list below.</span></div>' : ''}
-        <div class="content-filter-bar">
+        <div class="content-filter-bar" hidden style="display: none !important;">
           <label>
             <span>Search</span>
             <input type="search" value="${escapeAttribute(workspace.search || '')}" placeholder="Title or provider" data-content-search>
@@ -1291,7 +1292,6 @@ function renderContentSummaryTab({ application, primaryCv, queuedJobs, failedJob
             <strong>${escapeHtml(primaryCv.original_name)}</strong>
             <p>${escapeHtml(primaryCv.version_label || 'Unlabeled')} · ${escapeHtml(formatBytes(Number(primaryCv.file_size || 0)))}</p>
             <div class="document-card-meta">
-              <span class="pill subtle">${primaryCv.storage_kind === 'dual' ? 'Local + S3' : 'Local only'}</span>
               <span class="pill info-pill">${primaryCv.extracted_text_length ? 'Text extracted' : 'No extracted text'}</span>
             </div>
             <div class="document-card-actions">
@@ -1754,7 +1754,7 @@ function renderContentDocumentSlot(applicationId, slot, cvId, recentDocumentId =
         <div class="document-type-line">
           <span class="document-type-icon" aria-hidden="true">${renderDocumentTypeIcon(slot.type)}</span>
           <div class="document-slot-copy">
-            <h4>Document Type - ${escapeHtml(slot.title)}</h4>
+            <h4>${escapeHtml(slot.title)}</h4>
             ${isRecent ? '<span class="pill info-pill">Latest changed</span>' : ''}
           </div>
         </div>

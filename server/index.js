@@ -115,6 +115,7 @@ const routeApi = createApiRouter({
   deleteTodo,
   getCVs: async (req, res) => sendJson(res, 200, await readApi.getCVs()),
   createCV,
+  updateCV,
   deleteCV,
   downloadCV,
   generateCV,
@@ -1240,6 +1241,25 @@ async function deleteTodo(req, res, id) {
   if (!result.rowCount) return sendError(res, 404, 'To-do not found');
   await logActivity(pool, result.rows[0].application_id, 'todo_deleted', result.rows[0].body.slice(0, 120));
   sendJson(res, 200, { ok: true });
+}
+
+
+async function updateCV(req, res, id) {
+  const body = await readJson(req, 64 * 1024);
+  const versionLabel = cleanString(body.version_label);
+  
+  const result = await pool.query(
+    `
+      UPDATE cv_versions
+      SET version_label = $1
+      WHERE id = $2
+      RETURNING id, original_name, version_label, mime_type, file_size, is_latest, created_at
+    `,
+    [versionLabel, id]
+  );
+
+  if (!result.rowCount) return sendError(res, 404, 'CV not found');
+  sendJson(res, 200, { cv: result.rows[0] });
 }
 
 

@@ -256,24 +256,25 @@ function bindHomeWorkspaceEvents() {
       showToast('No activity entries selected', 'warning');
       return;
     }
-    await runConfirmedAction({
-      title: 'Delete Activity Logs',
-      body: `Are you sure you want to delete ${ids.length} selected activity log entries? This will also remove any linked status history changes to correct timeline metrics.`,
-      acceptLabel: 'Delete',
-      triggerButton: els.activityDeleteButton,
-      successMessage: `Successfully deleted ${ids.length} activity entries`,
-      onConfirm: async () => {
-        await api('/api/activity', {
-          method: 'DELETE',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({ ids })
-        });
-        state.activity.selectedIds.clear();
-        await loadActivity();
-      }
-    });
+    if (!confirm(`Are you sure you want to delete ${ids.length} selected activity log entries? This will also remove any linked status history changes to correct timeline metrics.`)) return;
+
+    setButtonBusy(els.activityDeleteButton, true);
+    try {
+      await api('/api/activity', {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ ids })
+      });
+      showToast(`Successfully deleted ${ids.length} activity entries`, 'success');
+      state.activity.selectedIds.clear();
+      await loadActivity();
+    } catch (err) {
+      showToast(err.message || 'Failed to delete activity entries', 'error');
+    } finally {
+      setButtonBusy(els.activityDeleteButton, false);
+    }
   });
   els.targetCompanySearch?.addEventListener('input', debounce(() => {
     state.targetCompanyFilters.search = els.targetCompanySearch.value.trim();
@@ -896,22 +897,44 @@ async function updateInlineStatus(event) {
 }
 
 function bindCvActions() {
+  // Bind version label editing
+  els.cvList.querySelectorAll('.cv-version-label').forEach((label) => {
+    label.addEventListener('click', async () => {
+      const cvId = label.dataset.cvId;
+      const currentVal = label.textContent === 'Add label' ? '' : label.textContent;
+      const newVal = prompt('Enter new CV version label:', currentVal);
+      if (newVal === null) return; // cancelled
+      
+      try {
+        await api(`/api/cv/${cvId}`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ version_label: newVal })
+        });
+        showToast('CV label updated.', 'success');
+        await loadCVs();
+      } catch (error) {
+        showToast(error.message, 'error');
+      }
+    });
+  });
+
   els.cvList.querySelectorAll('[data-delete-cv-id]').forEach((button) => {
     button.addEventListener('click', async () => {
-      await runConfirmedAction({
-        title: 'Delete CV',
-        body: 'Delete this CV? Linked historical CVs cannot be deleted.',
-        acceptLabel: 'Delete',
-        triggerButton: button,
-        successMessage: 'CV deleted.',
-        onConfirm: async () => {
-          await api(`/api/cv/${button.dataset.deleteCvId}`, { method: 'DELETE' });
-          await loadCVs();
-        },
-        onError: (error) => {
-          setError(els.cvError, error.message);
-        }
-      });
+      if (!confirm('Delete this CV? Linked historical CVs cannot be deleted.')) return;
+      
+      setButtonBusy(button, true);
+      try {
+        await api(`/api/cv/${button.dataset.deleteCvId}`, { method: 'DELETE' });
+        showToast('CV deleted.', 'success');
+        await loadCVs();
+      } catch (error) {
+        showToast(error.message, 'error');
+      } finally {
+        setButtonBusy(button, false);
+      }
     });
   });
 }
