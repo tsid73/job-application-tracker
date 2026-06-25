@@ -17,7 +17,7 @@ import {
   renderTags,
   reportRow
 } from './utils.js';
-import { isClosedStatus } from './state.js';
+import { isClosedStatus, statusLabels } from './state.js';
 
 export function renderHomeWorkspace() {
   return `
@@ -32,7 +32,7 @@ export function renderHomeWorkspace() {
               <input id="searchInput" type="search" placeholder="Company">
             </label>
             <button id="filterToggle" class="icon-button" type="button" aria-label="Toggle filters" title="Filters">
-              <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.8"><polygon points="1 2 13 2 9 7 9 12 5 12 5 7 1 2"/></svg>
+              <i class="bi bi-filter"></i>
             </button>
           </div>
           <div id="filterPanel" class="filter-panel" hidden>
@@ -62,13 +62,13 @@ export function renderHomeWorkspace() {
                 <option value="all">All</option>
               </select>
             </label>
-            <label>
+            <label style="display: none !important;" hidden>
               <span>Saved Filter</span>
               <select id="savedFilterSelect">
                 <option value="">Current filters</option>
               </select>
             </label>
-            <div class="saved-filter-row" hidden>
+            <div class="saved-filter-row" style="display: none !important;" hidden>
               <label>
                 <span>Save As</span>
                 <input id="savedFilterName" type="text" placeholder="Interview week">
@@ -77,8 +77,8 @@ export function renderHomeWorkspace() {
               <button id="deleteFilterButton" class="secondary" type="button">Delete Filter</button>
             </div>
             <div id="exportPanel" class="export-row">
-              <button id="quickExportCsvButton" class="secondary" type="button">Export CSV</button>
-              <button id="quickExportIcsButton" class="secondary" type="button">Calendar (.ics)</button>
+              <button id="quickExportCsvButton" class="icon-button text-success" type="button" title="Export CSV"><i class="bi bi-filetype-csv"></i></button>
+              <button id="quickExportIcsButton" class="icon-button text-primary" type="button" title="Calendar (.ics)"><i class="bi bi-calendar-event"></i></button>
             </div>
           </div>
         </section>
@@ -103,10 +103,10 @@ export function renderHomeWorkspace() {
         <div id="bulkActionsBar" class="bulk-bar" hidden>
           <strong id="bulkCount">0 selected</strong>
           <div class="row-actions">
-            <button id="bulkArchiveButton" class="secondary" type="button">Archive Selected</button>
-            <button id="bulkRestoreButton" class="secondary" type="button">Restore Selected</button>
-            <button id="bulkDeleteButton" class="secondary danger" type="button">Delete Selected</button>
-            <button id="bulkClearButton" class="secondary" type="button">Clear Selection</button>
+            <button id="bulkArchiveButton" class="icon-button" type="button" title="Archive Selected"><i class="bi bi-archive" style="color: var(--warn-line)"></i></button>
+            <button id="bulkRestoreButton" class="icon-button" type="button" title="Restore Selected"><i class="bi bi-arrow-clockwise" style="color: var(--focus)"></i></button>
+            <button id="bulkDeleteButton" class="icon-button" type="button" title="Delete Selected"><i class="bi bi-trash" style="color: var(--danger)"></i></button>
+            <button id="bulkClearButton" class="icon-button" type="button" title="Clear Selection"><i class="bi bi-x-circle"></i></button>
           </div>
         </div>
       </section>
@@ -169,16 +169,15 @@ export function renderHomeWorkspace() {
           <div class="section-heading boards-heading">
             <div>
               <h3>Company List</h3>
-              <p class="section-help">Track Germany and EU companies that frequently hire international engineers.</p>
             </div>
             <div style="display: flex; gap: 8px; align-items: center;">
               <button id="targetCompanyFilterToggle" class="icon-button" type="button" aria-label="Toggle filters" title="Filters">
-                <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.8"><polygon points="1 2 13 2 9 7 9 12 5 12 5 7 1 2"/></svg>
+                <i class="bi bi-filter"></i>
               </button>
               <button id="targetCompanyOpenButton" type="button">Add Company</button>
             </div>
           </div>
-          <section id="targetCompanyFilterPanel" class="toolbar target-company-toolbar filter-panel" aria-label="Company filters" hidden>
+          <section id="targetCompanyFilterPanel" class="target-company-toolbar filter-panel" aria-label="Company filters" hidden>
             <label>
               <span>Keyword</span>
               <input id="targetCompanySearchInput" type="search" placeholder="Company, stack, city">
@@ -311,7 +310,7 @@ export function renderActivity(els, state, payload) {
     <tr>
       <td>${formatDateTime(item.created_at)}</td>
       <td>
-        <div class="company-cell">
+        <div class="company-cell truncate-col">
           <strong>${escapeHtml(activityApplicationName(item))}</strong>
           <span>${item.application_id ? `Application ${item.application_id}` : ''}</span>
         </div>
@@ -356,12 +355,15 @@ export function buildApplicationRow(application, statusOptions, selected = false
   const row = document.createElement('tr');
   row.dataset.id = application.id;
   row.className = application.archived_at ? 'archived' : closed ? 'closed' : '';
+  
+  const subtitle = [application.role_title, application.location].filter(Boolean).join(' · ') || application.cv_name || 'No CV';
+  
   row.innerHTML = `
     <td class="select-col"><input type="checkbox" data-select-id="${application.id}" aria-label="Select ${escapeHtml(application.company_name)}"${selected ? ' checked' : ''}></td>
     <td>
       <div class="company-cell">
-        <strong>${escapeHtml(application.company_name)}</strong>
-        <span>${escapeHtml([application.role_title, application.location].filter(Boolean).join(' · ') || application.cv_name || 'No CV')}</span>
+        <strong title="${escapeAttribute(application.company_name)}">${escapeHtml(application.company_name)}</strong>
+        <span title="${escapeAttribute(subtitle)}">${escapeHtml(subtitle)}</span>
       </div>
     </td>
     <td>${formatDate(application.applied_date)}</td>
@@ -379,12 +381,11 @@ export function buildApplicationRow(application, statusOptions, selected = false
     <td class="action-col">
       <div class="row-actions">
         <button class="icon-button row-open-btn" type="button" data-detail-id="${application.id}" aria-label="Open ${escapeHtml(application.company_name)}" title="Open">
-          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M6 2H2a1 1 0 0 0-1 1v9a1 1 0 0 0 1 1h9a1 1 0 0 0 1-1V8"/><polyline points="9 1 13 1 13 5"/><line x1="13" y1="1" x2="6" y2="8"/></svg>
+          <i class="bi bi-box-arrow-up-right"></i>
         </button>
-        ${application.archived_at
-          ? `<button class="icon-button" type="button" data-restore-row-id="${application.id}" aria-label="Restore ${escapeHtml(application.company_name)}" title="Restore"><svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M1 4a6 6 0 1 1 .7 5.8"/><polyline points="1 1 1 4 4 4"/></svg></button>`
-          : `<button class="icon-button" type="button" data-archive-row-id="${application.id}" aria-label="Archive ${escapeHtml(application.company_name)}" title="Archive"><svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="1" y="1" width="12" height="3" rx="1"/><path d="M2 4v8a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V4"/><line x1="5" y1="7" x2="9" y2="7"/></svg></button>`
-        }
+        <button class="icon-button" type="button" data-edit-row-id="${application.id}" aria-label="Edit ${escapeHtml(application.company_name)}" title="Edit">
+          <i class="bi bi-pencil" style="color: var(--focus)"></i>
+        </button>
       </div>
     </td>
   `;
@@ -397,7 +398,7 @@ function renderNextAction(application) {
   const action = application.next_action || recommendedNextAction(application);
   return `
     <div class="next-action-cell">
-      <strong>${escapeHtml(action)}</strong>
+      <strong title="${escapeAttribute(action)}">${escapeHtml(action)}</strong>
       ${application.next_action_due_date ? `<span>${formatDate(application.next_action_due_date)}</span>` : ''}
     </div>
   `;
@@ -498,9 +499,9 @@ export function renderKanban(els, applications, statusLabels) {
       ${group.items.map((item) => `
         <article class="kanban-card">
           <strong>${escapeHtml(item.company_name)}</strong>
+          <span class="role-title">${escapeHtml(item.role_title || 'N/A')}</span>
           <span>${formatDate(item.applied_date)}</span>
           ${item.interview_date ? renderDays(item.days_remaining) : ''}
-          ${renderTags(item.tags)}
         </article>
       `).join('') || '<p class="empty small">No entries.</p>'}
     </section>
@@ -555,12 +556,12 @@ export function renderTargetCompanies(els, companies, filters) {
   const visaFriendly = companies.filter((company) => /yes|strong|sponsor|relocat|international|blue card|frequent/i.test(`${company.visa_signal || ''} ${company.relocation_signal || ''}`)).length;
 
   if (els.targetCompaniesSummary) {
-    els.targetCompaniesSummary.textContent = `${filtered.length} shown from ${companies.length} saved, ${visaFriendly} with stronger visa or relocation signals.`;
+    els.targetCompaniesSummary.textContent = '';
   }
 
   els.targetCompaniesList.innerHTML = [
-    renderTargetCompanySection('Active companies', 'Companies to review regularly for backend and international hiring openings.', activeCompanies, { fullWidth: true }),
-    inactiveCompanies.length ? renderTargetCompanySection('Inactive companies', 'Paused companies kept for future reference.', inactiveCompanies) : ''
+    renderTargetCompanySection('Active companies', '', activeCompanies, { fullWidth: true }),
+    inactiveCompanies.length ? renderTargetCompanySection('Inactive companies', '', inactiveCompanies) : ''
   ].join('') || renderEmptyState('No companies found', 'No target companies match the current filters.', 'Clear filters or add a company manually.');
 }
 
@@ -622,19 +623,16 @@ function renderTargetCompanySection(title, description, companies, options = {})
                 <span class="muted-text company-card-meta">${escapeHtml([company.region, company.primary_location, company.industry].filter(Boolean).join(' · ') || 'No context')}</span>
               </div>
               <div class="company-card-links">
-                ${company.career_url ? `<button class="icon-button" type="button" data-target-company-open="${company.id}" data-target-company-url="career" aria-label="Careers" title="Careers"><svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M1 9a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1V5a1 1 0 0 0-1-1H2a1 1 0 0 0-1 1v4z"/><path d="M4 4V2a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg></button>` : ''}
-                ${company.linkedin_url ? `<button class="icon-button" type="button" data-target-company-open="${company.id}" data-target-company-url="linkedin" aria-label="LinkedIn" title="LinkedIn"><svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M1 4h3v9H1z"/><path d="M4 7c0-2 2-3 4-3s4 1 4 3v6H9V7c0-1-1-2-2-2s-3 1-3 2v6H4V7z"/><circle cx="2.5" cy="1.5" r="1"/></svg></button>` : ''}
-                ${company.company_url ? `<button class="icon-button" type="button" data-target-company-open="${company.id}" data-target-company-url="company" aria-label="Website" title="Website"><svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="7" cy="7" r="6"/><line x1="1" y1="7" x2="13" y2="7"/><path d="M7 1a10 10 0 0 0 0 12 10 10 0 0 0 0-12"/></svg></button>` : ''}
+                ${company.career_url ? `<button class="icon-button" type="button" data-target-company-open="${company.id}" data-target-company-url="career" aria-label="Careers" title="Careers"><i class="bi bi-briefcase"></i></button>` : ''}
+                ${company.linkedin_url ? `<button class="icon-button" type="button" data-target-company-open="${company.id}" data-target-company-url="linkedin" aria-label="LinkedIn" title="LinkedIn"><i class="bi bi-linkedin"></i></button>` : ''}
+                ${company.company_url ? `<button class="icon-button" type="button" data-target-company-open="${company.id}" data-target-company-url="company" aria-label="Website" title="Website"><i class="bi bi-globe"></i></button>` : ''}
               </div>
-            </div>
-            <div class="company-card-signals">
-              ${[company.visa_signal, company.relocation_signal, company.work_mode, company.employee_count].filter(Boolean).map(s => `<span class="pill subtle">${escapeHtml(s)}</span>`).join('')}
             </div>
             ${company.description || company.fit_notes ? `<p class="company-card-notes" title="${escapeAttribute(company.fit_notes || company.description)}">${escapeHtml(truncateText(company.fit_notes || company.description, 80))}</p>` : ''}
             <div class="company-card-actions">
               <span class="state ${company.is_active ? 'active-state' : 'closed-state'}">${company.is_active ? 'Active' : 'Inactive'}</span>
-              <button class="secondary" type="button" data-target-company-edit="${company.id}">Edit</button>
-              <button class="secondary" type="button" data-target-company-toggle="${company.id}" data-target-company-active="${company.is_active ? 'true' : 'false'}">${company.is_active ? 'Deactivate' : 'Activate'}</button>
+              <button class="icon-button text-primary" type="button" data-target-company-edit="${company.id}" title="Edit"><i class="bi bi-pencil"></i></button>
+              <button class="icon-button text-warning" type="button" data-target-company-toggle="${company.id}" data-target-company-active="${company.is_active ? 'true' : 'false'}" title="${company.is_active ? 'Deactivate' : 'Activate'}"><i class="bi bi-power"></i></button>
             </div>
           </article>
         `).join('')}
@@ -677,14 +675,14 @@ function renderBoardSection(title, description, boards, options = {}) {
         <span class="board-freshness ${jobBoardFreshnessClass(board)}">${jobBoardFreshnessLabel(board)}</span>
       </div>
       <p>${escapeHtml(board.notes || 'No notes yet.')}</p>
-      <div class="board-meta">
+      <div class="row-actions">
+        <button class="icon-button text-primary" type="button" data-job-board-edit="${board.id}" title="Edit"><i class="bi bi-pencil"></i></button>
+        <button class="icon-button text-warning" type="button" data-job-board-toggle="${board.id}" data-job-board-active="${board.is_active ? 'true' : 'false'}" title="${board.is_active ? 'Mark inactive' : 'Activate'}"><i class="bi bi-power"></i></button>
+        <button class="icon-button text-danger" type="button" data-job-board-delete="${board.id}" title="Delete"><i class="bi bi-trash"></i></button>
+      </div>
+      <div class="board-meta" style="margin-top: auto; padding-top: 1rem;">
         <span>Last checked: ${board.last_checked_date ? formatDate(board.last_checked_date) : 'Never'}</span>
         <span>Updated: ${formatDateTime(board.updated_at)}</span>
-      </div>
-      <div class="row-actions">
-        <button class="secondary" type="button" data-job-board-edit="${board.id}">Edit</button>
-        <button class="secondary" type="button" data-job-board-toggle="${board.id}" data-job-board-active="${board.is_active ? 'true' : 'false'}">${board.is_active ? 'Mark inactive' : 'Activate'}</button>
-        <button class="secondary" type="button" data-job-board-delete="${board.id}">Delete</button>
       </div>
           </article>
         `).join('')}
@@ -707,22 +705,22 @@ function renderSettingsPanel() {
         <article class="document-summary-card settings-action-card">
           <strong>Export CSV</strong>
           <p>Download application rows for spreadsheet work or manual review.</p>
-          <button id="settingsExportCsvButton" class="secondary" type="button">Export CSV</button>
+          <button id="settingsExportCsvButton" class="secondary" type="button"><i class="bi bi-download"></i> Export CSV</button>
         </article>
         <article class="document-summary-card settings-action-card">
           <strong>Import CSV</strong>
           <p>Load application rows into the tracker using the latest linked CV.</p>
-          <button id="settingsImportCsvButton" class="secondary" type="button">Import CSV</button>
+          <button id="settingsImportCsvButton" class="secondary" type="button"><i class="bi bi-upload"></i> Import CSV</button>
         </article>
         <article class="document-summary-card settings-action-card">
           <strong>Create Backup</strong>
           <p>Export applications, AI data, uploads, and workspace settings into one backup file.</p>
-          <button id="settingsBackupButton" type="button">Create Backup</button>
+          <button id="settingsBackupButton" type="button"><i class="bi bi-cloud-download"></i> Create Backup</button>
         </article>
         <article class="document-summary-card settings-action-card">
           <strong>Restore Backup</strong>
           <p>Replace the current local workspace with a validated backup state.</p>
-          <button id="settingsRestoreButton" class="secondary" type="button">Choose Backup</button>
+          <button id="settingsRestoreButton" class="secondary" type="button"><i class="bi bi-folder2-open"></i> Choose Backup</button>
           <div id="restoreBackupSelection" class="backup-file-selection" hidden>
             <div>
               <span>Selected backup</span>
@@ -730,9 +728,9 @@ function renderSettingsPanel() {
               <p id="restoreBackupStatus">Ready to restore.</p>
             </div>
             <div class="split-actions">
-              <button id="settingsRestoreSelectedButton" class="danger" type="button">Restore Selected</button>
-              <button id="settingsReplaceBackupButton" class="secondary" type="button">Choose Another</button>
-              <button id="settingsClearBackupButton" class="secondary" type="button">Remove</button>
+              <button id="settingsRestoreSelectedButton" class="danger" type="button"><i class="bi bi-arrow-clockwise"></i> Restore Selected</button>
+              <button id="settingsReplaceBackupButton" class="secondary icon-button" type="button" title="Choose Another"><i class="bi bi-arrow-left-right"></i></button>
+              <button id="settingsClearBackupButton" class="secondary icon-button" type="button" title="Remove"><i class="bi bi-trash" style="color: var(--danger)"></i></button>
             </div>
           </div>
         </article>
@@ -845,17 +843,17 @@ export function renderApplicationPage(els, payload, statusLabels, viewState) {
           <div class="page-header-actions application-hero-actions">
             <div class="hero-action-row">
               ${closed ? '' : `<button type="button" data-edit-application="${application.id}" class="icon-button" aria-label="Edit application" title="Edit">
-                <svg width="15" height="15" viewBox="0 0 15 15" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M10.5 1.5a1.5 1.5 0 0 1 3 3L5 13H1v-4L10.5 1.5z"/></svg>
+                <i class="bi bi-pencil" style="color: var(--focus)"></i>
               </button>`}
               ${application.archived_at ? `<button type="button" data-restore-application="${application.id}" class="secondary" style="font-size:12px;padding:5px 10px">Restore</button>` : ''}
               ${application.job_link ? `<a class="icon-button" href="${escapeAttribute(application.job_link)}" target="_blank" rel="noreferrer" aria-label="Open posting" title="Open Posting">
-                <svg width="15" height="15" viewBox="0 0 15 15" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M7 3H3a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V9"/><polyline points="10 1 14 1 14 5"/><line x1="14" y1="1" x2="7" y2="8"/></svg>
+                <i class="bi bi-box-arrow-up-right"></i>
               </a>` : ''}
               <button class="icon-button" type="button" data-view-job-description="${application.id}" aria-label="View job description" title="View JD">
-                <svg width="15" height="15" viewBox="0 0 15 15" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="2" y="1" width="11" height="13" rx="1"/><line x1="5" y1="5" x2="10" y2="5"/><line x1="5" y1="8" x2="10" y2="8"/><line x1="5" y1="11" x2="8" y2="11"/></svg>
+                <i class="bi bi-file-text"></i>
               </button>
               ${!application.archived_at ? `<button class="icon-button danger-icon" type="button" data-delete-application="${application.id}" aria-label="Delete application" title="Delete">
-                <svg width="15" height="15" viewBox="0 0 15 15" fill="none" stroke="currentColor" stroke-width="1.7"><polyline points="2 4 13 4"/><path d="M5 4V2h5v2"/><path d="M6 4v8m3-8v8"/><rect x="3" y="4" width="9" height="9" rx="1"/></svg>
+                <i class="bi bi-trash" style="color: var(--danger)"></i>
               </button>` : ''}
             </div>
           </div>
@@ -1867,13 +1865,13 @@ function renderSlotMetadata(slot) {
 
 function renderDocumentTypeIcon(type) {
   const icons = {
-    tailored_cv: '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M6 3.5h5l3 3V16a1 1 0 0 1-1 1H6.9A1.9 1.9 0 0 1 5 15.1V5.4A1.9 1.9 0 0 1 6.9 3.5Z"/><path d="M11 3.5V7h3"/></svg>',
-    cover_letter: '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="3.5" y="5" width="13" height="10" rx="2"/><path d="m5.5 7 4.5 3.5L14.5 7"/></svg>',
-    role_fit: '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M10 3.5 15.5 6v4.2c0 3.1-2.2 5.9-5.5 6.8-3.3-.9-5.5-3.7-5.5-6.8V6L10 3.5Z"/><path d="m7.6 10 1.4 1.5 3.3-3.5"/></svg>',
-    ats_check: '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="8.5" cy="8.5" r="4.5"/><path d="M12 12 16 16"/><path d="M7 8.5h3"/></svg>',
-    follow_up_email: '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M3.5 10a6.5 6.5 0 1 1 2.3 5"/><path d="M3.5 13.5V16h2.5"/><path d="M7.5 10h5"/></svg>'
+    tailored_cv: '<i class="bi bi-file-earmark-person"></i>',
+    cover_letter: '<i class="bi bi-envelope"></i>',
+    role_fit: '<i class="bi bi-shield-check"></i>',
+    ats_check: '<i class="bi bi-patch-check"></i>',
+    follow_up_email: '<i class="bi bi-send-check"></i>'
   };
-  return icons[type] || '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="4" y="4" width="12" height="12" rx="2"/></svg>';
+  return icons[type] || '<i class="bi bi-file-earmark"></i>';
 }
 
 function truncateText(value, maxLength) {
@@ -2048,16 +2046,45 @@ export function renderCalendar(els, calendarDate, reminders) {
       day,
       iso,
       today: iso === isoDate(new Date()),
-      events: reminders.filter((item) => item.interview_date === iso)
+      events: reminders.filter((item) => item.event_date === iso)
     });
   }
   while (cells.length % 7) cells.push({ empty: true });
+
+  const getTimelineIcon = (type) => {
+    if (type === 'interview') return 'bi-calendar-event text-primary';
+    if (type === 'next_action') return 'bi-check2-circle text-info';
+    if (type === 'applied') return 'bi-send text-success';
+    if (type === 'status_change_rejected') return 'bi-x-circle text-danger';
+    if (type === 'status_change_offer') return 'bi-trophy text-warning';
+    if (type === 'status_change_accepted') return 'bi-hand-thumbs-up-fill text-success';
+    if (type === 'status_change_ghosted') return 'bi-eye-slash text-muted';
+    if (type === 'status_change_withdrawn') return 'bi-arrow-left-circle text-muted';
+    return 'bi-arrow-right-circle';
+  };
+
+  const getTimelineLabel = (event) => {
+    let label = event.company_name;
+    if (event.type === 'applied') {
+      label += ' (Applied)';
+    } else if (event.type === 'interview') {
+      label += ' (Interview)';
+    } else if (event.type === 'next_action') {
+      label += ' (Next Action)';
+    } else if (event.type.startsWith('status_change_')) {
+      const newStatus = event.type.replace('status_change_', '');
+      const displayStatus = statusLabels[newStatus] || newStatus;
+      const capitalized = displayStatus.charAt(0).toUpperCase() + displayStatus.slice(1);
+      label += ` (${capitalized})`;
+    }
+    return label;
+  };
 
   els.remindersList.innerHTML = `
     <div class="calendar-header">
       <div>
         <h2>${formatMonthTitle(month)}</h2>
-        <p>${reminders.length} scheduled interviews</p>
+        <p>${reminders.length} timeline events</p>
       </div>
       <div class="calendar-actions">
         <button class="secondary" type="button" data-calendar-action="prev">Prev</button>
@@ -2074,8 +2101,8 @@ export function renderCalendar(els, calendarDate, reminders) {
             <span class="calendar-date">${cell.day}</span>
             <div class="calendar-events">
               ${cell.events.map((event) => `
-                <article class="calendar-event ${daysClass(event.days_remaining).replace('days-badge', '').trim()}">
-                  <strong>${escapeHtml(event.company_name)}</strong>
+                <article class="calendar-event ${daysClass(event.days_remaining).replace('days-badge', '').trim()}" title="${escapeHtml(event.type)}">
+                  <strong><i class="bi ${getTimelineIcon(event.type)}"></i> ${escapeHtml(getTimelineLabel(event))}</strong>
                   <span>${renderDays(event.days_remaining)}</span>
                   <button class="link-button" type="button" data-calendar-detail="${event.id}">Details</button>
                 </article>

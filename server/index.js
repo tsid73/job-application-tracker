@@ -426,8 +426,12 @@ function normalizedDuplicateValue(value) {
 
 
 async function exportApplicationsCsv(req, res) {
-  const result = await pool.query(
-    `
+  const urlParams = new URL(req.url, `http://${req.headers.host}`);
+  const idsParam = urlParams.searchParams.get('ids');
+  const hasIds = !!idsParam;
+  const ids = hasIds ? idsParam.split(',').map(Number).filter(n => !isNaN(n)) : [];
+
+  const query = `
       SELECT
         a.company_name,
         a.role_title,
@@ -448,10 +452,12 @@ async function exportApplicationsCsv(req, res) {
       FROM applications a
       LEFT JOIN application_tags at ON at.application_id = a.id
       LEFT JOIN tags t ON t.id = at.tag_id
+      ${hasIds && ids.length > 0 ? 'WHERE a.id = ANY($1::int[])' : ''}
       GROUP BY a.id
       ORDER BY a.applied_date DESC, a.id DESC
-    `
-  );
+    `;
+  
+  const result = await pool.query(query, hasIds && ids.length > 0 ? [ids] : []);
 
   const headers = ['company_name', 'role_title', 'job_link', 'job_description', 'status', 'salary', 'location', 'recruiter', 'contact_person', 'applied_date', 'interview_date', 'next_action', 'next_action_due_date', 'notes', 'lifecycle', 'tags'];
   const csv = [
@@ -468,17 +474,22 @@ async function exportApplicationsCsv(req, res) {
 }
 
 async function exportCalendar(req, res) {
-  const result = await pool.query(
-    `
+  const urlParams = new URL(req.url, `http://${req.headers.host}`);
+  const idsParam = urlParams.searchParams.get('ids');
+  const hasIds = !!idsParam;
+  const ids = hasIds ? idsParam.split(',').map(Number).filter(n => !isNaN(n)) : [];
+
+  const query = `
       SELECT id, company_name, role_title, next_action,
         to_char(interview_date, 'YYYYMMDD') AS interview_day,
         to_char(next_action_due_date, 'YYYYMMDD') AS due_day
       FROM applications
       WHERE archived_at IS NULL
         AND (interview_date IS NOT NULL OR next_action_due_date IS NOT NULL)
+        ${hasIds && ids.length > 0 ? 'AND id = ANY($1::int[])' : ''}
       ORDER BY id
-    `
-  );
+    `;
+  const result = await pool.query(query, hasIds && ids.length > 0 ? [ids] : []);
 
   const stamp = new Date().toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '');
   const events = [];
@@ -1773,6 +1784,14 @@ process.on('SIGINT', shutdown);
 async function startServer() {
   try {
     await applyMigrations(pool);
+    server.on('error', (error) => {
+      if (error.code === 'EADDRINUSE') {
+        console.error(`Error: Port ${config.port} is already in use by another process.`);
+      } else {
+        console.error('Server error:', error.message);
+      }
+      shutdown();
+    });
     server.listen(config.port, config.host, () => {
       console.log(`Job tracker running at http://localhost:${config.port} (bound to ${config.host})`);
       if (config.host !== '127.0.0.1' && config.host !== 'localhost') {
@@ -1789,6 +1808,10 @@ async function startServer() {
 function shutdown() {
   if (shuttingDown) return;
   shuttingDown = true;
+  setTimeout(() => {
+    console.error('Forcefully exiting after timeout to release port.');
+    process.exit(1);
+  }, 1500).unref();
   server.close(() => {
     pool.end().finally(() => process.exit(0));
   });

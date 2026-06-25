@@ -47,10 +47,15 @@ body {
   background: var(--bg);
   color: var(--text);
   font-family: "Segoe UI Variable", "Segoe UI", "Aptos", "Helvetica Neue", system-ui, sans-serif;
-  font-size: 14px;
+  font-size: 13px;
   min-height: 100vh;
   position: relative;
   overflow-x: hidden;
+}
+
+html:has(dialog[open]),
+body:has(dialog[open]) {
+  overflow: hidden;
 }
 
 html {
@@ -454,11 +459,11 @@ h3 {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 22px 30px 6px;
+  padding: 16px 20px 6px;
 }
 
 .content-header h1 {
-  font-size: 22px;
+  font-size: 20px;
 }
 
 .content-header #summary {
@@ -478,7 +483,7 @@ h3 {
 }
 
 main {
-  padding: 14px 30px 32px;
+  padding: 10px 20px 24px;
 }
 
 /* Responsive: drawer sidebar */
@@ -671,11 +676,15 @@ main {
   padding-bottom: 4px;
 }
 
-.toolbar label {
+.toolbar label,
+.filter-panel label,
+.target-company-toolbar label {
   width: 180px;
 }
 
-.toolbar label:first-child {
+.toolbar label:first-child,
+.filter-panel label:first-child,
+.target-company-toolbar label:first-child {
   width: 240px;
 }
 
@@ -729,16 +738,22 @@ button:focus {
 
 table {
   width: 100%;
-  min-width: 1120px;
   border-collapse: collapse;
 }
 
 th,
 td {
-  padding: 7px 9px;
+  padding: 5px 6px;
   text-align: left;
   border-bottom: 1px solid var(--line);
   vertical-align: middle;
+}
+
+.truncate-col {
+  max-width: 250px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 th {
@@ -779,13 +794,21 @@ tr:last-child td {
 }
 
 .company-cell strong {
-  font-size: 15px;
+  font-size: 14px;
   letter-spacing: -0.01em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 280px;
 }
 
 .company-cell span {
   color: var(--muted);
-  font-size: 12px;
+  font-size: 11.5px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 280px;
 }
 
 .next-action-cell {
@@ -818,6 +841,9 @@ tr:last-child td {
 .days-badge {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
+  width: fit-content;
+  white-space: nowrap;
   min-height: 24px;
   border-radius: 999px;
   padding: 3px 8px;
@@ -1323,6 +1349,7 @@ dialog {
   border-radius: 14px;
   padding: 0;
   box-shadow: 0 24px 60px rgba(16, 32, 45, 0.22);
+  overflow-y: auto;
 }
 
 #detailDialog {
@@ -3684,4 +3711,11 @@ a {
 .action-col { width: 64px; }
 .icon-button.danger-icon { color: var(--danger); }
 .icon-button.danger-icon:hover { background: rgba(162,59,59,0.08); }
-.status-cell { display: flex; flex-direction: column; gap: 3px; }
+.status-cell { display: flex; flex-direction: column; gap: 3px; align-items: center; }
+
+/* Color utilities */
+.text-primary { color: var(--focus) !important; }
+.text-warning { color: var(--warn-line) !important; }
+.text-danger { color: var(--danger) !important; }
+.text-success { color: #2e7d32 !important; }
+.text-muted { color: var(--muted) !important; }

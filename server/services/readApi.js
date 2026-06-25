@@ -26,14 +26,42 @@ export function createReadApi({ pool, audit }) {
             id,
             company_name,
             status,
-            to_char(interview_date, 'YYYY-MM-DD') AS interview_date,
+            'interview' AS type,
+            to_char(interview_date, 'YYYY-MM-DD') AS event_date,
             interview_date - CURRENT_DATE AS days_remaining
           FROM applications
-          WHERE archived_at IS NULL
-            AND status = 'interview_scheduled'
-            AND interview_date IS NOT NULL
-          ORDER BY interview_date ASC
-          LIMIT 20
+          WHERE archived_at IS NULL AND interview_date IS NOT NULL
+          UNION ALL
+          SELECT
+            id,
+            company_name,
+            status,
+            'next_action' AS type,
+            to_char(next_action_due_date, 'YYYY-MM-DD') AS event_date,
+            next_action_due_date - CURRENT_DATE AS days_remaining
+          FROM applications
+          WHERE archived_at IS NULL AND next_action_due_date IS NOT NULL
+          UNION ALL
+          SELECT
+            id,
+            company_name,
+            status,
+            'applied' AS type,
+            to_char(applied_date, 'YYYY-MM-DD') AS event_date,
+            applied_date - CURRENT_DATE AS days_remaining
+          FROM applications
+          WHERE archived_at IS NULL AND applied_date IS NOT NULL
+          UNION ALL
+          SELECT
+            a.id,
+            a.company_name,
+            a.status,
+            'status_change_' || sh.to_status AS type,
+            to_char(sh.changed_at, 'YYYY-MM-DD') AS event_date,
+            sh.changed_at::date - CURRENT_DATE AS days_remaining
+          FROM status_history sh
+          JOIN applications a ON a.id = sh.application_id
+          WHERE a.archived_at IS NULL
         `
       );
       return { reminders: result.rows };

@@ -79,7 +79,7 @@ function closeMobileSidebar() {
 function currentHomeViewTitle(view = state.view) {
   return {
     list: 'Applications',
-    reminders: 'Reminders',
+    reminders: 'Timeline',
     kanban: 'Kanban',
     reports: 'Reports',
     stats: 'Stats',
@@ -97,6 +97,11 @@ function syncContentHeader() {
   contentHeader.hidden = state.route.page !== 'home';
   const heading = contentHeader.querySelector('h1');
   if (heading && state.route.page === 'home') heading.textContent = currentHomeViewTitle();
+
+  const summary = document.querySelector('#summary');
+  if (summary) {
+    summary.style.display = (state.route.page === 'home' && state.view === 'list') ? '' : 'none';
+  }
 }
 
 function bindGlobalEvents() {
@@ -362,7 +367,7 @@ function bindSettingsActions() {
   if (els.settingsExportCsvButton && els.settingsExportCsvButton.dataset.bound !== 'true') {
     els.settingsExportCsvButton.dataset.bound = 'true';
     els.settingsExportCsvButton.addEventListener('click', () => {
-      downloadApplicationsCsv();
+      downloadApplicationsCsv(true);
     });
   }
   if (els.settingsImportCsvButton && els.settingsImportCsvButton.dataset.bound !== 'true') {
@@ -403,9 +408,18 @@ function bindSettingsActions() {
   updateRestoreBackupSelection();
 }
 
-function downloadApplicationsCsv() {
+function downloadApplicationsCsv(exportAll = false) {
   const link = document.createElement('a');
-  link.href = '/api/export/applications.csv';
+  if (exportAll) {
+    link.href = '/api/export/applications.csv';
+  } else {
+    if (state.selectedIds.size === 0) {
+      showToast('No applications selected. Select applications to export.', 'warning');
+      return;
+    }
+    const ids = Array.from(state.selectedIds).join(',');
+    link.href = `/api/export/applications.csv?ids=${ids}`;
+  }
   link.download = 'job-applications.csv';
   document.body.appendChild(link);
   link.click();
@@ -413,8 +427,13 @@ function downloadApplicationsCsv() {
 }
 
 function downloadCalendarIcs() {
+  if (state.selectedIds.size === 0) {
+    showToast('No applications selected. Select applications to export calendar events.', 'warning');
+    return;
+  }
   const link = document.createElement('a');
-  link.href = '/api/export/calendar.ics';
+  const ids = Array.from(state.selectedIds).join(',');
+  link.href = `/api/export/calendar.ics?ids=${ids}`;
   link.download = 'job-tracker.ics';
   document.body.appendChild(link);
   link.click();
@@ -505,7 +524,7 @@ async function switchView(view) {
   unmountInactiveHomeViews(view);
 
   if (view === 'reminders') {
-    renderSectionLoading(els.remindersList, 'Loading reminders');
+    renderSectionLoading(els.remindersList, 'Loading timeline');
     await loadReminders();
   }
   if (view === 'kanban') renderKanban(els, state.applications, statusLabels);
@@ -1090,7 +1109,7 @@ async function renderCurrentRoute() {
   clearContentPolling();
   resetTransientUiState();
   state.route = parseRoute(location.pathname, location.search);
-  window.scrollTo({ top: 0, behavior: 'auto' });
+  // window.scrollTo({ top: 0, behavior: 'auto' });
   syncContentHeader();
 
   if (state.route.page === 'home') {

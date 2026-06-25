@@ -6,6 +6,7 @@
     <meta name="robots" content="noindex, nofollow, noarchive">
     <title>Job Tracker</title>
     <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
     <link rel="stylesheet" href="/css/styles.css">
   </head>
   <body>
@@ -22,25 +23,25 @@
 
         <nav class="sidebar-nav" aria-label="Sections">
           <div class="nav-group-label">Pipeline</div>
-          <button class="nav-item is-active" type="button" data-view="list" aria-pressed="true"><span class="nav-ic" aria-hidden="true"><svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.8"><line x1="1" y1="3" x2="13" y2="3"/><line x1="1" y1="7" x2="13" y2="7"/><line x1="1" y1="11" x2="13" y2="11"/></svg></span><span class="nav-text">List</span></button>
-          <button class="nav-item" type="button" data-view="kanban" aria-pressed="false"><span class="nav-ic" aria-hidden="true">▦</span><span class="nav-text">Kanban</span></button>
-          <button class="nav-item" type="button" data-view="reports" aria-pressed="false"><span class="nav-ic" aria-hidden="true">◔</span><span class="nav-text">Reports</span></button>
-          <button class="nav-item" type="button" data-view="stats" aria-pressed="false"><span class="nav-ic" aria-hidden="true">▲</span><span class="nav-text">Stats</span></button>
+          <button class="nav-item is-active" type="button" data-view="list" aria-pressed="true"><span class="nav-ic" aria-hidden="true"><i class="bi bi-list-ul"></i></span><span class="nav-text">List</span></button>
+          <button class="nav-item" type="button" data-view="kanban" aria-pressed="false"><span class="nav-ic" aria-hidden="true"><i class="bi bi-kanban"></i></span><span class="nav-text">Kanban</span></button>
+          <button class="nav-item" type="button" data-view="reports" aria-pressed="false"><span class="nav-ic" aria-hidden="true"><i class="bi bi-pie-chart"></i></span><span class="nav-text">Reports</span></button>
+          <button class="nav-item" type="button" data-view="stats" aria-pressed="false"><span class="nav-ic" aria-hidden="true"><i class="bi bi-bar-chart"></i></span><span class="nav-text">Stats</span></button>
 
           <div class="nav-group-label">Workspace</div>
-          <button class="nav-item" type="button" data-view="reminders" aria-pressed="false"><span class="nav-ic" aria-hidden="true">◷</span><span class="nav-text">Reminders</span></button>
-          <button class="nav-item" type="button" data-view="activity" aria-pressed="false"><span class="nav-ic" aria-hidden="true">≡</span><span class="nav-text">Activity</span></button>
-          <button class="nav-item" type="button" data-view="boards" aria-pressed="false"><span class="nav-ic" aria-hidden="true">⊞</span><span class="nav-text">Job Boards</span></button>
-          <button class="nav-item" type="button" data-view="companies" aria-pressed="false"><span class="nav-ic" aria-hidden="true">⌂</span><span class="nav-text">Company List</span></button>
-          <button class="nav-item" type="button" data-view="toolkit" aria-pressed="false"><span class="nav-ic" aria-hidden="true">✦</span><span class="nav-text">Toolkit</span></button>
-          <button class="nav-item" type="button" data-view="settings" aria-pressed="false"><span class="nav-ic" aria-hidden="true">⚙</span><span class="nav-text">Settings</span></button>
+          <button class="nav-item" type="button" data-view="reminders" aria-pressed="false"><span class="nav-ic" aria-hidden="true"><i class="bi bi-calendar3"></i></span><span class="nav-text">Timeline</span></button>
+          <button class="nav-item" type="button" data-view="activity" aria-pressed="false"><span class="nav-ic" aria-hidden="true"><i class="bi bi-activity"></i></span><span class="nav-text">Activity</span></button>
+          <button class="nav-item" type="button" data-view="boards" aria-pressed="false"><span class="nav-ic" aria-hidden="true"><i class="bi bi-grid-3x3-gap"></i></span><span class="nav-text">Job Boards</span></button>
+          <button class="nav-item" type="button" data-view="companies" aria-pressed="false"><span class="nav-ic" aria-hidden="true"><i class="bi bi-buildings"></i></span><span class="nav-text">Company List</span></button>
+          <button class="nav-item" type="button" data-view="toolkit" aria-pressed="false"><span class="nav-ic" aria-hidden="true"><i class="bi bi-tools"></i></span><span class="nav-text">Toolkit</span></button>
+          <button class="nav-item" type="button" data-view="settings" aria-pressed="false"><span class="nav-ic" aria-hidden="true"><i class="bi bi-gear"></i></span><span class="nav-text">Settings</span></button>
         </nav>
 
         <div class="sidebar-footer">
           <input id="importCsvInput" type="file" accept=".csv,text/csv" hidden>
           <input id="restoreBackupInput" type="file" accept=".json,application/json" hidden>
-          <button id="cvManagerButton" class="secondary sidebar-btn" type="button"><span class="nav-ic" aria-hidden="true">▤</span><span class="nav-text">CVs</span></button>
-          <button id="newApplicationButton" class="sidebar-btn primary-btn" type="button"><span class="nav-ic" aria-hidden="true">＋</span><span class="nav-text">New Application</span></button>
+          <button id="cvManagerButton" class="secondary sidebar-btn" type="button"><span class="nav-ic" aria-hidden="true"><i class="bi bi-file-earmark-person"></i></span><span class="nav-text">CVs</span></button>
+          <button id="newApplicationButton" class="sidebar-btn primary-btn" type="button"><span class="nav-ic" aria-hidden="true"><i class="bi bi-plus-lg"></i></span><span class="nav-text">New Application</span></button>
         </div>
       </aside>
 
