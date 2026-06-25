@@ -76,6 +76,29 @@ function closeMobileSidebar() {
   document.querySelector('.app-layout')?.classList.remove('sidebar-open');
 }
 
+function currentHomeViewTitle(view = state.view) {
+  return {
+    list: 'Applications',
+    reminders: 'Reminders',
+    kanban: 'Kanban',
+    reports: 'Reports',
+    stats: 'Stats',
+    activity: 'Activity',
+    boards: 'Job Boards',
+    companies: 'Company List',
+    toolkit: 'Toolkit',
+    settings: 'Settings'
+  }[view] || 'Applications';
+}
+
+function syncContentHeader() {
+  const contentHeader = document.querySelector('.content-header');
+  if (!contentHeader) return;
+  contentHeader.hidden = state.route.page !== 'home';
+  const heading = contentHeader.querySelector('h1');
+  if (heading && state.route.page === 'home') heading.textContent = currentHomeViewTitle();
+}
+
 function bindGlobalEvents() {
   document.querySelector('#newApplicationButton').addEventListener('click', openApplicationDialog);
   document.querySelector('#cvManagerButton').addEventListener('click', openCVDialog);
@@ -266,8 +289,13 @@ function bindHomeWorkspaceEvents() {
     const openButton = event.target.closest('[data-detail-id]');
     const archiveButton = event.target.closest('[data-archive-row-id]');
     const restoreButton = event.target.closest('[data-restore-row-id]');
-    if (openButton) navigateTo(`/applications/${openButton.dataset.detailId}`);
+    const inlineMenu = event.target.closest('details.inline-menu');
+    if (openButton) {
+      inlineMenu?.removeAttribute('open');
+      navigateTo(`/applications/${openButton.dataset.detailId}`);
+    }
     if (archiveButton) {
+      inlineMenu?.removeAttribute('open');
       const application = state.applications.find((item) => item.id === Number(archiveButton.dataset.archiveRowId));
       if (!application) return;
       await runConfirmedAction({
@@ -282,6 +310,7 @@ function bindHomeWorkspaceEvents() {
       });
     }
     if (restoreButton) {
+      inlineMenu?.removeAttribute('open');
       await withAsyncButton(restoreButton, async () => {
         await restoreApplication(Number(restoreButton.dataset.restoreRowId));
         showToast('Restore completed.', 'info');
@@ -441,6 +470,7 @@ async function runBulkAction(action) {
 
 async function switchView(view) {
   state.view = view;
+  syncContentHeader();
   document.querySelectorAll('.sidebar [data-view]').forEach((button) => {
     const isActive = button.dataset.view === view;
     button.classList.toggle('is-active', isActive);
@@ -1046,6 +1076,7 @@ async function renderCurrentRoute() {
   resetTransientUiState();
   state.route = parseRoute(location.pathname, location.search);
   window.scrollTo({ top: 0, behavior: 'auto' });
+  syncContentHeader();
 
   if (state.route.page === 'home') {
     mountWorkspace(renderHomeWorkspace(), 'home');
@@ -1092,6 +1123,7 @@ function mountWorkspace(markup, viewName) {
 
 function bindHomeWorkspaceElements() {
   bindWorkspaceElements();
+  syncContentHeader();
   if (els.summary) {
     const interviews = state.applications.filter((item) => item.status === 'interview_scheduled').length;
     const archived = state.applications.filter((item) => item.archived_at).length;

@@ -97,3 +97,55 @@ test('application REST API supports workflow CRUD and lookup', async ({ request 
   const deletedReadResponse = await request.get(`/api/applications/${applicationId}`);
   expect(deletedReadResponse.status()).toBe(404);
 });
+
+test('backup restore accepts next action fields in application rows', async ({ request }) => {
+  const backup = {
+    version: 1,
+    data: {
+      applications: [
+        {
+          id: 901,
+          company_name: 'Restore Fields Co',
+          role_title: 'Backend Engineer',
+          job_link: 'https://example.com/jobs/restore-fields',
+          job_description: 'Role used to verify backup restore field coverage.',
+          status: 'applied',
+          applied_date: '2026-06-24',
+          interview_date: null,
+          notes: 'Imported from backup test.',
+          created_at: '2026-06-24T00:00:00.000Z',
+          updated_at: '2026-06-24T00:00:00.000Z',
+          archived_at: null,
+          salary: 'INR 30 LPA',
+          location: 'Remote',
+          recruiter: 'A. Recruiter',
+          contact_person: 'Hiring Manager',
+          next_action: 'Send follow-up email',
+          next_action_due_date: '2026-06-30'
+        }
+      ]
+    },
+    files: []
+  };
+
+  const restoreResponse = await request.post('/api/import/backup', {
+    multipart: {
+      backup: {
+        name: 'backup.json',
+        mimeType: 'application/json',
+        buffer: Buffer.from(JSON.stringify(backup), 'utf8')
+      }
+    }
+  });
+
+  expect(restoreResponse.status()).toBe(200);
+
+  const readResponse = await request.get('/api/applications/901');
+  expect(readResponse.status()).toBe(200);
+  const readPayload = await readResponse.json();
+  expect(readPayload.application).toMatchObject({
+    company_name: 'Restore Fields Co',
+    next_action: 'Send follow-up email',
+    next_action_due_date: '2026-06-30'
+  });
+});

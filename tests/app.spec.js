@@ -73,6 +73,31 @@ test('settings restore shows selected backup before restore', async ({ page }, t
   await expect(page.locator('#restoreBackupSelection')).toBeHidden();
 });
 
+test('home header tracks the active view and hides on detail pages', async ({ page }) => {
+  const company = `Header Detail Co ${Date.now()}`;
+
+  await page.goto('/');
+
+  await expect(page.getByRole('heading', { name: 'Applications' })).toBeVisible();
+
+  await page.getByRole('button', { name: 'Reports' }).click();
+  await expect(page.getByRole('heading', { name: 'Reports' })).toBeVisible();
+
+  await page.getByRole('button', { name: 'Company List' }).click();
+  await expect(page.getByRole('heading', { name: 'Company List' })).toBeVisible();
+
+  await page.getByRole('button', { name: 'New Application' }).click();
+  const applicationDialog = page.locator('#applicationDialog');
+  await applicationDialog.getByLabel('Company Name').fill(company);
+  await applicationDialog.getByLabel('Job Description').fill('Role used to verify detail-page shell behavior.');
+  await applicationDialog.getByLabel('Upload CV').setInputFiles(sampleCvPath);
+  await applicationDialog.getByRole('button', { name: 'Save', exact: true }).click();
+
+  await page.getByRole('link', { name: 'Open workflow' }).click();
+  await expect(page.locator('.content-header')).toBeHidden();
+  await expect(page.locator('.application-hero-card')).toBeVisible();
+});
+
 test('manage preparation workspace and job boards', async ({ page }) => {
   await page.goto('/');
 

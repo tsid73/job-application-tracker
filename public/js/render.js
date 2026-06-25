@@ -820,6 +820,10 @@ export function renderApplicationPage(els, payload, statusLabels, viewState) {
   };
 
   const closed = !application.archived_at && isClosedStatus(application.status);
+  const roleAndMarket = [application.location, application.salary].filter(Boolean).join(' • ') || 'Not set';
+  const peopleLine = [application.recruiter, application.contact_person].filter(Boolean).join(' • ') || 'Not set';
+  const nextStep = application.next_action || recommendedNextAction(application);
+  const nextStepLine = [nextStep, formatDate(application.next_action_due_date)].filter(Boolean).join(' • ');
 
   els.workspaceRoot.innerHTML = `
     <section class="workspace-view workspace-view-application${closed ? ' is-closed' : ''}" data-workspace-view="application">
@@ -835,24 +839,30 @@ export function renderApplicationPage(els, payload, statusLabels, viewState) {
             </div>
             <h1>${escapeHtml(application.role_title || 'Application Detail')}</h1>
             <p class="hero-company-line">${escapeHtml(application.company_name)}</p>
+            <p class="hero-support-line">${escapeHtml(roleAndMarket)}</p>
             ${renderTags(tags)}
           </div>
           <div class="page-header-actions application-hero-actions">
-            ${closed ? '' : `<button class="secondary" type="button" data-edit-application="${application.id}">Edit Application</button>`}
-            ${application.archived_at
-              ? `<button class="secondary" type="button" data-restore-application="${application.id}">Restore</button>`
-              : `<button class="secondary" type="button" data-archive-application="${application.id}">Archive</button>`}
-            <button class="secondary" type="button" data-view-job-description="${application.id}">View Job Description</button>
-            ${application.job_link ? `<a class="button-link" href="${escapeAttribute(application.job_link)}" target="_blank" rel="noreferrer">Open Posting</a>` : ''}
+            <div class="hero-action-row">
+              ${closed ? '' : `<button type="button" data-edit-application="${application.id}">Edit Application</button>`}
+              ${application.archived_at
+                ? `<button type="button" data-restore-application="${application.id}">Restore</button>`
+                : ''}
+              ${application.job_link ? `<a class="button-link tertiary" href="${escapeAttribute(application.job_link)}" target="_blank" rel="noreferrer">Open Posting</a>` : ''}
+            </div>
+            <div class="hero-action-row hero-action-row-secondary">
+              <button class="secondary" type="button" data-view-job-description="${application.id}">View Job Description</button>
+              ${application.archived_at
+                ? ''
+                : `<button class="secondary" type="button" data-archive-application="${application.id}">Archive</button>`}
+            </div>
           </div>
         </div>
         <div class="hero-inline-meta">
           ${renderInlineMeta('Applied', formatDate(application.applied_date) || 'Not set')}
-          ${renderInlineMeta('Location', application.location || 'Not set', !application.location)}
-          ${renderInlineMeta('Recruiter', application.recruiter || 'Not set', !application.recruiter)}
-          ${renderInlineMeta('Contact', application.contact_person || 'Not set', !application.contact_person)}
-          ${renderInlineMeta('Salary', application.salary || 'Not set', !application.salary)}
-          ${renderInlineMeta('Next Action', application.next_action || recommendedNextAction(application))}
+          ${renderInlineMeta('Role & Market', roleAndMarket, roleAndMarket === 'Not set')}
+          ${renderInlineMeta('People', peopleLine, peopleLine === 'Not set')}
+          ${renderInlineMeta('Next Step', nextStepLine, !application.next_action && !application.next_action_due_date)}
         </div>
       </section>
       <nav class="detail-tabbar" aria-label="Application sections">

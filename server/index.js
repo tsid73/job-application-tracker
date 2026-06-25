@@ -1648,7 +1648,7 @@ function validateBackupTableColumns(table, rows, columns) {
 }
 
 const backupTableColumns = {
-  applications: new Set(['id', 'company_name', 'job_link', 'job_description', 'status', 'applied_date', 'interview_date', 'notes', 'created_at', 'updated_at', 'archived_at', 'salary', 'location', 'recruiter', 'contact_person', 'role_title']),
+  applications: new Set(['id', 'company_name', 'job_link', 'job_description', 'status', 'applied_date', 'interview_date', 'notes', 'created_at', 'updated_at', 'archived_at', 'salary', 'location', 'recruiter', 'contact_person', 'role_title', 'next_action', 'next_action_due_date']),
   cv_versions: new Set(['id', 'file_path', 'original_name', 'mime_type', 'file_size', 'version_label', 'is_latest', 'created_at', 'extracted_text', 'deleted_at', 'file_hash', 'storage_kind', 's3_bucket', 's3_key']),
   application_cvs: new Set(['application_id', 'cv_id', 'linked_at']),
   status_history: new Set(['id', 'application_id', 'from_status', 'to_status', 'changed_at']),

@@ -260,7 +260,7 @@ h3 {
   position: sticky;
   top: 0;
   height: 100vh;
-  overflow-y: auto;
+  overflow: hidden;
   transition: width 160ms ease, flex-basis 160ms ease;
 }
 
@@ -328,6 +328,9 @@ h3 {
   display: flex;
   flex-direction: column;
   gap: 2px;
+  flex: 1 1 auto;
+  overflow-y: auto;
+  min-height: 0;
 }
 
 .nav-group-label {
@@ -526,14 +529,14 @@ main {
   gap: 12px;
   padding: 10px 12px;
   border-radius: 16px;
-  background: rgba(255, 255, 255, 0.76);
+  background: var(--card);
   color: var(--text);
   border-color: rgba(217, 170, 56, 0.18);
   box-shadow: none;
 }
 
 .notifications-toggle:hover {
-  background: rgba(255, 255, 255, 0.92);
+  background: var(--panel);
 }
 
 .notifications-toggle-copy {
@@ -592,7 +595,7 @@ main {
   padding: 14px 16px;
   border: 1px solid rgba(217, 170, 56, 0.2);
   border-radius: 18px;
-  background: rgba(255, 255, 255, 0.86);
+  background: var(--card);
 }
 
 .notification-card.follow-up {
@@ -883,7 +886,7 @@ tr:last-child td {
   padding: 18px;
   border: 1px dashed rgba(20, 74, 102, 0.22);
   border-radius: 20px;
-  background: linear-gradient(180deg, rgba(250, 252, 253, 0.96), rgba(244, 247, 249, 0.9));
+  background: #f7f9fb;
 }
 
 .empty-state {
@@ -895,8 +898,7 @@ tr:last-child td {
   width: 38px;
   height: 38px;
   border-radius: 14px;
-  background:
-    linear-gradient(180deg, rgba(28, 103, 136, 0.18), rgba(22, 78, 103, 0.12));
+  background: var(--accent-soft);
   border: 1px solid rgba(20, 74, 102, 0.14);
   position: relative;
 }
@@ -1038,11 +1040,11 @@ tr:last-child td {
   border: 1px solid var(--line);
   border-radius: 18px;
   overflow: hidden;
-  background: rgba(255, 255, 255, 0.9);
+  background: var(--card);
 }
 
 .calendar-weekday {
-  background: rgba(216, 236, 246, 0.48);
+  background: var(--accent-soft);
   color: var(--muted);
   font-size: 12px;
   font-weight: 700;
@@ -1060,7 +1062,7 @@ tr:last-child td {
   padding: 8px;
   border-top: 1px solid var(--line);
   border-right: 1px solid var(--line);
-  background: rgba(255, 255, 255, 0.82);
+  background: var(--card);
 }
 
 .calendar-day:nth-child(7n) {
@@ -1140,7 +1142,7 @@ tr:last-child td {
 
 .kanban-column {
   min-height: 240px;
-  background: linear-gradient(180deg, rgba(248, 250, 252, 0.94), rgba(240, 245, 248, 0.82));
+  background: var(--card);
   border: 1px solid var(--line);
   border-radius: 24px;
   padding: 14px;
@@ -1257,19 +1259,19 @@ button.report-row:focus-visible {
 }
 
 .report-panel-status {
-  background: linear-gradient(180deg, rgba(226, 241, 248, 0.95), rgba(255, 255, 255, 0.92));
+  background: #edf4f9;
 }
 
 .report-panel-lifecycle {
-  background: linear-gradient(180deg, rgba(245, 239, 224, 0.95), rgba(255, 255, 255, 0.92));
+  background: #f7f2e7;
 }
 
 .report-panel-monthly {
-  background: linear-gradient(180deg, rgba(241, 246, 239, 0.95), rgba(255, 255, 255, 0.92));
+  background: #eef6ef;
 }
 
 .report-panel-upcoming {
-  background: linear-gradient(180deg, rgba(250, 241, 234, 0.95), rgba(255, 255, 255, 0.92));
+  background: #fbf1ea;
 }
 
 .pagination {
@@ -1497,7 +1499,7 @@ dialog::backdrop {
   white-space: pre-wrap;
   font-family: inherit;
   line-height: 1.6;
-  background: rgba(255, 255, 255, 0.76);
+  background: var(--card);
   border: 1px solid var(--line);
   border-radius: 16px;
   padding: 16px;
@@ -1507,7 +1509,8 @@ dialog::backdrop {
   border: 1px solid var(--line);
   border-radius: 18px;
   padding: 16px;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.97), rgba(248, 250, 252, 0.92));
+  background: var(--panel);
+  box-shadow: var(--shadow-sm);
 }
 
 .section-heading {
@@ -1525,9 +1528,7 @@ dialog::backdrop {
 }
 
 .details-hero {
-  background:
-    radial-gradient(circle at top right, rgba(255, 255, 255, 0.3), transparent 36%),
-    linear-gradient(135deg, rgba(18, 72, 96, 0.98), rgba(14, 49, 66, 0.92));
+  background: var(--sidebar);
   color: white;
 }
 
@@ -1585,7 +1586,7 @@ dialog::backdrop {
   padding: 10px 12px;
   border: 1px solid var(--line);
   border-radius: 14px;
-  background: rgba(255, 255, 255, 0.72);
+  background: #f6f8fa;
   color: var(--muted);
 }
 
@@ -1615,7 +1616,7 @@ dialog::backdrop {
   padding: 10px 12px;
   border: 1px solid var(--line);
   border-radius: 12px;
-  background: rgba(255, 255, 255, 0.78);
+  background: #f8fafb;
 }
 
 .research-preview-text {
@@ -1665,24 +1666,24 @@ dialog::backdrop {
   border: 1px solid var(--line);
   border-radius: 20px;
   padding: 16px;
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(244, 249, 252, 0.9));
+  background: var(--card);
+  box-shadow: var(--shadow-sm);
 }
 
 .prep-card-research {
-  background: linear-gradient(180deg, rgba(244, 239, 226, 0.96), rgba(255, 255, 255, 0.92));
+  background: #f7f2e7;
 }
 
 .prep-card-questions {
-  background: linear-gradient(180deg, rgba(233, 243, 249, 0.96), rgba(255, 255, 255, 0.92));
+  background: #edf4f9;
 }
 
 .prep-card-feedback {
-  background: linear-gradient(180deg, rgba(248, 240, 233, 0.96), rgba(255, 255, 255, 0.92));
+  background: #fbf1ea;
 }
 
 .prep-card-todo {
-  background: linear-gradient(180deg, rgba(236, 246, 239, 0.98), rgba(255, 255, 255, 0.94));
+  background: #eef6ef;
 }
 
 .prep-progress {
@@ -1735,7 +1736,7 @@ dialog::backdrop {
   border: 1px solid var(--line);
   border-radius: 14px;
   padding: 12px;
-  background: rgba(255, 255, 255, 0.84);
+  background: var(--card);
 }
 
 .signal-stack {
@@ -1749,7 +1750,7 @@ dialog::backdrop {
   padding: 12px;
   border: 1px solid rgba(31, 111, 86, 0.15);
   border-radius: 16px;
-  background: rgba(255, 255, 255, 0.72);
+  background: var(--card);
 }
 
 .signal-label {
@@ -1888,7 +1889,7 @@ dialog::backdrop {
   padding: 9px 10px;
   border: 1px solid rgba(20, 74, 102, 0.12);
   border-radius: 12px;
-  background: rgba(255, 255, 255, 0.68);
+  background: var(--card);
 }
 
 .company-signal-grid dt {
@@ -1996,7 +1997,7 @@ dialog::backdrop {
   height: 38px;
   margin-bottom: 10px;
   border-radius: 14px;
-  background: linear-gradient(180deg, rgba(22, 78, 103, 0.14), rgba(70, 165, 127, 0.12));
+  background: var(--accent-soft);
   border: 1px solid rgba(20, 74, 102, 0.12);
   color: var(--accent-dark);
   font-size: 12px;
@@ -2019,7 +2020,7 @@ dialog::backdrop {
   padding: 24px;
   border: 1px solid var(--line);
   border-radius: 28px;
-  background: rgba(255, 255, 255, 0.88);
+  background: var(--card);
   box-shadow: var(--shadow-md);
 }
 
@@ -2046,7 +2047,7 @@ dialog::backdrop {
   border: 1px solid var(--line);
   border-radius: 12px;
   padding: 10px;
-  background: rgba(255, 255, 255, 0.82);
+  background: var(--card);
 }
 
 .note-item {
@@ -2095,7 +2096,7 @@ dialog::backdrop {
   padding: 10px 12px;
   border: 1px solid var(--line);
   border-radius: 12px;
-  background: rgba(255, 255, 255, 0.82);
+  background: var(--card);
 }
 
 .timeline-icon {
@@ -2133,7 +2134,7 @@ dialog::backdrop {
   border: 1px solid var(--line);
   border-radius: 12px;
   padding: 10px;
-  background: rgba(255, 255, 255, 0.82);
+  background: var(--card);
 }
 
 .doc-item a {
@@ -2159,15 +2160,15 @@ a {
   padding: 10px 14px;
   border-radius: 10px;
   border: 1px solid rgba(20, 74, 102, 0.28);
-  background: linear-gradient(180deg, #1b6185, var(--accent));
+  background: var(--accent);
   color: white;
   text-decoration: none;
   font-weight: 700;
-  box-shadow: 0 10px 18px rgba(20, 74, 102, 0.18);
+  box-shadow: var(--shadow-sm);
 }
 
 .button-link.secondary {
-  background: rgba(255, 255, 255, 0.84);
+  background: var(--card);
   color: var(--text);
   border-color: var(--line);
   box-shadow: none;
@@ -2203,9 +2204,7 @@ a {
   padding: 24px 26px;
   border: 1px solid rgba(20, 74, 102, 0.14);
   border-radius: 20px;
-  background:
-    radial-gradient(circle at top right, rgba(255, 255, 255, 0.44), transparent 28%),
-    linear-gradient(180deg, rgba(255, 252, 246, 0.96), rgba(246, 240, 228, 0.92));
+  background: #f8f4ec;
   box-shadow: var(--shadow-md);
 }
 
@@ -2221,28 +2220,26 @@ a {
 }
 
 .application-hero-card .back-pill {
-  background: rgba(255, 255, 255, 0.14);
-  color: white;
-  border-color: rgba(255, 255, 255, 0.24);
+  background: #f5f8fb;
+  color: var(--accent-dark);
+  border-color: rgba(20, 74, 102, 0.14);
 }
 
 .application-hero-card .back-pill:hover {
-  background: rgba(255, 255, 255, 0.22);
-  color: white;
+  background: #eaf0f5;
+  color: var(--accent-dark);
 }
 
 .application-hero-card {
   display: grid;
   grid-template-columns: 1fr;
-  gap: 16px;
-  padding: 18px 20px;
-  border: 1px solid rgba(20, 74, 102, 0.14);
+  gap: 18px;
+  padding: 22px 24px;
+  border: 1px solid var(--line);
   border-radius: 20px;
-  background:
-    linear-gradient(135deg, rgba(12, 52, 73, 0.96), rgba(25, 92, 122, 0.9)),
-    radial-gradient(circle at top right, rgba(255, 255, 255, 0.12), transparent 30%);
-  color: white;
-  box-shadow: var(--shadow-lg);
+  background: var(--panel);
+  color: var(--text);
+  box-shadow: var(--shadow-md);
 }
 
 .hero-copy-group {
@@ -2258,9 +2255,17 @@ a {
 }
 
 .hero-company-line {
-  color: rgba(240, 246, 251, 0.82);
-  font-size: 15px;
+  color: var(--text);
+  font-size: 16px;
   font-weight: 600;
+  margin: 0;
+}
+
+.hero-support-line {
+  margin: -2px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.45;
 }
 
 .hero-badge-row {
@@ -2278,24 +2283,44 @@ a {
 }
 
 .application-hero-actions {
+  display: grid;
+  gap: 10px;
   justify-content: flex-end;
+  align-content: start;
+  min-width: min(320px, 100%);
+}
+
+.hero-action-row {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.hero-action-row-secondary {
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
 }
 
 .hero-inline-meta {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
   gap: 10px 14px;
-  padding-top: 4px;
-  border-top: 1px solid rgba(255, 255, 255, 0.14);
+  padding-top: 2px;
+  border-top: 1px solid var(--line);
 }
 
 .hero-inline-meta-item {
   display: grid;
   gap: 4px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: #f8fafb;
 }
 
 .hero-inline-meta-item span {
-  color: rgba(240, 246, 251, 0.72);
+  color: var(--muted);
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.08em;
@@ -2304,12 +2329,12 @@ a {
 
 .hero-inline-meta-item strong,
 .hero-inline-meta-item strong a {
-  color: white;
-  font-size: 13px;
+  color: var(--text);
+  font-size: 14px;
 }
 
 .hero-inline-meta-item.is-empty strong {
-  color: rgba(240, 246, 251, 0.62);
+  color: var(--muted);
   font-weight: 500;
 }
 
@@ -2319,8 +2344,8 @@ a {
   padding: 5px;
   border-radius: 16px;
   border: 1px solid var(--line);
-  background: rgba(255, 255, 255, 0.72);
-  box-shadow: 0 10px 24px rgba(19, 33, 45, 0.06);
+  background: var(--panel);
+  box-shadow: var(--shadow-sm);
   overflow-x: auto;
   position: sticky;
   top: 10px;
@@ -2348,15 +2373,15 @@ a {
   min-width: 22px;
   height: 22px;
   border-radius: 999px;
-  background: rgba(20, 74, 102, 0.08);
+  background: var(--accent-soft);
   font-size: 11px;
   font-weight: 800;
 }
 
 .detail-tab.is-active {
-  background: linear-gradient(180deg, #1c6788, var(--accent));
+  background: var(--sidebar);
   color: white;
-  box-shadow: 0 10px 20px rgba(20, 74, 102, 0.18);
+  box-shadow: var(--shadow-sm);
 }
 
 .detail-tab.is-active .tab-icon {
@@ -2367,7 +2392,7 @@ a {
 .route-card {
   border: 1px solid var(--line);
   border-radius: 18px;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(247, 249, 251, 0.94));
+  background: var(--card);
   box-shadow: var(--shadow-md);
 }
 
@@ -2384,20 +2409,20 @@ a {
 }
 
 .research-surface {
-  background: linear-gradient(180deg, rgba(248, 241, 229, 0.98), rgba(255, 255, 255, 0.94));
+  background: #f7f2e7;
 }
 
 .ask-surface {
-  background: linear-gradient(180deg, rgba(236, 245, 250, 0.98), rgba(255, 255, 255, 0.94));
+  background: #edf4f9;
 }
 
 .feedback-surface {
-  background: linear-gradient(180deg, rgba(249, 241, 236, 0.98), rgba(255, 255, 255, 0.94));
+  background: #fbf1ea;
 }
 
 .task-surface,
 .queue-surface {
-  background: linear-gradient(180deg, rgba(237, 247, 241, 0.98), rgba(255, 255, 255, 0.94));
+  background: #eef6ef;
 }
 
 .tab-grid {
@@ -2430,7 +2455,7 @@ a {
   padding: 12px;
   border: 1px solid rgba(22, 78, 103, 0.14);
   border-radius: 12px;
-  background: rgba(255, 255, 255, 0.78);
+  background: #f8fafb;
 }
 
 .workflow-snapshot span {
@@ -2465,7 +2490,7 @@ a {
   padding: 6px;
   border-radius: 18px;
   border: 1px solid var(--line);
-  background: rgba(242, 246, 249, 0.9);
+  background: #f2f5f8;
 }
 
 .provider-segmented button {
@@ -2474,9 +2499,9 @@ a {
 }
 
 .provider-segmented button.is-active {
-  background: linear-gradient(180deg, #1c6788, var(--accent));
+  background: var(--sidebar);
   color: white;
-  border-color: var(--accent);
+  border-color: var(--sidebar);
 }
 
 .toolbar-pills {
@@ -2495,7 +2520,7 @@ a {
 }
 
 .pill.subtle {
-  background: rgba(255, 255, 255, 0.82);
+  background: var(--card);
   color: var(--text);
 }
 
@@ -2554,7 +2579,7 @@ a {
   padding: 14px;
   border: 1px solid var(--line);
   border-radius: 16px;
-  background: rgba(255, 255, 255, 0.88);
+  background: var(--card);
 }
 
 .artifact-card:focus-within,
@@ -2572,11 +2597,11 @@ a {
 
 .artifact-card-generating,
 .artifact-card-updating {
-  background: linear-gradient(180deg, rgba(237, 245, 250, 0.96), rgba(255, 255, 255, 0.92));
+  background: #edf4f9;
 }
 
 .artifact-card-failed {
-  background: linear-gradient(180deg, rgba(255, 241, 244, 0.96), rgba(255, 255, 255, 0.92));
+  background: #faeff1;
 }
 
 .artifact-card-head,
@@ -2673,7 +2698,7 @@ a {
   border: 1px solid var(--line);
   border-radius: 14px;
   padding: 12px;
-  background: rgba(255, 255, 255, 0.88);
+  background: var(--card);
 }
 
 .document-card,
@@ -2962,7 +2987,7 @@ a {
   padding: 12px;
   border: 1px solid var(--line);
   border-radius: 8px;
-  background: rgba(255, 255, 255, 0.7);
+  background: var(--card);
 }
 
 .backup-file-selection[hidden] {
@@ -3096,7 +3121,7 @@ a {
   padding: 12px;
   border: 1px solid rgba(79, 98, 118, 0.12);
   border-radius: 14px;
-  background: rgba(255, 255, 255, 0.82);
+  background: var(--card);
 }
 
 .metadata-details {
