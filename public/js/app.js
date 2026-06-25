@@ -198,6 +198,12 @@ function bindGlobalEvents() {
 }
 
 function bindHomeWorkspaceEvents() {
+  els.filterToggle?.addEventListener('click', () => {
+    if (els.filterPanel) {
+      els.filterPanel.hidden = !els.filterPanel.hidden;
+      try { localStorage.setItem('filterPanelOpen', String(!els.filterPanel.hidden)); } catch (e) {}
+    }
+  });
   els.jobBoardOpenButton?.addEventListener('click', () => openJobBoardDialog());
   els.targetCompanyOpenButton?.addEventListener('click', () => openTargetCompanyDialog());
   els.search?.addEventListener('input', debounce(() => {
@@ -283,6 +289,12 @@ function bindHomeWorkspaceEvents() {
       renderTargetCompanies(els, state.targetCompanies, state.targetCompanyFilters);
       bindTargetCompanyActions();
     });
+  });
+  els.targetCompanyFilterToggle?.addEventListener('click', () => {
+    if (els.targetCompanyFilterPanel) {
+      els.targetCompanyFilterPanel.hidden = !els.targetCompanyFilterPanel.hidden;
+      try { localStorage.setItem('targetCompanyFilterPanelOpen', String(!els.targetCompanyFilterPanel.hidden)); } catch (e) {}
+    }
   });
   els.table?.addEventListener('change', updateInlineStatus);
   els.table?.addEventListener('click', async (event) => {
@@ -609,6 +621,9 @@ async function loadTargetCompanies() {
   const payload = await api('/api/target-companies');
   state.targetCompanies = payload.target_companies;
   if (els.targetCompaniesList) {
+    if (els.targetCompanyFilterPanel) {
+      els.targetCompanyFilterPanel.hidden = localStorage.getItem('targetCompanyFilterPanelOpen') !== 'true';
+    }
     renderTargetCompanyFilters(els, state.targetCompanies, state.targetCompanyFilters);
     renderTargetCompanies(els, state.targetCompanies, state.targetCompanyFilters);
     bindTargetCompanyActions();
@@ -1123,6 +1138,9 @@ function mountWorkspace(markup, viewName) {
 
 function bindHomeWorkspaceElements() {
   bindWorkspaceElements();
+  if (els.filterPanel) {
+    els.filterPanel.hidden = localStorage.getItem('filterPanelOpen') !== 'true';
+  }
   syncContentHeader();
   if (els.summary) {
     const interviews = state.applications.filter((item) => item.status === 'interview_scheduled').length;
@@ -1885,46 +1903,56 @@ function openApplicationEditDialog(application) {
   els.applicationEditForm.elements.next_action_due_date.value = application.next_action_due_date || '';
   els.applicationEditForm.elements.job_link.value = application.job_link || '';
   els.applicationEditForm.elements.notes.value = application.notes || '';
-  els.applicationEditForm.querySelector('[data-archive-action]').hidden = Boolean(application.archived_at);
-  els.applicationEditForm.querySelector('[data-restore-action]').hidden = !application.archived_at;
+  const archiveBtn = els.applicationEditForm.querySelector('[data-archive-action]');
+  const restoreBtn = els.applicationEditForm.querySelector('[data-restore-action]');
+  const deleteBtn = els.applicationEditForm.querySelector('[data-delete-action]');
 
-  els.applicationEditForm.querySelector('[data-archive-action]').onclick = async () => {
-    await runConfirmedAction({
-      title: 'Archive application',
-      body: `Archive ${application.company_name}?`,
-      acceptLabel: 'Archive',
-      triggerButton: els.applicationEditForm.querySelector('[data-archive-action]'),
-      successMessage: 'Application archived.',
-      onConfirm: async () => {
-        await archiveApplication(application.id);
+  if (archiveBtn) archiveBtn.hidden = Boolean(application.archived_at);
+  if (restoreBtn) restoreBtn.hidden = !application.archived_at;
+
+  if (archiveBtn) {
+    archiveBtn.onclick = async () => {
+      await runConfirmedAction({
+        title: 'Archive application',
+        body: `Archive ${application.company_name}?`,
+        acceptLabel: 'Archive',
+        triggerButton: archiveBtn,
+        successMessage: 'Application archived.',
+        onConfirm: async () => {
+          await archiveApplication(application.id);
+          els.applicationEditDialog.close();
+          await Promise.all([loadApplications(), loadReminders(), loadNotifications(), renderCurrentRoute()]);
+        }
+      });
+    };
+  }
+  if (restoreBtn) {
+    restoreBtn.onclick = async () => {
+      await withAsyncButton(restoreBtn, async () => {
+        await restoreApplication(application.id);
         els.applicationEditDialog.close();
+        showToast('Application restored.', 'info');
         await Promise.all([loadApplications(), loadReminders(), loadNotifications(), renderCurrentRoute()]);
-      }
-    });
-  };
-  els.applicationEditForm.querySelector('[data-restore-action]').onclick = async () => {
-    await withAsyncButton(els.applicationEditForm.querySelector('[data-restore-action]'), async () => {
-      await restoreApplication(application.id);
-      els.applicationEditDialog.close();
-      showToast('Application restored.', 'info');
-      await Promise.all([loadApplications(), loadReminders(), loadNotifications(), renderCurrentRoute()]);
-    });
-  };
-  els.applicationEditForm.querySelector('[data-delete-action]').onclick = async () => {
-    await runConfirmedAction({
-      title: 'Delete application',
-      body: `Delete ${application.company_name}? This cannot be undone.`,
-      acceptLabel: 'Delete',
-      triggerButton: els.applicationEditForm.querySelector('[data-delete-action]'),
-      successMessage: 'Application deleted.',
-      onConfirm: async () => {
-        await api(`/api/applications/${application.id}`, { method: 'DELETE' });
-        els.applicationEditDialog.close();
-        await Promise.all([loadApplications(), loadReminders(), loadNotifications()]);
-        navigateTo('/');
-      }
-    });
-  };
+      });
+    };
+  }
+  if (deleteBtn) {
+    deleteBtn.onclick = async () => {
+      await runConfirmedAction({
+        title: 'Delete application',
+        body: `Delete ${application.company_name}? This cannot be undone.`,
+        acceptLabel: 'Delete',
+        triggerButton: deleteBtn,
+        successMessage: 'Application deleted.',
+        onConfirm: async () => {
+          await api(`/api/applications/${application.id}`, { method: 'DELETE' });
+          els.applicationEditDialog.close();
+          await Promise.all([loadApplications(), loadReminders(), loadNotifications()]);
+          navigateTo('/');
+        }
+      });
+    };
+  }
 
   els.applicationEditDialog.showModal();
 }

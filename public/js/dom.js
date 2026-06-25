@@ -105,7 +105,11 @@ const workspaceKeys = [
   'restoreBackupSelection',
   'restoreBackupFileName',
   'restoreBackupStatus',
-  'applicationPageContent'
+  'applicationPageContent',
+  'filterToggle',
+  'filterPanel',
+  'targetCompanyFilterToggle',
+  'targetCompanyFilterPanel'
 ];
 
 export function bindWorkspaceElements(root = els.workspaceRoot) {
@@ -172,5 +176,9 @@ export function bindWorkspaceElements(root = els.workspaceRoot) {
   els.restoreBackupFileName = root.querySelector('#restoreBackupFileName');
   els.restoreBackupStatus = root.querySelector('#restoreBackupStatus');
   els.applicationPageContent = root.querySelector('#applicationPageContent');
+  els.filterToggle = root.querySelector('#filterToggle');
+  els.filterPanel = root.querySelector('#filterPanel');
+  els.targetCompanyFilterToggle = root.querySelector('#targetCompanyFilterToggle');
+  els.targetCompanyFilterPanel = root.querySelector('#targetCompanyFilterPanel');
   return els;
 }

@@ -26,51 +26,60 @@ export function renderHomeWorkspace() {
 
       <section id="listView" class="surface-panel">
         <section class="toolbar" aria-label="Filters">
-          <label>
-            <span>Search</span>
-            <input id="searchInput" type="search" placeholder="Company">
-          </label>
-          <label>
-            <span>Status</span>
-            <select id="statusFilter">
-              <option value="">All</option>
-              <option value="applied">Applied</option>
-              <option value="interview_scheduled">Interview Scheduled</option>
-              <option value="offer">Offer</option>
-              <option value="accepted">Accepted</option>
-              <option value="rejected">Rejected</option>
-              <option value="withdrawn">Withdrawn</option>
-              <option value="ghosted">Ghosted</option>
-            </select>
-          </label>
-          <label>
-            <span>Tag</span>
-            <input id="tagFilter" type="search" placeholder="Remote">
-          </label>
-          <label>
-            <span>View</span>
-            <select id="archiveFilter">
-              <option value="false">Active</option>
-              <option value="closed">Closed</option>
-              <option value="true">Archived</option>
-              <option value="all">All</option>
-            </select>
-          </label>
-          <label>
-            <span>Saved Filter</span>
-            <select id="savedFilterSelect">
-              <option value="">Current filters</option>
-            </select>
-          </label>
-          <label>
-            <span>Save As</span>
-            <input id="savedFilterName" type="text" placeholder="Interview week">
-          </label>
-          <div class="toolbar-actions">
-            <button id="saveFilterButton" class="secondary" type="button">Save Filter</button>
-            <button id="deleteFilterButton" class="secondary" type="button">Delete Filter</button>
-            <button id="quickExportCsvButton" class="secondary" type="button">Export CSV</button>
-            <button id="quickExportIcsButton" class="secondary" type="button">Calendar (.ics)</button>
+          <div class="toolbar-main-row">
+            <label>
+              <span>Search</span>
+              <input id="searchInput" type="search" placeholder="Company">
+            </label>
+            <button id="filterToggle" class="icon-button" type="button" aria-label="Toggle filters" title="Filters">
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.8"><polygon points="1 2 13 2 9 7 9 12 5 12 5 7 1 2"/></svg>
+            </button>
+          </div>
+          <div id="filterPanel" class="filter-panel" hidden>
+            <label>
+              <span>Status</span>
+              <select id="statusFilter">
+                <option value="">All</option>
+                <option value="applied">Applied</option>
+                <option value="interview_scheduled">Interview Scheduled</option>
+                <option value="offer">Offer</option>
+                <option value="accepted">Accepted</option>
+                <option value="rejected">Rejected</option>
+                <option value="withdrawn">Withdrawn</option>
+                <option value="ghosted">Ghosted</option>
+              </select>
+            </label>
+            <label>
+              <span>Tag</span>
+              <input id="tagFilter" type="search" placeholder="Remote">
+            </label>
+            <label>
+              <span>View</span>
+              <select id="archiveFilter">
+                <option value="false">Active</option>
+                <option value="closed">Closed</option>
+                <option value="true">Archived</option>
+                <option value="all">All</option>
+              </select>
+            </label>
+            <label>
+              <span>Saved Filter</span>
+              <select id="savedFilterSelect">
+                <option value="">Current filters</option>
+              </select>
+            </label>
+            <div class="saved-filter-row" hidden>
+              <label>
+                <span>Save As</span>
+                <input id="savedFilterName" type="text" placeholder="Interview week">
+              </label>
+              <button id="saveFilterButton" class="secondary" type="button">Save Filter</button>
+              <button id="deleteFilterButton" class="secondary" type="button">Delete Filter</button>
+            </div>
+            <div id="exportPanel" class="export-row">
+              <button id="quickExportCsvButton" class="secondary" type="button">Export CSV</button>
+              <button id="quickExportIcsButton" class="secondary" type="button">Calendar (.ics)</button>
+            </div>
           </div>
         </section>
         <section class="table-shell" aria-live="polite">
@@ -82,11 +91,8 @@ export function renderHomeWorkspace() {
                 <th>Applied</th>
                 <th>Status</th>
                 <th>Next</th>
-                <th>Follow-up</th>
                 <th>Last Touched</th>
-                <th>State</th>
                 <th>Interview</th>
-                <th>Tags</th>
                 <th>Actions</th>
               </tr>
             </thead>
@@ -165,9 +171,14 @@ export function renderHomeWorkspace() {
               <h3>Company List</h3>
               <p class="section-help">Track Germany and EU companies that frequently hire international engineers.</p>
             </div>
-            <button id="targetCompanyOpenButton" type="button">Add Company</button>
+            <div style="display: flex; gap: 8px; align-items: center;">
+              <button id="targetCompanyFilterToggle" class="icon-button" type="button" aria-label="Toggle filters" title="Filters">
+                <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.8"><polygon points="1 2 13 2 9 7 9 12 5 12 5 7 1 2"/></svg>
+              </button>
+              <button id="targetCompanyOpenButton" type="button">Add Company</button>
+            </div>
           </div>
-          <section class="toolbar target-company-toolbar" aria-label="Company filters">
+          <section id="targetCompanyFilterPanel" class="toolbar target-company-toolbar filter-panel" aria-label="Company filters" hidden>
             <label>
               <span>Keyword</span>
               <input id="targetCompanySearchInput" type="search" placeholder="Company, stack, city">
@@ -350,29 +361,31 @@ export function buildApplicationRow(application, statusOptions, selected = false
     <td>
       <div class="company-cell">
         <strong>${escapeHtml(application.company_name)}</strong>
-        <span>${escapeHtml([application.role_title, application.location, application.salary, application.recruiter].filter(Boolean).join(' · ') || application.cv_name || 'No CV')}</span>
+        <span>${escapeHtml([application.role_title, application.location].filter(Boolean).join(' · ') || application.cv_name || 'No CV')}</span>
       </div>
     </td>
     <td>${formatDate(application.applied_date)}</td>
     <td>
-      <select data-field="status" aria-label="Status for ${escapeHtml(application.company_name)}"${closed ? ' disabled' : ''}>
-        ${statusOptions}
-      </select>
+      <div class="status-cell">
+        <span class="state ${application.archived_at ? 'archived-state' : closed ? 'closed-state' : 'active-state'}">${application.archived_at ? 'Archived' : closed ? 'Closed' : 'Active'}</span>
+        <select data-field="status" aria-label="Status for ${escapeHtml(application.company_name)}"${closed ? ' disabled' : ''}>
+          ${statusOptions}
+        </select>
+      </div>
     </td>
     <td>${closed ? '' : renderNextAction(application)}</td>
-    <td>${closed ? '' : renderFollowUpDue(application)}</td>
     <td>${renderStaleSignal(application)}</td>
-    <td>${application.archived_at ? '<span class="state archived-state">Archived</span>' : closed ? '<span class="state closed-state">Closed</span>' : '<span class="state active-state">Active</span>'}</td>
     <td data-interview-cell>${closed ? '' : renderInterviewControl(application)}</td>
-    <td>${renderTags(application.tags)}</td>
-    <td>
-      <details class="inline-menu row-menu">
-        <summary class="icon-button row-menu-trigger" aria-label="Actions for ${escapeHtml(application.company_name)}">⋯</summary>
-        <div class="inline-menu-list">
-          <button class="secondary" type="button" data-detail-id="${application.id}">Open</button>
-          ${application.archived_at ? `<button class="secondary" type="button" data-restore-row-id="${application.id}">Restore</button>` : `<button class="secondary" type="button" data-archive-row-id="${application.id}">Archive</button>`}
-        </div>
-      </details>
+    <td class="action-col">
+      <div class="row-actions">
+        <button class="icon-button row-open-btn" type="button" data-detail-id="${application.id}" aria-label="Open ${escapeHtml(application.company_name)}" title="Open">
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M6 2H2a1 1 0 0 0-1 1v9a1 1 0 0 0 1 1h9a1 1 0 0 0 1-1V8"/><polyline points="9 1 13 1 13 5"/><line x1="13" y1="1" x2="6" y2="8"/></svg>
+        </button>
+        ${application.archived_at
+          ? `<button class="icon-button" type="button" data-restore-row-id="${application.id}" aria-label="Restore ${escapeHtml(application.company_name)}" title="Restore"><svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M1 4a6 6 0 1 1 .7 5.8"/><polyline points="1 1 1 4 4 4"/></svg></button>`
+          : `<button class="icon-button" type="button" data-archive-row-id="${application.id}" aria-label="Archive ${escapeHtml(application.company_name)}" title="Archive"><svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="1" y="1" width="12" height="3" rx="1"/><path d="M2 4v8a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V4"/><line x1="5" y1="7" x2="9" y2="7"/></svg></button>`
+        }
+      </div>
     </td>
   `;
 
@@ -603,36 +616,25 @@ function renderTargetCompanySection(title, description, companies, options = {})
       <div class="board-section-grid${options.fullWidth ? ' board-section-grid-wide' : ''}">
         ${companies.map((company) => `
           <article class="board-card target-company-card ${company.is_active ? '' : 'is-inactive'} ${jobBoardFreshnessClass(company)}">
-            <div class="board-card-top">
-              <div>
+            <div class="company-card-header">
+              <div class="company-card-title">
                 <strong>${escapeHtml(company.name)}</strong>
-                <span>${escapeHtml([company.region, company.primary_location, company.industry].filter(Boolean).join(' · ') || 'No company context saved')}</span>
+                <span class="muted-text company-card-meta">${escapeHtml([company.region, company.primary_location, company.industry].filter(Boolean).join(' · ') || 'No context')}</span>
               </div>
-              <span class="state ${company.is_active ? 'active-state' : 'archived-state'}">${company.is_active ? 'Active' : 'Inactive'}</span>
+              <div class="company-card-links">
+                ${company.career_url ? `<button class="icon-button" type="button" data-target-company-open="${company.id}" data-target-company-url="career" aria-label="Careers" title="Careers"><svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M1 9a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1V5a1 1 0 0 0-1-1H2a1 1 0 0 0-1 1v4z"/><path d="M4 4V2a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg></button>` : ''}
+                ${company.linkedin_url ? `<button class="icon-button" type="button" data-target-company-open="${company.id}" data-target-company-url="linkedin" aria-label="LinkedIn" title="LinkedIn"><svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M1 4h3v9H1z"/><path d="M4 7c0-2 2-3 4-3s4 1 4 3v6H9V7c0-1-1-2-2-2s-3 1-3 2v6H4V7z"/><circle cx="2.5" cy="1.5" r="1"/></svg></button>` : ''}
+                ${company.company_url ? `<button class="icon-button" type="button" data-target-company-open="${company.id}" data-target-company-url="company" aria-label="Website" title="Website"><svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="7" cy="7" r="6"/><line x1="1" y1="7" x2="13" y2="7"/><path d="M7 1a10 10 0 0 0 0 12 10 10 0 0 0 0-12"/></svg></button>` : ''}
+              </div>
             </div>
-            <div class="company-link-row">
-              ${company.career_url ? `<button class="button-link tertiary board-open-link" type="button" data-target-company-open="${company.id}" data-target-company-url="career">Careers</button>` : ''}
-              ${company.linkedin_url ? `<button class="button-link tertiary board-open-link" type="button" data-target-company-open="${company.id}" data-target-company-url="linkedin">LinkedIn</button>` : ''}
-              ${company.company_url ? `<button class="button-link tertiary board-open-link" type="button" data-target-company-open="${company.id}" data-target-company-url="company">Website</button>` : ''}
-              ${!company.career_url && !company.linkedin_url && !company.company_url ? '<span>No link saved</span>' : ''}
+            <div class="company-card-signals">
+              ${[company.visa_signal, company.relocation_signal, company.work_mode, company.employee_count].filter(Boolean).map(s => `<span class="pill subtle">${escapeHtml(s)}</span>`).join('')}
             </div>
-            <div class="board-status-row">
-              <span class="board-freshness ${jobBoardFreshnessClass(company)}">${jobBoardFreshnessLabel(company)}</span>
-            </div>
-            <p>${escapeHtml(company.description || company.fit_notes || 'No notes yet.')}</p>
-            <dl class="company-signal-grid">
-              ${renderCompanySignal('Visa', company.visa_signal)}
-              ${renderCompanySignal('Relocation', company.relocation_signal)}
-              ${renderCompanySignal('Work', company.work_mode)}
-              ${renderCompanySignal('Employees', company.employee_count)}
-            </dl>
-            ${company.fit_notes ? `<p class="target-company-notes">${escapeHtml(company.fit_notes)}</p>` : ''}
-            <div class="board-meta">
-              <span>Last checked: ${company.last_checked_date ? formatDate(company.last_checked_date) : 'Never'}</span>
-            </div>
-            <div class="row-actions">
+            ${company.description || company.fit_notes ? `<p class="company-card-notes" title="${escapeAttribute(company.fit_notes || company.description)}">${escapeHtml(truncateText(company.fit_notes || company.description, 80))}</p>` : ''}
+            <div class="company-card-actions">
+              <span class="state ${company.is_active ? 'active-state' : 'closed-state'}">${company.is_active ? 'Active' : 'Inactive'}</span>
               <button class="secondary" type="button" data-target-company-edit="${company.id}">Edit</button>
-              <button class="secondary" type="button" data-target-company-toggle="${company.id}" data-target-company-active="${company.is_active ? 'true' : 'false'}">${company.is_active ? 'Mark inactive' : 'Activate'}</button>
+              <button class="secondary" type="button" data-target-company-toggle="${company.id}" data-target-company-active="${company.is_active ? 'true' : 'false'}">${company.is_active ? 'Deactivate' : 'Activate'}</button>
             </div>
           </article>
         `).join('')}
@@ -806,21 +808,20 @@ export function renderApplicationPage(els, payload, statusLabels, viewState) {
     todos
   } = payload;
 
-  const activeTab = viewState.activeTab || 'overview';
+  const activeTab = viewState.activeTab && viewState.activeTab !== 'overview' ? viewState.activeTab : 'workflow';
   const primaryCv = cvs[0] || null;
   const latestDocuments = summarizeLatestDocuments(documents);
   const queuedJobs = jobs.filter((item) => item.status !== 'completed' && item.status !== 'failed');
   const failedJobs = jobs.filter((item) => item.status === 'failed');
 
   const tabBodies = {
-    overview: renderOverviewTab({ application, primaryCv, tags, documents, jobs, statusLabels, selectedProvider: viewState.selectedProvider, capabilities: viewState.capabilities, preparation, recruiterQuestions, feedbackEntries, todos }),
     workflow: renderWorkflowTab({ application, preparation, recruiterQuestions, feedbackEntries, todos }),
-    content: renderContentSummaryTab({ application, primaryCvId: primaryCv?.id || '', queuedJobs, failedJobs, allDocuments: documents, allJobs: jobs, selectedProvider: viewState.selectedProvider, capabilities: viewState.capabilities, workspace: viewState.contentWorkspace }),
+    content: renderContentSummaryTab({ application, primaryCv, queuedJobs, failedJobs, allDocuments: documents, allJobs: jobs, selectedProvider: viewState.selectedProvider, capabilities: viewState.capabilities, workspace: viewState.contentWorkspace }),
     history: renderHistoryTab({ application, history, notes, activity, statusLabels })
   };
 
   const closed = !application.archived_at && isClosedStatus(application.status);
-  const roleAndMarket = [application.location, application.salary].filter(Boolean).join(' • ') || 'Not set';
+  const locationLine = application.location || 'Not set';
   const peopleLine = [application.recruiter, application.contact_person].filter(Boolean).join(' • ') || 'Not set';
   const nextStep = application.next_action || recommendedNextAction(application);
   const nextStepLine = [nextStep, formatDate(application.next_action_due_date)].filter(Boolean).join(' • ');
@@ -831,7 +832,6 @@ export function renderApplicationPage(els, payload, statusLabels, viewState) {
       <section class="application-hero-card application-hero-compact">
         <div class="hero-main-row">
           <div class="hero-copy-group">
-            <a class="button-link tertiary back-pill" href="/">Tracker</a>
             <div class="hero-badge-row">
               <span class="state ${application.archived_at ? 'archived-state' : closed ? 'closed-state' : 'active-state'}">${application.archived_at ? 'Archived' : statusLabels[application.status] || application.status}</span>
               ${closed ? '<span class="state closed-state">Closed</span>' : ''}
@@ -839,40 +839,41 @@ export function renderApplicationPage(els, payload, statusLabels, viewState) {
             </div>
             <h1>${escapeHtml(application.role_title || 'Application Detail')}</h1>
             <p class="hero-company-line">${escapeHtml(application.company_name)}</p>
-            <p class="hero-support-line">${escapeHtml(roleAndMarket)}</p>
+            <p class="hero-support-line">${escapeHtml(locationLine)}</p>
             ${renderTags(tags)}
           </div>
           <div class="page-header-actions application-hero-actions">
             <div class="hero-action-row">
-              ${closed ? '' : `<button type="button" data-edit-application="${application.id}">Edit Application</button>`}
-              ${application.archived_at
-                ? `<button type="button" data-restore-application="${application.id}">Restore</button>`
-                : ''}
-              ${application.job_link ? `<a class="button-link tertiary" href="${escapeAttribute(application.job_link)}" target="_blank" rel="noreferrer">Open Posting</a>` : ''}
-            </div>
-            <div class="hero-action-row hero-action-row-secondary">
-              <button class="secondary" type="button" data-view-job-description="${application.id}">View Job Description</button>
-              ${application.archived_at
-                ? ''
-                : `<button class="secondary" type="button" data-archive-application="${application.id}">Archive</button>`}
+              ${closed ? '' : `<button type="button" data-edit-application="${application.id}" class="icon-button" aria-label="Edit application" title="Edit">
+                <svg width="15" height="15" viewBox="0 0 15 15" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M10.5 1.5a1.5 1.5 0 0 1 3 3L5 13H1v-4L10.5 1.5z"/></svg>
+              </button>`}
+              ${application.archived_at ? `<button type="button" data-restore-application="${application.id}" class="secondary" style="font-size:12px;padding:5px 10px">Restore</button>` : ''}
+              ${application.job_link ? `<a class="icon-button" href="${escapeAttribute(application.job_link)}" target="_blank" rel="noreferrer" aria-label="Open posting" title="Open Posting">
+                <svg width="15" height="15" viewBox="0 0 15 15" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M7 3H3a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V9"/><polyline points="10 1 14 1 14 5"/><line x1="14" y1="1" x2="7" y2="8"/></svg>
+              </a>` : ''}
+              <button class="icon-button" type="button" data-view-job-description="${application.id}" aria-label="View job description" title="View JD">
+                <svg width="15" height="15" viewBox="0 0 15 15" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="2" y="1" width="11" height="13" rx="1"/><line x1="5" y1="5" x2="10" y2="5"/><line x1="5" y1="8" x2="10" y2="8"/><line x1="5" y1="11" x2="8" y2="11"/></svg>
+              </button>
+              ${!application.archived_at ? `<button class="icon-button danger-icon" type="button" data-delete-application="${application.id}" aria-label="Delete application" title="Delete">
+                <svg width="15" height="15" viewBox="0 0 15 15" fill="none" stroke="currentColor" stroke-width="1.7"><polyline points="2 4 13 4"/><path d="M5 4V2h5v2"/><path d="M6 4v8m3-8v8"/><rect x="3" y="4" width="9" height="9" rx="1"/></svg>
+              </button>` : ''}
             </div>
           </div>
         </div>
         <div class="hero-inline-meta">
           ${renderInlineMeta('Applied', formatDate(application.applied_date) || 'Not set')}
-          ${renderInlineMeta('Role & Market', roleAndMarket, roleAndMarket === 'Not set')}
+          ${renderInlineMeta('Salary', application.salary || 'Not set', !application.salary)}
           ${renderInlineMeta('People', peopleLine, peopleLine === 'Not set')}
           ${renderInlineMeta('Next Step', nextStepLine, !application.next_action && !application.next_action_due_date)}
         </div>
       </section>
       <nav class="detail-tabbar" aria-label="Application sections">
-        ${renderDetailTab(application.id, 'overview', 'Overview', activeTab, 'O')}
         ${renderDetailTab(application.id, 'workflow', 'Workflow', activeTab, 'W')}
         ${renderDetailTab(application.id, 'content', 'Content', activeTab, 'C')}
         ${renderDetailTab(application.id, 'history', 'History', activeTab, 'H')}
       </nav>
       <section class="detail-tab-panel">
-        ${tabBodies[activeTab] || tabBodies.overview}
+        ${tabBodies[activeTab] || tabBodies.workflow}
       </section>
     </div>
     </section>
@@ -1226,7 +1227,8 @@ function renderWorkflowTab({ application, preparation, recruiterQuestions, feedb
   `;
 }
 
-function renderContentSummaryTab({ application, primaryCvId, queuedJobs, failedJobs, allDocuments, allJobs, selectedProvider, capabilities, workspace }) {
+function renderContentSummaryTab({ application, primaryCv, queuedJobs, failedJobs, allDocuments, allJobs, selectedProvider, capabilities, workspace }) {
+  const primaryCvId = primaryCv?.id || '';
   const documentSlots = filterDocumentSlots(buildDocumentSlots(allDocuments, allJobs), workspace);
   const documentTypes = [...new Set(buildDocumentSlots(allDocuments, allJobs).map((item) => item.type))];
   const recentDocumentId = Number(workspace.recentDocumentId) || null;
@@ -1286,8 +1288,29 @@ function renderContentSummaryTab({ application, primaryCvId, queuedJobs, failedJ
         <div class="content-asset-list">
           ${documentSlots.map((slot) => renderContentDocumentSlot(application.id, slot, primaryCvId, recentDocumentId)).join('') || (allDocuments.length || allJobs.length
             ? renderInlineEmpty('No documents match these filters', 'Clear or relax the active filters to see more generated content.')
-            : renderInlineEmpty('No generated content yet', 'Use the overview tab to generate your first persistent document asset.'))}
+            : renderInlineEmpty('No generated content yet', 'Generate a document from the workspace above to create your first saved asset.'))}
         </div>
+      </section>
+      <section class="route-card">
+        <div class="section-heading">
+          <div>
+            <div class="panel-kicker">Resume Context</div>
+            <h3>Linked CV</h3>
+          </div>
+        </div>
+        ${primaryCv ? `
+          <article class="document-summary-card attachment-card">
+            <strong>${escapeHtml(primaryCv.original_name)}</strong>
+            <p>${escapeHtml(primaryCv.version_label || 'Unlabeled')} · ${escapeHtml(formatBytes(Number(primaryCv.file_size || 0)))}</p>
+            <div class="document-card-meta">
+              <span class="pill subtle">${primaryCv.storage_kind === 'dual' ? 'Local + S3' : 'Local only'}</span>
+              <span class="pill info-pill">${primaryCv.extracted_text_length ? 'Text extracted' : 'No extracted text'}</span>
+            </div>
+            <div class="document-card-actions">
+              <a class="button-link secondary" href="/api/cv/${primaryCv.id}/download">Download CV</a>
+            </div>
+          </article>
+        ` : renderInlineEmpty('No CV linked', 'Link a CV to unlock tailored generation and consistent job-specific outputs.')}
       </section>
       <section class="route-card">
         <div class="section-heading">

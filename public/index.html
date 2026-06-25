@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="robots" content="noindex, nofollow, noarchive">
-    <title>Job Applications</title>
+    <title>Job Tracker</title>
     <link rel="icon" href="/favicon.svg" type="image/svg+xml">
     <link rel="stylesheet" href="/css/styles.css">
   </head>
@@ -16,14 +16,13 @@
             <span class="sidebar-toggle-bars" aria-hidden="true"></span>
           </button>
           <div class="sidebar-brand-copy">
-            <b>Job Applications</b>
-            <small>Command center</small>
+            <b>Job Tracker</b>
           </div>
         </div>
 
         <nav class="sidebar-nav" aria-label="Sections">
           <div class="nav-group-label">Pipeline</div>
-          <button class="nav-item is-active" type="button" data-view="list" aria-pressed="true"><span class="nav-ic" aria-hidden="true">☰</span><span class="nav-text">List</span></button>
+          <button class="nav-item is-active" type="button" data-view="list" aria-pressed="true"><span class="nav-ic" aria-hidden="true"><svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.8"><line x1="1" y1="3" x2="13" y2="3"/><line x1="1" y1="7" x2="13" y2="7"/><line x1="1" y1="11" x2="13" y2="11"/></svg></span><span class="nav-text">List</span></button>
           <button class="nav-item" type="button" data-view="kanban" aria-pressed="false"><span class="nav-ic" aria-hidden="true">▦</span><span class="nav-text">Kanban</span></button>
           <button class="nav-item" type="button" data-view="reports" aria-pressed="false"><span class="nav-ic" aria-hidden="true">◔</span><span class="nav-text">Reports</span></button>
           <button class="nav-item" type="button" data-view="stats" aria-pressed="false"><span class="nav-ic" aria-hidden="true">▲</span><span class="nav-text">Stats</span></button>
@@ -233,16 +232,9 @@
           </label>
         </div>
         <p class="form-error" id="applicationEditError" hidden></p>
-        <div class="split-actions">
-          <div>
-            <button class="secondary" type="button" data-archive-action>Archive</button>
-            <button class="secondary" type="button" data-restore-action hidden>Restore</button>
-            <button class="danger" type="button" data-delete-action>Delete</button>
-          </div>
-          <div>
-            <button class="secondary" type="button" data-close-dialog>Cancel</button>
-            <button type="submit">Save Changes</button>
-          </div>
+        <div class="dialog-actions">
+          <button class="secondary" type="button" data-close-dialog>Cancel</button>
+          <button type="submit">Save Changes</button>
         </div>
       </form>
     </dialog>
