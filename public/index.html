@@ -429,6 +429,24 @@
       </div>
     </dialog>
 
+    <dialog id="promptDialog" class="small-dialog">
+      <form id="promptDialogForm" method="dialog">
+        <div class="dialog-header">
+          <h3 id="promptDialogTitle">Update Label</h3>
+          <button class="secondary" type="button" data-close-dialog>Close</button>
+        </div>
+        <div class="dialog-body">
+          <label class="wide" style="margin: 0;">
+            <span id="promptDialogLabel">Enter value:</span>
+            <input type="text" id="promptDialogInput" required autocomplete="off" style="width: 100%; box-sizing: border-box; margin-top: 8px;" />
+          </label>
+        </div>
+        <div class="dialog-actions">
+          <button id="promptDialogCancel" class="secondary" type="button">Cancel</button>
+          <button id="promptDialogSubmit" type="submit">Save</button>
+        </div>
+      </form>
+    </dialog>
     <dialog id="editorDialog">
       <form id="editorDialogForm" method="dialog">
         <div class="dialog-header">

@@ -301,7 +301,7 @@ export function renderStats(els, stats) {
         </article>
       </div>
     </section>
-    <section class="report-panel">
+    <section class="report-panel wide">
       <div class="panel-kicker">Channels</div>
       <h3>Interview Rate by Tag</h3>
       ${stats.tags.map((row) => reportRow(`${row.tag} · ${rate(row.interviewed, Number(row.applications || 0))} interviews`, Number(row.applications || 0), tagMax)).join('') || '<p>No tagged applications yet.</p>'}

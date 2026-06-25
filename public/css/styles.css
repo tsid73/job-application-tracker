@@ -1411,6 +1411,57 @@ dialog {
   max-width: min(860px, 92vw);
 }
 
+#confirmDialog,
+dialog.small-dialog {
+  width: min(440px, calc(100vw - 32px));
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+#confirmDialog .dialog-header,
+dialog.small-dialog .dialog-header {
+  padding: 12px 16px;
+}
+
+#confirmDialog h2,
+dialog.small-dialog h3 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+#confirmDialog .dialog-body,
+dialog.small-dialog .dialog-body {
+  padding: 16px;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--text);
+}
+
+#confirmDialog .dialog-actions,
+dialog.small-dialog .dialog-actions {
+  padding: 12px 16px;
+}
+
+dialog.small-dialog input[type="text"] {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  font-size: 14px;
+  background: var(--bg);
+  color: var(--text);
+  margin-top: 8px;
+  box-sizing: border-box;
+  outline: none;
+}
+
+dialog.small-dialog input[type="text"]:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(9, 132, 227, 0.15);
+}
+
 dialog::backdrop {
   background: rgba(16, 32, 45, 0.42);
 }

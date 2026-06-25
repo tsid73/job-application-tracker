@@ -256,25 +256,22 @@ function bindHomeWorkspaceEvents() {
       showToast('No activity entries selected', 'warning');
       return;
     }
-    if (!confirm(`Are you sure you want to delete ${ids.length} selected activity log entries? This will also remove any linked status history changes to correct timeline metrics.`)) return;
-
-    setButtonBusy(els.activityDeleteButton, true);
-    try {
-      await api('/api/activity', {
-        method: 'DELETE',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ ids })
-      });
-      showToast(`Successfully deleted ${ids.length} activity entries`, 'success');
-      state.activity.selectedIds.clear();
-      await loadActivity();
-    } catch (err) {
-      showToast(err.message || 'Failed to delete activity entries', 'error');
-    } finally {
-      setButtonBusy(els.activityDeleteButton, false);
-    }
+    await runConfirmedAction({
+      title: 'Delete Activity Logs',
+      body: `Are you sure you want to delete ${ids.length} selected activity log entries? This will also remove any linked status history changes to correct timeline metrics.`,
+      acceptLabel: 'Delete',
+      triggerButton: els.activityDeleteButton,
+      successMessage: `Successfully deleted ${ids.length} activity entries`,
+      onConfirm: async () => {
+        await api('/api/activity', {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ids })
+        });
+        state.activity.selectedIds.clear();
+        await loadActivity();
+      }
+    });
   });
   els.targetCompanySearch?.addEventListener('input', debounce(() => {
     state.targetCompanyFilters.search = els.targetCompanySearch.value.trim();
@@ -902,7 +899,7 @@ function bindCvActions() {
     label.addEventListener('click', async () => {
       const cvId = label.dataset.cvId;
       const currentVal = label.textContent === 'Add label' ? '' : label.textContent;
-      const newVal = prompt('Enter new CV version label:', currentVal);
+      const newVal = await showPromptDialog('Update Version Label', 'Enter new CV version label:', currentVal);
       if (newVal === null) return; // cancelled
       
       try {
@@ -923,18 +920,17 @@ function bindCvActions() {
 
   els.cvList.querySelectorAll('[data-delete-cv-id]').forEach((button) => {
     button.addEventListener('click', async () => {
-      if (!confirm('Delete this CV? Linked historical CVs cannot be deleted.')) return;
-      
-      setButtonBusy(button, true);
-      try {
-        await api(`/api/cv/${button.dataset.deleteCvId}`, { method: 'DELETE' });
-        showToast('CV deleted.', 'success');
-        await loadCVs();
-      } catch (error) {
-        showToast(error.message, 'error');
-      } finally {
-        setButtonBusy(button, false);
-      }
+      await runConfirmedAction({
+        title: 'Delete CV',
+        body: 'Delete this CV? Linked historical CVs cannot be deleted.',
+        acceptLabel: 'Delete',
+        triggerButton: button,
+        successMessage: 'CV deleted.',
+        onConfirm: async () => {
+          await api(`/api/cv/${button.dataset.deleteCvId}`, { method: 'DELETE' });
+          await loadCVs();
+        }
+      });
     });
   });
 }
@@ -1068,17 +1064,20 @@ function bindTargetCompanyActions() {
     button.addEventListener('click', async () => {
       const company = state.targetCompanies.find((item) => item.id === Number(button.dataset.targetCompanyDelete));
       if (!company) return;
-      if (!confirm(`Are you sure you want to delete ${company.name}?`)) return;
-      button.disabled = true;
-      try {
-        await api(`/api/target-companies/${company.id}`, { method: 'DELETE' });
-        await loadTargetCompanies();
-        showToast('Company deleted successfully.');
-      } catch (error) {
-        setError(els.targetCompanyError, error.message);
-      } finally {
-        button.disabled = false;
-      }
+      await runConfirmedAction({
+        title: 'Delete Company',
+        body: `Are you sure you want to delete ${company.name}?`,
+        acceptLabel: 'Delete',
+        triggerButton: button,
+        successMessage: 'Company deleted successfully.',
+        onConfirm: async () => {
+          await api(`/api/target-companies/${company.id}`, { method: 'DELETE' });
+          await loadTargetCompanies();
+        },
+        onError: (error) => {
+          setError(els.targetCompanyError, error.message);
+        }
+      });
     });
   });
 }
@@ -2160,6 +2159,43 @@ async function confirmAction(title, body, acceptLabel = 'Confirm') {
   });
 }
 
+async function showPromptDialog(title, labelText, defaultValue = '') {
+  return new Promise((resolve) => {
+    els.promptDialogTitle.textContent = title;
+    els.promptDialogLabel.textContent = labelText;
+    els.promptDialogInput.value = defaultValue;
+    
+    let result = null;
+    
+    const handleClose = () => {
+      els.promptDialogForm.removeEventListener('submit', handleSubmit);
+      els.promptDialogCancel.removeEventListener('click', handleCancel);
+      resolve(result);
+    };
+
+    const handleSubmit = (e) => {
+      e.preventDefault();
+      const val = els.promptDialogInput.value.trim();
+      if (!val) return;
+      result = val;
+      els.promptDialog.close();
+    };
+    
+    const handleCancel = () => {
+      result = null;
+      els.promptDialog.close();
+    };
+
+    els.promptDialogForm.addEventListener('submit', handleSubmit);
+    els.promptDialogCancel.addEventListener('click', handleCancel);
+    els.promptDialog.addEventListener('close', handleClose, { once: true });
+    
+    els.promptDialog.showModal();
+    els.promptDialogInput.focus();
+    els.promptDialogInput.select();
+  });
+}
+
 async function runConfirmedAction({ title, body, acceptLabel = 'Confirm', triggerButton = null, successMessage = null, onConfirm, onError = null }) {
   if (!(await confirmAction(title, body, acceptLabel))) return false;
   try {
@@ -2269,7 +2305,7 @@ function resetDialogState(dialog) {
 }
 
 function resetTransientUiState() {
-  [els.detailDialog, els.confirmDialog, els.editorDialog].forEach((dialog) => {
+  [els.detailDialog, els.confirmDialog, els.editorDialog, els.promptDialog].forEach((dialog) => {
     if (dialog?.open) {
       dialog.close();
       resetDialogState(dialog);
