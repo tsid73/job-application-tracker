@@ -118,7 +118,11 @@ const workspaceKeys = [
   'filterToggle',
   'filterPanel',
   'targetCompanyFilterToggle',
-  'targetCompanyFilterPanel'
+  'targetCompanyFilterPanel',
+  'dateFromFilter',
+  'dateToFilter',
+  'resetFiltersButton',
+  'activityResetButton'
 ];
 
 export function bindWorkspaceElements(root = els.workspaceRoot) {
@@ -129,6 +133,9 @@ export function bindWorkspaceElements(root = els.workspaceRoot) {
   els.statusFilter = root.querySelector('#statusFilter');
   els.tagFilter = root.querySelector('#tagFilter');
   els.archiveFilter = root.querySelector('#archiveFilter');
+  els.dateFromFilter = root.querySelector('#dateFromFilter');
+  els.dateToFilter = root.querySelector('#dateToFilter');
+  els.resetFiltersButton = root.querySelector('#resetFiltersButton');
   els.savedFilterSelect = root.querySelector('#savedFilterSelect');
   els.savedFilterName = root.querySelector('#savedFilterName');
   els.saveFilterButton = root.querySelector('#saveFilterButton');
@@ -161,6 +168,7 @@ export function bindWorkspaceElements(root = els.workspaceRoot) {
   els.toolkitContent = root.querySelector('#toolkitContent');
   els.settingsContent = root.querySelector('#settingsContent');
   els.activitySearch = root.querySelector('#activitySearchInput');
+  els.activityResetButton = root.querySelector('#activityResetButton');
   els.activityTable = root.querySelector('#activityTable');
   els.activityEmpty = root.querySelector('#activityEmptyState');
   els.activityPagination = root.querySelector('#activityPagination');

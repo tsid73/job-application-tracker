@@ -395,7 +395,7 @@ export function createReadApi({ pool, audit }) {
               OR ($4 = 'false' AND a.archived_at IS NULL AND a.status NOT IN ('rejected', 'withdrawn', 'ghosted'))
             )
             AND ($5 = '' OR a.applied_date >= $5::date)
-            AND ($6 = '' OR a.applied_date <= $6::date)
+            AND ($6 = '' OR a.applied_date < ($6::date + interval '1 day'))
           GROUP BY a.id, c.original_name
           ORDER BY
             a.archived_at DESC NULLS LAST,

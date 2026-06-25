@@ -318,7 +318,9 @@ export function renderStats(els, stats) {
     <section class="report-panel wide">
       <div class="panel-kicker">Channels</div>
       <h3>Interview Rate by Tag</h3>
-      ${stats.tags.map((row) => reportRow(`${row.tag} · ${rate(row.interviewed, Number(row.applications || 0))} interviews`, Number(row.applications || 0), tagMax)).join('') || '<p>No tagged applications yet.</p>'}
+      <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 1rem;">
+        ${stats.tags.map((row) => reportRow(`${row.tag} — ${rate(row.interviewed, Number(row.applications || 0))} interviews`, Number(row.applications || 0), tagMax)).join('') || '<p>No tagged applications yet.</p>'}
+      </div>
     </section>
   `;
 }

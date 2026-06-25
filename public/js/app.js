@@ -181,11 +181,19 @@ function bindHomeWorkspaceEvents() {
     loadApplications();
   });
   els.dateFromFilter?.addEventListener('change', () => {
+    if (els.dateFromFilter.value && state.filters.dateTo && els.dateFromFilter.value > state.filters.dateTo) {
+      els.dateFromFilter.value = state.filters.dateTo;
+      showToast('From date cannot be after To date.');
+    }
     state.filters.dateFrom = els.dateFromFilter.value;
     els.savedFilterSelect.value = '';
     loadApplications();
   });
   els.dateToFilter?.addEventListener('change', () => {
+    if (els.dateToFilter.value && state.filters.dateFrom && els.dateToFilter.value < state.filters.dateFrom) {
+      els.dateToFilter.value = state.filters.dateFrom;
+      showToast('To date cannot be before From date.');
+    }
     state.filters.dateTo = els.dateToFilter.value;
     els.savedFilterSelect.value = '';
     loadApplications();
@@ -208,7 +216,7 @@ function bindHomeWorkspaceEvents() {
   });
   els.activityResetButton?.addEventListener('click', () => {
     state.activity.search = '';
-    if (els.activitySearchInput) els.activitySearchInput.value = '';
+    if (els.activitySearch) els.activitySearch.value = '';
     loadActivity();
   });
   els.savedFilterSelect?.addEventListener('change', async () => {
@@ -220,7 +228,13 @@ function bindHomeWorkspaceEvents() {
   });
   els.saveFilterButton?.addEventListener('click', saveCurrentFilter);
   els.deleteFilterButton?.addEventListener('click', deleteCurrentSavedFilter);
-  els.quickExportCsvButton?.addEventListener('click', downloadApplicationsCsv);
+  els.quickExportCsvButton?.addEventListener('click', () => {
+    if (state.selectedIds.size === 0) {
+      showToast('No applications selected.', 'warning');
+      return;
+    }
+    downloadApplicationsCsv();
+  });
   els.quickExportIcsButton?.addEventListener('click', downloadCalendarIcs);
   els.selectAllRows?.addEventListener('change', () => {
     if (els.selectAllRows.checked) {
