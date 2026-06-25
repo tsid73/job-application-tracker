@@ -56,8 +56,8 @@ Loaded when you run `npm start`.
 ```text
 PORT=3000
 DB_CLIENT=pglite
-PGLITE_DATA_DIR=data/production/pglite
-UPLOAD_DIR=uploads/production
+PGLITE_DATA_DIR=data/pglite
+UPLOAD_DIR=uploads
 FILE_STORAGE_MODE=local
 AI_PROVIDER=gemini
 ```
