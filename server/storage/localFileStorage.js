@@ -129,8 +129,11 @@ export class LocalFileStorage {
 
   resolveSafe(relativePath) {
     const absolutePath = resolve(process.cwd(), relativePath);
-    const allowedRoot = this.baseDir;
-    if (absolutePath !== allowedRoot && !absolutePath.startsWith(`${allowedRoot}/`) && !absolutePath.startsWith(`${allowedRoot}\\`)) {
+    const allowedRoots = [this.baseDir, resolve(process.cwd(), 'sample-data')];
+    const isAllowed = allowedRoots.some((root) =>
+      absolutePath === root || absolutePath.startsWith(`${root}/`) || absolutePath.startsWith(`${root}\\`)
+    );
+    if (!isAllowed) {
       const error = new Error('Invalid file path');
       error.statusCode = 400;
       throw error;

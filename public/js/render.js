@@ -383,9 +383,6 @@ export function buildApplicationRow(application, statusOptions, selected = false
         <button class="icon-button row-open-btn" type="button" data-detail-id="${application.id}" aria-label="Open ${escapeHtml(application.company_name)}" title="Open">
           <i class="bi bi-box-arrow-up-right"></i>
         </button>
-        <button class="icon-button" type="button" data-edit-row-id="${application.id}" aria-label="Edit ${escapeHtml(application.company_name)}" title="Edit">
-          <i class="bi bi-pencil" style="color: var(--focus)"></i>
-        </button>
       </div>
     </td>
   `;
@@ -607,13 +604,6 @@ function renderTargetCompanySection(title, description, companies, options = {})
   if (!companies.length) return '';
   return `
     <section class="board-section${options.fullWidth ? ' board-section-wide' : ''}">
-      <div class="board-section-head">
-        <div>
-          <strong>${escapeHtml(title)}</strong>
-          <p>${escapeHtml(description)}</p>
-        </div>
-        <span class="board-section-count">${companies.length}</span>
-      </div>
       <div class="board-section-grid${options.fullWidth ? ' board-section-grid-wide' : ''}">
         ${companies.map((company) => `
           <article class="board-card target-company-card ${company.is_active ? '' : 'is-inactive'} ${jobBoardFreshnessClass(company)}">
@@ -633,6 +623,7 @@ function renderTargetCompanySection(title, description, companies, options = {})
               <span class="state ${company.is_active ? 'active-state' : 'closed-state'}">${company.is_active ? 'Active' : 'Inactive'}</span>
               <button class="icon-button text-primary" type="button" data-target-company-edit="${company.id}" title="Edit"><i class="bi bi-pencil"></i></button>
               <button class="icon-button text-warning" type="button" data-target-company-toggle="${company.id}" data-target-company-active="${company.is_active ? 'true' : 'false'}" title="${company.is_active ? 'Deactivate' : 'Activate'}"><i class="bi bi-power"></i></button>
+              <button class="icon-button text-danger" type="button" data-target-company-delete="${company.id}" title="Delete"><i class="bi bi-trash"></i></button>
             </div>
           </article>
         `).join('')}
@@ -654,36 +645,28 @@ function renderBoardSection(title, description, boards, options = {}) {
   if (!boards.length) return '';
   return `
     <section class="board-section${options.fullWidth ? ' board-section-wide' : ''}">
-      <div class="board-section-head">
-        <div>
-          <strong>${escapeHtml(title)}</strong>
-          <p>${escapeHtml(description)}</p>
-        </div>
-        <span class="board-section-count">${boards.length}</span>
-      </div>
       <div class="board-section-grid${options.fullWidth ? ' board-section-grid-wide' : ''}">
         ${boards.map((board) => `
           <article class="board-card ${board.is_active ? '' : 'is-inactive'} ${jobBoardFreshnessClass(board)}">
-      <div class="board-card-top">
-        <div>
-          <strong>${escapeHtml(board.name)}</strong>
-          <span>${board.url ? `<button class="button-link tertiary board-open-link" type="button" data-job-board-open="${board.id}">Open board</button>` : 'No link saved'}</span>
-        </div>
-        <span class="state ${board.is_active ? 'active-state' : 'archived-state'}">${board.is_active ? 'Active' : 'Inactive'}</span>
-      </div>
-      <div class="board-status-row">
-        <span class="board-freshness ${jobBoardFreshnessClass(board)}">${jobBoardFreshnessLabel(board)}</span>
-      </div>
-      <p>${escapeHtml(board.notes || 'No notes yet.')}</p>
-      <div class="row-actions">
-        <button class="icon-button text-primary" type="button" data-job-board-edit="${board.id}" title="Edit"><i class="bi bi-pencil"></i></button>
-        <button class="icon-button text-warning" type="button" data-job-board-toggle="${board.id}" data-job-board-active="${board.is_active ? 'true' : 'false'}" title="${board.is_active ? 'Mark inactive' : 'Activate'}"><i class="bi bi-power"></i></button>
-        <button class="icon-button text-danger" type="button" data-job-board-delete="${board.id}" title="Delete"><i class="bi bi-trash"></i></button>
-      </div>
-      <div class="board-meta" style="margin-top: auto; padding-top: 1rem;">
-        <span>Last checked: ${board.last_checked_date ? formatDate(board.last_checked_date) : 'Never'}</span>
-        <span>Updated: ${formatDateTime(board.updated_at)}</span>
-      </div>
+            <div class="board-card-top">
+              <strong>${escapeHtml(board.name)}</strong>
+              <div class="board-actions-grid">
+                ${board.url ? `<button class="icon-button text-primary board-open-link" type="button" data-job-board-open="${board.id}" title="Open board"><i class="bi bi-box-arrow-up-right"></i></button>` : `<div class="placeholder-icon-button"></div>`}
+                <button class="icon-button text-primary" type="button" data-job-board-edit="${board.id}" title="Edit"><i class="bi bi-pencil"></i></button>
+                <button class="icon-button text-warning" type="button" data-job-board-toggle="${board.id}" data-job-board-active="${board.is_active ? 'true' : 'false'}" title="${board.is_active ? 'Mark inactive' : 'Activate'}"><i class="bi bi-power"></i></button>
+                <button class="icon-button text-danger" type="button" data-job-board-delete="${board.id}" title="Delete"><i class="bi bi-trash"></i></button>
+              </div>
+            </div>
+            ${board.last_checked_date ? `
+            <div class="board-status-row">
+              <span class="board-freshness ${jobBoardFreshnessClass(board)}">${jobBoardFreshnessLabel(board)}</span>
+            </div>
+            ` : ''}
+            <p>${escapeHtml(board.notes || 'No notes yet.')}</p>
+            <div class="board-meta" style="margin-top: auto; padding-top: 1rem;">
+              <span>Last checked: ${board.last_checked_date ? formatDate(board.last_checked_date) : 'Never'}</span>
+              <span>Updated: ${formatDateTime(board.updated_at)}</span>
+            </div>
           </article>
         `).join('')}
       </div>
@@ -852,9 +835,6 @@ export function renderApplicationPage(els, payload, statusLabels, viewState) {
               <button class="icon-button" type="button" data-view-job-description="${application.id}" aria-label="View job description" title="View JD">
                 <i class="bi bi-file-text"></i>
               </button>
-              ${!application.archived_at ? `<button class="icon-button danger-icon" type="button" data-delete-application="${application.id}" aria-label="Delete application" title="Delete">
-                <i class="bi bi-trash" style="color: var(--danger)"></i>
-              </button>` : ''}
             </div>
           </div>
         </div>
@@ -2101,10 +2081,8 @@ export function renderCalendar(els, calendarDate, reminders) {
             <span class="calendar-date">${cell.day}</span>
             <div class="calendar-events">
               ${cell.events.map((event) => `
-                <article class="calendar-event ${daysClass(event.days_remaining).replace('days-badge', '').trim()}" title="${escapeHtml(event.type)}">
+                <article class="calendar-event ${daysClass(event.days_remaining).replace('days-badge', '').trim()}" title="${escapeHtml(event.type)}" data-calendar-detail="${event.id}">
                   <strong><i class="bi ${getTimelineIcon(event.type)}"></i> ${escapeHtml(getTimelineLabel(event))}</strong>
-                  <span>${renderDays(event.days_remaining)}</span>
-                  <button class="link-button" type="button" data-calendar-detail="${event.id}">Details</button>
                 </article>
               `).join('')}
             </div>

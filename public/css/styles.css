@@ -160,7 +160,7 @@ button.is-busy {
 button.is-busy::before {
   content: "";
   position: absolute;
-  left: calc(50% - 28px);
+  left: calc(50% - 8px);
   top: calc(50% - 8px);
   width: 16px;
   height: 16px;
@@ -189,12 +189,27 @@ button.is-busy::after {
   }
 }
 
-button.secondary,
+button.secondary {
+  background: var(--card);
+  color: var(--text);
+  border-color: var(--line);
+  box-shadow: none;
+}
+
 button.icon-button {
   background: var(--card);
   color: var(--text);
   border-color: var(--line);
   box-shadow: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  min-height: 28px !important;
+  padding: 0 !important;
+  border-radius: 6px;
+  font-size: 14px;
 }
 
 button.secondary:hover,
@@ -1150,12 +1165,32 @@ tr:last-child td {
 }
 
 .calendar-event {
-  display: grid;
-  gap: 5px;
-  padding: 7px;
-  border: 1px solid rgba(20, 74, 102, 0.16);
-  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 6px;
+  border: 1px solid rgba(20, 74, 102, 0.12);
+  border-radius: 6px;
   background: rgba(216, 236, 246, 0.62);
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.calendar-event:hover {
+  background: rgba(20, 74, 102, 0.12);
+  border-color: rgba(20, 74, 102, 0.32);
+}
+
+.calendar-event strong {
+  font-weight: 500;
+  font-size: 11px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  width: 100%;
 }
 
 .calendar-event.warning {
@@ -1167,10 +1202,6 @@ tr:last-child td {
 .calendar-event.overdue {
   border-color: #f3a6ba;
   background: var(--danger-soft);
-}
-
-.calendar-event .days-badge {
-  width: fit-content;
 }
 
 .link-button {
@@ -1238,6 +1269,12 @@ tr:last-child td {
 .kanban-card span {
   color: var(--muted);
   font-size: 12px;
+}
+
+.kanban-card .role-title {
+  color: var(--text);
+  font-weight: 500;
+  font-size: 12.5px;
 }
 
 .report-row {
@@ -1726,13 +1763,22 @@ dialog::backdrop {
 }
 
 .prep-card,
-.toolkit-card,
+.toolkit-card {
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  padding: 16px;
+  background: var(--card);
+  box-shadow: var(--shadow-sm);
+}
+
 .board-card {
   border: 1px solid var(--line);
   border-radius: 20px;
   padding: 16px;
   background: var(--card);
   box-shadow: var(--shadow-sm);
+  display: flex;
+  flex-direction: column;
 }
 
 .prep-card-research {
@@ -1834,10 +1880,19 @@ dialog::backdrop {
   letter-spacing: -0.02em;
 }
 
-.stack-item p,
+.stack-item p {
+  white-space: pre-wrap;
+  line-height: 1.5;
+}
+
 .board-card p {
   white-space: pre-wrap;
   line-height: 1.5;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .item-meta,
@@ -1922,10 +1977,16 @@ dialog::backdrop {
   grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
 }
 
-.board-open-link {
-  min-height: 28px;
-  padding: 4px 0;
-  border: 0;
+.board-actions-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 28px);
+  grid-template-rows: repeat(2, 28px);
+  gap: 4px;
+}
+
+.placeholder-icon-button {
+  width: 28px;
+  height: 28px;
 }
 
 .target-company-toolbar {

@@ -86,6 +86,7 @@ const routeApi = createApiRouter({
   createTargetCompany,
   updateTargetCompany,
   checkTargetCompany,
+  deleteTargetCompany,
   exportApplicationsCsv,
   exportCalendar,
   getStats,
@@ -319,6 +320,18 @@ async function checkTargetCompany(req, res, id) {
   );
   if (!result.rowCount) return sendError(res, 404, 'Target company not found');
   sendJson(res, 200, { target_company: result.rows[0] });
+}
+
+async function deleteTargetCompany(req, res, id) {
+  const result = await pool.query('DELETE FROM target_companies WHERE id = $1 RETURNING id, name', [id]);
+  if (!result.rowCount) return sendError(res, 404, 'Target company not found');
+  await audit.log(req, {
+    targetType: 'target_company',
+    targetId: id,
+    action: 'delete',
+    details: `Deleted target company ${result.rows[0].name}`
+  });
+  sendJson(res, 200, { ok: true });
 }
 
 function normalizeTargetCompanyInput(body) {

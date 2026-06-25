@@ -127,57 +127,6 @@ function bindGlobalEvents() {
 
   initSidebarControls();
 
-  els.search?.addEventListener('input', debounce(() => {
-    state.filters.search = els.search.value.trim();
-    els.savedFilterSelect.value = '';
-    loadApplications();
-  }, 250));
-
-  els.statusFilter?.addEventListener('change', () => {
-    state.filters.status = els.statusFilter.value;
-    els.savedFilterSelect.value = '';
-    loadApplications();
-  });
-
-  els.tagFilter?.addEventListener('input', debounce(() => {
-    state.filters.tag = els.tagFilter.value.trim();
-    els.savedFilterSelect.value = '';
-    loadApplications();
-  }, 250));
-
-  els.archiveFilter?.addEventListener('change', () => {
-    state.filters.archived = els.archiveFilter.value;
-    els.savedFilterSelect.value = '';
-    loadApplications();
-  });
-
-  els.savedFilterSelect?.addEventListener('change', async () => {
-    const id = Number(els.savedFilterSelect.value);
-    const savedFilter = state.savedFilters.find((item) => item.id === id);
-    if (!savedFilter) return;
-    applySavedFilter(savedFilter);
-    await loadApplications();
-  });
-
-  els.saveFilterButton?.addEventListener('click', saveCurrentFilter);
-  els.deleteFilterButton?.addEventListener('click', deleteCurrentSavedFilter);
-  els.quickExportCsvButton?.addEventListener('click', () => {
-    downloadApplicationsCsv();
-  });
-
-  els.activitySearch?.addEventListener('input', debounce(() => {
-    state.activity.search = els.activitySearch.value.trim();
-    state.activity.page = 1;
-    loadActivity();
-  }, 250));
-
-  els.activityPagination?.addEventListener('click', async (event) => {
-    const button = event.target.closest('[data-activity-page]');
-    if (!button) return;
-    state.activity.page = Number(button.dataset.activityPage);
-    await loadActivity();
-  });
-
   els.applicationForm.addEventListener('submit', submitApplicationForm);
   els.applicationEditForm.addEventListener('submit', submitApplicationEditForm);
   els.cvForm.addEventListener('submit', submitCvForm);
@@ -356,7 +305,6 @@ function bindHomeWorkspaceEvents() {
     if (toggle) {
       state.notificationsExpanded = !state.notificationsExpanded;
       renderNotifications(els, state.notifications, state.notificationsExpanded);
-      bindNotificationActions();
     }
     if (detail) navigateTo(`/applications/${detail.dataset.notificationDetail}`);
   });
@@ -651,7 +599,16 @@ async function loadTargetCompanies() {
 
 async function loadReminders() {
   const payload = await api('/api/reminders');
-  if (els.remindersList) renderCalendar(els, state.calendarDate, payload.reminders);
+  if (els.remindersList) {
+    const seen = new Set();
+    const unique = (payload.reminders || []).filter((r) => {
+      const key = `${r.id}-${r.event_date}-${r.type}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+    renderCalendar(els, state.calendarDate, unique);
+  }
 }
 
 async function loadNotifications() {
@@ -659,7 +616,6 @@ async function loadNotifications() {
   state.notifications = payload.notifications;
   if (els.notificationsPanel) {
     renderNotifications(els, state.notifications, state.notificationsExpanded);
-    bindNotificationActions();
   }
 }
 
@@ -894,11 +850,6 @@ function bindCvActions() {
   });
 }
 
-function bindNotificationActions() {
-  els.notificationsPanel.querySelectorAll('[data-notification-detail]').forEach((button) => {
-    button.addEventListener('click', () => navigateTo(`/applications/${button.dataset.notificationDetail}`));
-  });
-}
 
 function bindJobBoardActions() {
   els.jobBoardsList.querySelectorAll('[data-job-board-open]').forEach((button) => {
@@ -1016,6 +967,24 @@ function bindTargetCompanyActions() {
         });
         await loadTargetCompanies();
         showToast(company.is_active ? 'Company marked inactive.' : 'Company activated.');
+      } catch (error) {
+        setError(els.targetCompanyError, error.message);
+      } finally {
+        button.disabled = false;
+      }
+    });
+  });
+
+  els.targetCompaniesList?.querySelectorAll('[data-target-company-delete]').forEach((button) => {
+    button.addEventListener('click', async () => {
+      const company = state.targetCompanies.find((item) => item.id === Number(button.dataset.targetCompanyDelete));
+      if (!company) return;
+      if (!confirm(`Are you sure you want to delete ${company.name}?`)) return;
+      button.disabled = true;
+      try {
+        await api(`/api/target-companies/${company.id}`, { method: 'DELETE' });
+        await loadTargetCompanies();
+        showToast('Company deleted successfully.');
       } catch (error) {
         setError(els.targetCompanyError, error.message);
       } finally {
@@ -1178,7 +1147,6 @@ function bindHomeWorkspaceElements() {
   renderJobBoards(els, state.jobBoards);
   renderToolkit(els);
   bindHomeWorkspaceEvents();
-  bindNotificationActions();
   bindJobBoardActions();
   if (state.view === 'kanban') renderKanban(els, state.applications, statusLabels);
   if (state.view === 'reports') loadReports();
@@ -1921,57 +1889,10 @@ function openApplicationEditDialog(application) {
   els.applicationEditForm.elements.next_action.value = application.next_action || '';
   els.applicationEditForm.elements.next_action_due_date.value = application.next_action_due_date || '';
   els.applicationEditForm.elements.job_link.value = application.job_link || '';
+  const tagsList = state.currentApplication?.tags || [];
+  els.applicationEditForm.elements.tags.value = tagsList.join(', ') || '';
+  els.applicationEditForm.elements.job_description.value = application.job_description || '';
   els.applicationEditForm.elements.notes.value = application.notes || '';
-  const archiveBtn = els.applicationEditForm.querySelector('[data-archive-action]');
-  const restoreBtn = els.applicationEditForm.querySelector('[data-restore-action]');
-  const deleteBtn = els.applicationEditForm.querySelector('[data-delete-action]');
-
-  if (archiveBtn) archiveBtn.hidden = Boolean(application.archived_at);
-  if (restoreBtn) restoreBtn.hidden = !application.archived_at;
-
-  if (archiveBtn) {
-    archiveBtn.onclick = async () => {
-      await runConfirmedAction({
-        title: 'Archive application',
-        body: `Archive ${application.company_name}?`,
-        acceptLabel: 'Archive',
-        triggerButton: archiveBtn,
-        successMessage: 'Application archived.',
-        onConfirm: async () => {
-          await archiveApplication(application.id);
-          els.applicationEditDialog.close();
-          await Promise.all([loadApplications(), loadReminders(), loadNotifications(), renderCurrentRoute()]);
-        }
-      });
-    };
-  }
-  if (restoreBtn) {
-    restoreBtn.onclick = async () => {
-      await withAsyncButton(restoreBtn, async () => {
-        await restoreApplication(application.id);
-        els.applicationEditDialog.close();
-        showToast('Application restored.', 'info');
-        await Promise.all([loadApplications(), loadReminders(), loadNotifications(), renderCurrentRoute()]);
-      });
-    };
-  }
-  if (deleteBtn) {
-    deleteBtn.onclick = async () => {
-      await runConfirmedAction({
-        title: 'Delete application',
-        body: `Delete ${application.company_name}? This cannot be undone.`,
-        acceptLabel: 'Delete',
-        triggerButton: deleteBtn,
-        successMessage: 'Application deleted.',
-        onConfirm: async () => {
-          await api(`/api/applications/${application.id}`, { method: 'DELETE' });
-          els.applicationEditDialog.close();
-          await Promise.all([loadApplications(), loadReminders(), loadNotifications()]);
-          navigateTo('/');
-        }
-      });
-    };
-  }
 
   els.applicationEditDialog.showModal();
 }
@@ -2010,9 +1931,9 @@ async function submitApplicationEditForm(event) {
         recruiter: form.get('recruiter'),
         contact_person: form.get('contact_person'),
         job_link: form.get('job_link'),
-        job_description: current.job_description,
+        job_description: form.get('job_description'),
         notes: form.get('notes'),
-        tags: state.currentApplication.tags || []
+        tags: (form.get('tags') || '').split(',').map((t) => t.trim()).filter(Boolean)
       })
     });
     els.applicationEditDialog.close();

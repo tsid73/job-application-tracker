@@ -62,6 +62,7 @@ export function createReadApi({ pool, audit }) {
           FROM status_history sh
           JOIN applications a ON a.id = sh.application_id
           WHERE a.archived_at IS NULL
+            AND sh.to_status NOT IN ('applied', 'interview_scheduled')
         `
       );
       return { reminders: result.rows };

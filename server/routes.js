@@ -18,6 +18,7 @@ export function createApiRouter(handlers) {
     route('POST', '/api/target-companies', handlers.createTargetCompany),
     route('PUT', /^\/api\/target-companies\/\d+$/, handlers.updateTargetCompany, pathId),
     route('POST', /^\/api\/target-companies\/\d+\/check$/, handlers.checkTargetCompany, pathId),
+    route('DELETE', /^\/api\/target-companies\/\d+$/, handlers.deleteTargetCompany, pathId),
     route('GET', '/api/export/applications.csv', handlers.exportApplicationsCsv),
     route('GET', '/api/export/calendar.ics', handlers.exportCalendar),
     route('GET', '/api/stats', handlers.getStats),
