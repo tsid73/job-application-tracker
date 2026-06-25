@@ -34,7 +34,8 @@ export const state = {
     search: '',
     page: 1,
     limit: 12,
-    total: 0
+    total: 0,
+    selectedIds: new Set()
   },
   targetCompanyFilters: {
     search: '',

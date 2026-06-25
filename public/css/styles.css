@@ -204,6 +204,16 @@ button.icon-button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  border-radius: 6px;
+}
+
+/* Compact icon-only button sizing */
+.board-actions-grid button,
+.company-card-actions button,
+.company-card-links button,
+.row-actions button,
+.bulk-bar button.icon-button,
+.toolbar button.icon-button {
   width: 28px;
   height: 28px;
   min-height: 28px !important;

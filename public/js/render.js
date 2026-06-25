@@ -129,15 +129,21 @@ export function renderHomeWorkspace() {
 
       <section id="activityView" class="surface-panel" hidden>
         <section class="toolbar" aria-label="Activity filters">
-          <label>
-            <span>Activity Query</span>
-            <input id="activitySearchInput" type="search" placeholder="Company, action, detail">
-          </label>
+          <div class="toolbar-main-row">
+            <label>
+              <span>Activity Query</span>
+              <input id="activitySearchInput" type="search" placeholder="Company, action, detail">
+            </label>
+            <button id="activityDeleteButton" class="secondary text-danger" type="button" disabled style="margin-left: auto;">
+              <i class="bi bi-trash"></i> Delete Selected
+            </button>
+          </div>
         </section>
         <section class="table-shell" aria-live="polite">
           <table>
             <thead>
               <tr>
+                <th class="select-col"><input type="checkbox" id="activitySelectAllCheckbox" aria-label="Select all activities"></th>
                 <th>When</th>
                 <th>Application</th>
                 <th>Action</th>
@@ -306,19 +312,23 @@ export function renderStats(els, stats) {
 export function renderActivity(els, state, payload) {
   state.activity.total = payload.total;
   els.activityEmpty.hidden = payload.activity.length !== 0;
-  els.activityTable.innerHTML = payload.activity.map((item) => `
-    <tr>
-      <td>${formatDateTime(item.created_at)}</td>
-      <td>
-        <div class="company-cell truncate-col">
-          <strong>${escapeHtml(activityApplicationName(item))}</strong>
-          <span>${item.application_id ? `Application ${item.application_id}` : ''}</span>
-        </div>
-      </td>
-      <td>${escapeHtml(activityLabel(item.action, item.details))}</td>
-      <td>${escapeHtml(cleanActivityDetails(item.details || ''))}</td>
-    </tr>
-  `).join('');
+  els.activityTable.innerHTML = payload.activity.map((item) => {
+    const isSelected = state.activity.selectedIds?.has(item.id) ? ' checked' : '';
+    return `
+      <tr data-activity-id="${item.id}">
+        <td class="select-col"><input type="checkbox" data-select-activity-id="${item.id}" aria-label="Select activity entry"${isSelected}></td>
+        <td>${formatDateTime(item.created_at)}</td>
+        <td>
+          <div class="company-cell truncate-col">
+            <strong>${escapeHtml(activityApplicationName(item))}</strong>
+            <span>${item.application_id ? `Application ${item.application_id}` : ''}</span>
+          </div>
+        </td>
+        <td>${escapeHtml(activityLabel(item.action, item.details))}</td>
+        <td>${escapeHtml(cleanActivityDetails(item.details || ''))}</td>
+      </tr>
+    `;
+  }).join('');
   if (!payload.activity.length) {
     els.activityEmpty.innerHTML = renderEmptyState('Activity timeline', 'No actions match the current search. Try a broader query or open an application to inspect its detailed timeline.', 'Clear search to see recent activity.');
   }

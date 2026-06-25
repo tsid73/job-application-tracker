@@ -85,6 +85,8 @@ const workspaceKeys = [
   'activityTable',
   'activityEmpty',
   'activityPagination',
+  'activityDeleteButton',
+  'activitySelectAllCheckbox',
   'jobBoardOpenButton',
   'jobBoardsList',
   'targetCompanyOpenButton',
@@ -155,6 +157,8 @@ export function bindWorkspaceElements(root = els.workspaceRoot) {
   els.activityTable = root.querySelector('#activityTable');
   els.activityEmpty = root.querySelector('#activityEmptyState');
   els.activityPagination = root.querySelector('#activityPagination');
+  els.activityDeleteButton = root.querySelector('#activityDeleteButton');
+  els.activitySelectAllCheckbox = root.querySelector('#activitySelectAllCheckbox');
   els.jobBoardOpenButton = root.querySelector('#jobBoardOpenButton');
   els.jobBoardsList = root.querySelector('#jobBoardsList');
   els.targetCompanyOpenButton = root.querySelector('#targetCompanyOpenButton');

@@ -227,6 +227,54 @@ function bindHomeWorkspaceEvents() {
     state.activity.page = Number(button.dataset.activityPage);
     await loadActivity();
   });
+  els.activitySelectAllCheckbox?.addEventListener('change', () => {
+    if (els.activitySelectAllCheckbox.checked) {
+      state.activity.items.forEach((item) => state.activity.selectedIds.add(item.id));
+    } else {
+      state.activity.selectedIds.clear();
+    }
+    const checkboxes = els.activityTable?.querySelectorAll('[data-select-activity-id]');
+    checkboxes?.forEach((cb) => {
+      cb.checked = els.activitySelectAllCheckbox.checked;
+    });
+    updateActivitySelectionUI();
+  });
+  els.activityTable?.addEventListener('change', (event) => {
+    const checkbox = event.target.closest('[data-select-activity-id]');
+    if (!checkbox) return;
+    const id = Number(checkbox.dataset.selectActivityId);
+    if (checkbox.checked) {
+      state.activity.selectedIds.add(id);
+    } else {
+      state.activity.selectedIds.delete(id);
+    }
+    updateActivitySelectionUI();
+  });
+  els.activityDeleteButton?.addEventListener('click', async () => {
+    const ids = Array.from(state.activity.selectedIds);
+    if (ids.length === 0) {
+      showToast('No activity entries selected', 'warning');
+      return;
+    }
+    await runConfirmedAction({
+      title: 'Delete Activity Logs',
+      body: `Are you sure you want to delete ${ids.length} selected activity log entries? This will also remove any linked status history changes to correct timeline metrics.`,
+      acceptLabel: 'Delete',
+      triggerButton: els.activityDeleteButton,
+      successMessage: `Successfully deleted ${ids.length} activity entries`,
+      onConfirm: async () => {
+        await api('/api/activity', {
+          method: 'DELETE',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ ids })
+        });
+        state.activity.selectedIds.clear();
+        await loadActivity();
+      }
+    });
+  });
   els.targetCompanySearch?.addEventListener('input', debounce(() => {
     state.targetCompanyFilters.search = els.targetCompanySearch.value.trim();
     renderTargetCompanies(els, state.targetCompanies, state.targetCompanyFilters);
@@ -407,6 +455,22 @@ function updateSelectionUI() {
   if (els.selectAllRows) {
     els.selectAllRows.checked = count > 0 && count === state.applications.length;
     els.selectAllRows.indeterminate = count > 0 && count < state.applications.length;
+  }
+}
+
+function updateActivitySelectionUI() {
+  if (!state.activity.items) return;
+  const visible = new Set(state.activity.items.map((item) => item.id));
+  for (const id of [...state.activity.selectedIds]) {
+    if (!visible.has(id)) state.activity.selectedIds.delete(id);
+  }
+  const count = state.activity.selectedIds.size;
+  if (els.activityDeleteButton) {
+    els.activityDeleteButton.disabled = count === 0;
+  }
+  if (els.activitySelectAllCheckbox) {
+    els.activitySelectAllCheckbox.checked = count > 0 && count === state.activity.items.length;
+    els.activitySelectAllCheckbox.indeterminate = count > 0 && count < state.activity.items.length;
   }
 }
 
@@ -637,7 +701,9 @@ async function loadActivity() {
   if (state.activity.search) params.set('search', state.activity.search);
 
   const payload = await api(`/api/activity?${params.toString()}`);
+  state.activity.items = payload.activity;
   if (els.activityTable) renderActivity(els, state, payload);
+  updateActivitySelectionUI();
 }
 
 async function submitApplicationForm(event) {

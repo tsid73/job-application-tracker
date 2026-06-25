@@ -73,6 +73,7 @@ const routeApi = createApiRouter({
   getNotifications: async (req, res) => sendJson(res, 200, await readApi.getNotifications()),
   getReports: async (req, res) => sendJson(res, 200, await readApi.getReports()),
   getActivity: async (req, res, url) => sendJson(res, 200, await readApi.getActivity(url)),
+  deleteActivityLogs,
   getAudit: async (req, res, url) => sendJson(res, 200, await readApi.getAudit(url)),
   getSavedFilters: async (req, res) => sendJson(res, 200, await readApi.getSavedFilters()),
   getJobBoards: async (req, res) => sendJson(res, 200, await readApi.getJobBoards()),
@@ -216,6 +217,52 @@ async function checkJobBoard(req, res, id) {
   );
   if (!result.rowCount) return sendError(res, 404, 'Job board not found');
   sendJson(res, 200, { job_board: result.rows[0] });
+}
+
+async function deleteActivityLogs(req, res) {
+  const body = await readJson(req, 64 * 1024);
+  const ids = body.ids;
+  if (!Array.isArray(ids) || ids.length === 0) {
+    return sendError(res, 400, 'Invalid or empty IDs list');
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    // 1. Get the activity logs we are going to delete
+    const selectResult = await client.query(
+      'SELECT id, application_id, action, details, created_at FROM activity_logs WHERE id = ANY($1)',
+      [ids]
+    );
+
+    // 2. Look for 'status_changed' activity logs.
+    // For each, find the corresponding status_history record to delete.
+    for (const log of selectResult.rows) {
+      if (log.action === 'status_changed' && log.application_id) {
+        await client.query(
+          `DELETE FROM status_history 
+           WHERE application_id = $1 
+             AND abs(extract(epoch from (changed_at - $2))) < 5`,
+          [log.application_id, log.created_at]
+        );
+      }
+    }
+
+    // 3. Delete the activity logs
+    await client.query(
+      'DELETE FROM activity_logs WHERE id = ANY($1)',
+      [ids]
+    );
+
+    await client.query('COMMIT');
+    sendJson(res, 200, { ok: true });
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
 }
 
 async function deleteJobBoard(req, res, id) {

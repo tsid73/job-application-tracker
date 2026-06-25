@@ -5,6 +5,7 @@ export function createApiRouter(handlers) {
     route('GET', '/api/notifications', handlers.getNotifications),
     route('GET', '/api/reports', handlers.getReports),
     route('GET', '/api/activity', handlers.getActivity),
+    route('DELETE', '/api/activity', handlers.deleteActivityLogs),
     route('GET', '/api/audit', handlers.getAudit),
     route('GET', '/api/saved-filters', handlers.getSavedFilters),
     route('POST', '/api/saved-filters', handlers.createSavedFilter),
