@@ -2048,6 +2048,7 @@ function openApplicationEditDialog(application) {
   setError(els.applicationEditError, '');
   els.applicationEditForm.elements.id.value = application.id;
   els.applicationEditForm.elements.company_name.value = application.company_name || '';
+  els.applicationEditForm.elements.company_category.value = application.company_category || '';
   els.applicationEditForm.elements.role_title.value = application.role_title || '';
   els.applicationEditForm.elements.status.value = application.status || 'applied';
   els.applicationEditForm.elements.salary.value = application.salary || '';
@@ -2090,6 +2091,7 @@ async function submitApplicationEditForm(event) {
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
         company_name: form.get('company_name'),
+        company_category: form.get('company_category'),
         role_title: form.get('role_title'),
         status,
         applied_date: form.get('applied_date'),
