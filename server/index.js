@@ -1195,7 +1195,7 @@ async function deleteFeedbackEntry(req, res, id) {
 async function createTodo(req, res, applicationId) {
   const application = await ensureApplicationExists(applicationId);
   const body = await readJson(req, 32 * 1024);
-  const todoBody = cleanString(body.body);
+  const todoBody = cleanString(body?.body || body?.text);
   if (!todoBody) return sendError(res, 400, 'To-do text is required');
 
   const result = await pool.query(
@@ -1808,12 +1808,11 @@ function validateBackupPayload(backup) {
 }
 
 function validateBackupFilePaths(files) {
-  const baseDir = resolve(process.cwd(), config.uploadDir);
+  const cwd = process.cwd();
   for (const entry of files) {
     if (!entry?.path || !entry?.content_base64) continue;
-    const absolutePath = resolve(process.cwd(), entry.path);
-    const relativePath = relative(baseDir, absolutePath);
-    if (relativePath.startsWith('..') || isAbsolute(relativePath)) {
+    const absolutePath = resolve(cwd, entry.path);
+    if (!absolutePath.startsWith(cwd + '/') && absolutePath !== cwd) {
       const error = new Error('Backup contains an invalid file path');
       error.statusCode = 400;
       throw error;
