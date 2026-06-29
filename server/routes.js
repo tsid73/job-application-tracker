@@ -45,6 +45,7 @@ export function createApiRouter(handlers) {
     route('PUT', /^\/api\/cv\/\d+$/, handlers.updateCV, pathId),
     route('DELETE', /^\/api\/cv\/\d+$/, handlers.deleteCV, pathId),
     route('GET', /^\/api\/cv\/\d+\/download$/, handlers.downloadCV, pathId),
+    route('GET', /^\/api\/cv\/\d+\/view$/, handlers.viewCV, pathId),
     route('PUT', /^\/api\/recruiter-questions\/\d+$/, handlers.updateRecruiterQuestion, pathId),
     route('DELETE', /^\/api\/recruiter-questions\/\d+$/, handlers.deleteRecruiterQuestion, pathId),
     route('DELETE', /^\/api\/feedback\/\d+$/, handlers.deleteFeedbackEntry, pathId),

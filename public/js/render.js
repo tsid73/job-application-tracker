@@ -220,6 +220,7 @@ export function renderHomeWorkspace() {
           </section>
           <p id="targetCompaniesSummary" class="section-help"></p>
           <div id="targetCompaniesList" class="board-list"></div>
+          <div class="pagination" id="targetCompanyPagination"></div>
         </section>
       </section>
 
@@ -258,17 +259,60 @@ export function renderInsights(els, report, stats, statusLabels) {
     return reportRow(row.tag, Number(row.applications), tagMax, {}, toIntStr, '--focus');
   }).join('') || '<p>No tag data.</p>';
 
+  const getW = (count) => total > 0 ? Math.max(15, (count / total) * 100) : 100;
+  const w0 = getW(funnelRows[0].count);
+  const w1 = getW(funnelRows[1].count);
+  const w2 = getW(funnelRows[2].count);
+  const w3 = getW(funnelRows[3].count);
+
+  const poly = (topW, botW) => {
+    const tl = (100 - topW) / 2, tr = 100 - tl;
+    const bl = (100 - botW) / 2, br = 100 - bl;
+    return `clip-path: polygon(${tl}% 0%, ${tr}% 0%, ${br}% 100%, ${bl}% 100%);`;
+  };
+
   els.insightsContent.innerHTML = `
     <!-- Top Row -->
     <section class="report-panel wide" style="grid-column: 1 / -1; display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px;">
       <div>
         <div class="panel-kicker">Funnel</div>
         <h3>Application Funnel</h3>
-        ${reportRow('Applied', funnelRows[0].count, funnelMax, null, total, '--app')}
-        ${reportRow('Interview', funnelRows[1].count, funnelMax, null, total, '--int')}
-        ${reportRow('Offer', funnelRows[2].count, funnelMax, null, total, '--act')}
-        ${reportRow('Accepted', funnelRows[3].count, funnelMax, null, total, '--act')}
-        <p class="section-help">Interview rate ${rate(stats.funnel.interviewed, total)} · Offer rate ${rate(stats.funnel.offers, total)}</p>
+        <div class="true-funnel">
+          <div class="funnel-stage">
+            <div class="funnel-stage-label">Applied</div>
+            <div class="funnel-shape-container">
+              <div class="funnel-shape" style="${poly(w0, w1)} background: var(--accent); border-radius: 8px 8px 0 0;"></div>
+            </div>
+            <div class="funnel-stage-count">${funnelRows[0].count}</div>
+          </div>
+          <div class="funnel-conv"><span class="conv-pill">↓ ${rate(stats.funnel.interviewed, total)} to Interview</span></div>
+          
+          <div class="funnel-stage">
+            <div class="funnel-stage-label">Interview</div>
+            <div class="funnel-shape-container">
+              <div class="funnel-shape" style="${poly(w1, w2)} background: var(--int);"></div>
+            </div>
+            <div class="funnel-stage-count">${funnelRows[1].count}</div>
+          </div>
+          <div class="funnel-conv"><span class="conv-pill">↓ ${rate(stats.funnel.offers, stats.funnel.interviewed)} to Offer</span></div>
+          
+          <div class="funnel-stage">
+            <div class="funnel-stage-label">Offer</div>
+            <div class="funnel-shape-container">
+              <div class="funnel-shape" style="${poly(w2, w3)} background: var(--act);"></div>
+            </div>
+            <div class="funnel-stage-count">${funnelRows[2].count}</div>
+          </div>
+          <div class="funnel-conv"><span class="conv-pill">↓ ${rate(stats.funnel.accepted, stats.funnel.offers)} to Accept</span></div>
+          
+          <div class="funnel-stage">
+            <div class="funnel-stage-label">Accepted</div>
+            <div class="funnel-shape-container">
+              <div class="funnel-shape" style="${poly(w3, w3)} background: var(--act); border-radius: 0 0 8px 8px;"></div>
+            </div>
+            <div class="funnel-stage-count">${funnelRows[3].count}</div>
+          </div>
+        </div>
       </div>
       <div>
         <div class="panel-kicker">Outcomes</div>
@@ -538,14 +582,23 @@ export function renderKanban(els, applications, statusLabels) {
         <span class="kanban-count">${group.items.length}</span>
       </div>
       <div class="kanban-cards-container">
-        ${group.items.map((item) => `
-          <article class="kanban-card">
-            <strong>${escapeHtml(item.company_name)}</strong>
-            <span class="role-title">${escapeHtml(item.role_title || 'N/A')}</span>
-            <span>${formatDate(item.applied_date)}</span>
-            ${item.interview_date ? renderDays(item.days_remaining) : ''}
-          </article>
-        `).join('') || '<p class="empty small">No entries.</p>'}
+        ${group.items.map((item) => {
+          const daysSinceTouched = typeof item.days_since_touched === 'number' ? item.days_since_touched : 0;
+          return `
+            <article class="kanban-card">
+              <strong>${escapeHtml(item.company_name)}</strong>
+              <span class="role-title">${escapeHtml(item.role_title || 'N/A')}</span>
+              <div class="kanban-card-meta">
+                <span>${formatDate(item.applied_date)}</span>
+                ${daysSinceTouched > 7
+                  ? `<span class="days-in-stage stale-alert" title="Stuck in this stage for ${daysSinceTouched} days">${daysSinceTouched}d in stage</span>`
+                  : `<span class="days-in-stage" title="In this stage for ${daysSinceTouched} days">${daysSinceTouched}d in stage</span>`
+                }
+              </div>
+              ${item.interview_date ? renderDays(item.days_remaining) : ''}
+            </article>
+          `;
+        }).join('') || '<p class="empty small">No entries.</p>'}
       </div>
     </section>
   `).join('');
@@ -570,12 +623,13 @@ export function renderCVs(els, cvs) {
         <strong>${escapeHtml(cv.original_name)}</strong>
         ${cv.is_latest ? '<span class="pill info-pill" style="margin-left: 6px;">Latest</span>' : ''}
         <p style="margin: 4px 0 0 0; font-size: 12px; color: var(--muted);">
-          <span class="cv-version-label" data-cv-id="${cv.id}" style="cursor: pointer; text-decoration: underline; font-weight: 500;" title="Click to edit label">${escapeHtml(cv.version_label || 'Add label')}</span> · ${formatBytes(Number(cv.file_size))}
+          <span class="cv-version-label" data-cv-id="${cv.id}" style="cursor: pointer; font-weight: 500; color: var(--accent);" title="Click to edit label">${escapeHtml(cv.version_label || 'Add label')}</span> · ${formatBytes(Number(cv.file_size))}
         </p>
       </div>
-      <div class="cv-item-actions" style="display: flex; gap: 8px;">
-        <a class="button-link secondary" href="/api/cv/${cv.id}/download" style="min-height: 28px; padding: 4px 10px; font-size: 12px; border-radius: 6px;"><i class="bi bi-download"></i> Download</a>
-        <button class="secondary text-danger" type="button" data-delete-cv-id="${cv.id}" style="min-height: 28px; padding: 4px 10px; font-size: 12px; border-radius: 6px;"><i class="bi bi-trash"></i> Delete</button>
+      <div class="cv-item-actions" style="display: flex; gap: 4px;">
+        <a class="icon-button" href="/api/cv/${cv.id}/view" target="_blank" title="View"><i class="bi bi-eye"></i></a>
+        <a class="icon-button" href="/api/cv/${cv.id}/download" download title="Download"><i class="bi bi-download"></i></a>
+        <button class="icon-button text-danger" type="button" data-delete-cv-id="${cv.id}" title="Delete"><i class="bi bi-trash"></i></button>
       </div>
     </div>
   `).join('') || renderEmptyState('No CV library yet', 'Upload a baseline CV so each application can preserve the exact version used.', 'A latest CV is required for quick application entry and AI generation.');
@@ -600,18 +654,41 @@ export function renderTargetCompanyFilters(els, companies, filters) {
 
 export function renderTargetCompanies(els, companies, filters) {
   const filtered = filterTargetCompanies(companies, filters);
-  const activeCompanies = filtered.filter((company) => company.is_active);
-  const inactiveCompanies = filtered.filter((company) => !company.is_active);
-  const visaFriendly = companies.filter((company) => /yes|strong|sponsor|relocat|international|blue card|frequent/i.test(`${company.visa_signal || ''} ${company.relocation_signal || ''}`)).length;
+  const limit = filters.limit || 20;
+  const total = filtered.length;
+  const totalPages = Math.max(1, Math.ceil(total / limit));
+  const page = Math.min(filters.page || 1, totalPages);
+  const start = total ? (page - 1) * limit : 0;
+  const end = Math.min(total, page * limit);
+
+  const pageCompanies = filtered.slice(start, end);
+  const activeCompanies = pageCompanies.filter((company) => company.is_active);
+  const inactiveCompanies = pageCompanies.filter((company) => !company.is_active);
 
   if (els.targetCompaniesSummary) {
-    els.targetCompaniesSummary.textContent = '';
+    els.targetCompaniesSummary.textContent = total
+      ? `Showing ${start + 1}-${end} of ${total} target companies.`
+      : '';
   }
 
   els.targetCompaniesList.innerHTML = [
     renderTargetCompanySection('Active companies', '', activeCompanies, { fullWidth: true }),
     inactiveCompanies.length ? renderTargetCompanySection('Inactive companies', '', inactiveCompanies) : ''
   ].join('') || renderEmptyState('No companies found', 'No target companies match the current filters.', 'Clear filters or add a company manually.');
+
+  if (els.targetCompanyPagination) {
+    if (total <= limit) {
+      els.targetCompanyPagination.innerHTML = '';
+      els.targetCompanyPagination.hidden = true;
+    } else {
+      els.targetCompanyPagination.hidden = false;
+      els.targetCompanyPagination.innerHTML = `
+        <span>Showing ${start + 1}-${end} of ${total}</span>
+        <button class="secondary" type="button" data-target-company-page="${page - 1}" ${page <= 1 ? 'disabled' : ''}>Prev</button>
+        <button class="secondary" type="button" data-target-company-page="${page + 1}" ${page >= totalPages ? 'disabled' : ''}>Next</button>
+      `;
+    }
+  }
 }
 
 function renderSelectFilter(select, companies, key, value, label) {

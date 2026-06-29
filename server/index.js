@@ -118,6 +118,7 @@ const routeApi = createApiRouter({
   updateCV,
   deleteCV,
   downloadCV,
+  viewCV,
   generateCV,
   generateCoverLetter,
   scoreRoleFit,
@@ -1365,6 +1366,25 @@ async function downloadCV(req, res, id) {
     'content-type': cv.mime_type,
     'content-length': stats.size,
     'content-disposition': `attachment; filename="${cv.original_name.replace(/"/g, '')}"`
+  });
+  storage.open(cv.file_path).pipe(res);
+}
+
+async function viewCV(req, res, id) {
+  const result = await pool.query(
+    'SELECT file_path, original_name, mime_type, file_size FROM cv_versions WHERE id = $1 AND deleted_at IS NULL',
+    [id]
+  );
+  if (!result.rowCount) return sendError(res, 404, 'CV not found');
+
+  const cv = result.rows[0];
+  const absolutePath = storage.resolveSafe(cv.file_path);
+  const stats = statSync(absolutePath);
+  res.writeHead(200, {
+    ...securityHeaders,
+    'content-type': cv.mime_type,
+    'content-length': stats.size,
+    'content-disposition': `inline; filename="${cv.original_name.replace(/"/g, '')}"`
   });
   storage.open(cv.file_path).pipe(res);
 }

@@ -103,6 +103,7 @@ const workspaceKeys = [
   'targetCompanyResetButton',
   'targetCompaniesList',
   'targetCompaniesSummary',
+  'targetCompanyPagination',
   'settingsExportCsvButton',
   'settingsImportCsvButton',
   'settingsBackupButton',
@@ -182,6 +183,7 @@ export function bindWorkspaceElements(root = els.workspaceRoot) {
   els.targetCompanyResetButton = root.querySelector('#targetCompanyResetButton');
   els.targetCompaniesList = root.querySelector('#targetCompaniesList');
   els.targetCompaniesSummary = root.querySelector('#targetCompaniesSummary');
+  els.targetCompanyPagination = root.querySelector('#targetCompanyPagination');
   els.settingsExportCsvButton = root.querySelector('#settingsExportCsvButton');
   els.settingsImportCsvButton = root.querySelector('#settingsImportCsvButton');
   els.settingsBackupButton = root.querySelector('#settingsBackupButton');

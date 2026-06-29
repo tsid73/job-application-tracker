@@ -47,17 +47,20 @@ function initSidebarControls() {
   const layout = document.querySelector('.app-layout');
   const toggle = document.getElementById('sidebarToggle');
   const openButton = document.getElementById('sidebarOpen');
+  const icon = document.getElementById('sidebarToggleIcon');
   if (!layout) return;
 
   if (localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === '1') {
     layout.classList.add('is-collapsed');
     toggle?.setAttribute('aria-expanded', 'false');
+    if (icon) icon.className = 'bi bi-chevron-right';
   }
 
   toggle?.addEventListener('click', () => {
     const collapsed = layout.classList.toggle('is-collapsed');
     toggle.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
     localStorage.setItem(SIDEBAR_COLLAPSED_KEY, collapsed ? '1' : '0');
+    if (icon) icon.className = collapsed ? 'bi bi-chevron-right' : 'bi bi-chevron-left';
   });
 
   openButton?.addEventListener('click', () => {
@@ -326,6 +329,7 @@ function bindHomeWorkspaceEvents() {
   });
   els.targetCompanySearch?.addEventListener('input', debounce(() => {
     state.targetCompanyFilters.search = els.targetCompanySearch.value.trim();
+    state.targetCompanyFilters.page = 1;
     renderTargetCompanies(els, state.targetCompanies, state.targetCompanyFilters);
     bindTargetCompanyActions();
   }, 250));
@@ -337,6 +341,7 @@ function bindHomeWorkspaceEvents() {
   ].forEach(([key, element]) => {
     element?.addEventListener('change', () => {
       state.targetCompanyFilters[key] = element.value;
+      state.targetCompanyFilters.page = 1;
       renderTargetCompanies(els, state.targetCompanies, state.targetCompanyFilters);
       bindTargetCompanyActions();
     });
@@ -347,11 +352,19 @@ function bindHomeWorkspaceEvents() {
     state.targetCompanyFilters.visa = '';
     state.targetCompanyFilters.workMode = '';
     state.targetCompanyFilters.industry = '';
+    state.targetCompanyFilters.page = 1;
     if (els.targetCompanySearch) els.targetCompanySearch.value = '';
     if (els.targetCompanyRegionFilter) els.targetCompanyRegionFilter.value = '';
     if (els.targetCompanyVisaFilter) els.targetCompanyVisaFilter.value = '';
     if (els.targetCompanyWorkModeFilter) els.targetCompanyWorkModeFilter.value = '';
     if (els.targetCompanyIndustryFilter) els.targetCompanyIndustryFilter.value = '';
+    renderTargetCompanies(els, state.targetCompanies, state.targetCompanyFilters);
+    bindTargetCompanyActions();
+  });
+  els.targetCompanyPagination?.addEventListener('click', (event) => {
+    const button = event.target.closest('[data-target-company-page]');
+    if (!button) return;
+    state.targetCompanyFilters.page = Number(button.dataset.targetCompanyPage);
     renderTargetCompanies(els, state.targetCompanies, state.targetCompanyFilters);
     bindTargetCompanyActions();
   });
@@ -572,7 +585,18 @@ async function runBulkAction(action) {
   try {
     await withAsyncButton(action === 'archive' ? els.bulkArchiveButton : els.bulkRestoreButton, async () => {
       await perform();
-      showToast(action === 'archive' ? 'Applications archived.' : 'Applications restored.', 'info');
+      const isArchive = action === 'archive';
+      const undoAction = isArchive ? 'restore' : 'archive';
+      const undoFn = async () => {
+        try {
+          for (const id of ids) await api(`/api/applications/${id}/${undoAction}`, { method: 'POST' });
+          await Promise.all([loadApplications(), loadReminders(), loadNotifications()]);
+          showToast(isArchive ? 'Archiving undone.' : 'Restoring undone.', 'success');
+        } catch (e) {
+          showToast('Failed to undo.', 'error');
+        }
+      };
+      showToast(isArchive ? 'Applications archived.' : 'Applications restored.', 'info', undoFn);
     });
   } catch (error) {
     showToast(error.message, 'error');
@@ -2169,16 +2193,20 @@ function setButtonBusy(button, isBusy) {
   button.style.width = '';
 }
 
-function showToast(message, type = 'success') {
+const toastCallbacks = new Map();
+
+function showToast(message, type = 'success', undoCallback = null) {
   if (!els.appToast) return;
   const id = `${Date.now()}-${Math.random().toString(16).slice(2, 8)}`;
-  state.toasts = [...state.toasts, { id, message, type }];
+  state.toasts = [...state.toasts, { id, message, type, hasUndo: !!undoCallback }];
+  if (undoCallback) toastCallbacks.set(id, undoCallback);
   renderToasts();
-  window.setTimeout(() => dismissToast(id), type === 'error' ? 4400 : 2600);
+  window.setTimeout(() => dismissToast(id), type === 'error' || undoCallback ? 5000 : 2600);
 }
 
 function dismissToast(id) {
   state.toasts = state.toasts.filter((item) => item.id !== id);
+  toastCallbacks.delete(id);
   renderToasts();
 }
 
@@ -2190,11 +2218,26 @@ function renderToasts() {
         <strong>${escapeHtml(toastTypeLabel(toast.type))}</strong>
         <p>${escapeHtml(toast.message)}</p>
       </div>
-      <button class="icon-button" type="button" data-toast-dismiss="${toast.id}" aria-label="Dismiss notification">Close</button>
+      <div style="display: flex; gap: 8px; align-items: center;">
+        ${toast.hasUndo ? `<button class="primary-btn" style="padding: 4px 12px; font-size: 12px;" type="button" data-toast-undo="${toast.id}">Undo</button>` : ''}
+        <button class="icon-button" type="button" data-toast-dismiss="${toast.id}" aria-label="Dismiss notification">Close</button>
+      </div>
     </article>
   `).join('');
+  
   els.appToast.querySelectorAll('[data-toast-dismiss]').forEach((button) => {
     button.addEventListener('click', () => dismissToast(button.dataset.toastDismiss));
+  });
+  
+  els.appToast.querySelectorAll('[data-toast-undo]').forEach((button) => {
+    button.addEventListener('click', () => {
+      const id = button.dataset.toastUndo;
+      const cb = toastCallbacks.get(id);
+      if (cb) {
+        cb();
+        dismissToast(id);
+      }
+    });
   });
 }
 
@@ -2425,10 +2468,14 @@ function unmountInactiveHomeViews(activeView) {
 function renderSectionLoading(element, title) {
   if (!element) return;
   if (element.tagName === 'TBODY') {
-    element.innerHTML = `<tr><td colspan="4"><div class="section-loading">${escapeHtml(title)}...</div></td></tr>`;
+    element.innerHTML = `
+      <tr><td colspan="4" style="padding: 12px;"><div class="skeleton" style="height: 20px; width: 100%; margin: 8px 0;"></div></td></tr>
+      <tr><td colspan="4" style="padding: 12px;"><div class="skeleton" style="height: 20px; width: 85%; margin: 8px 0;"></div></td></tr>
+      <tr><td colspan="4" style="padding: 12px;"><div class="skeleton" style="height: 20px; width: 95%; margin: 8px 0;"></div></td></tr>
+    `;
     return;
   }
-  element.innerHTML = `<div class="section-loading">${escapeHtml(title)}...</div>`;
+  element.innerHTML = `<div class="skeleton" style="height: 120px; width: 100%; border-radius: 8px;"></div>`;
 }
 
 async function promptForText({ title, label, value = '', submitLabel = 'Save' }) {

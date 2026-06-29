@@ -14,7 +14,7 @@
       <aside class="sidebar" id="sidebar">
         <div class="sidebar-brand">
           <button id="sidebarToggle" class="sidebar-toggle" type="button" aria-label="Collapse sidebar" aria-expanded="true">
-            <span class="sidebar-toggle-bars" aria-hidden="true"></span>
+            <i class="bi bi-chevron-left" id="sidebarToggleIcon"></i>
           </button>
           <div class="sidebar-brand-copy">
             <b>Job Tracker</b>
@@ -46,7 +46,6 @@
 
       <div class="content">
         <header class="content-header">
-          <button id="sidebarOpen" class="sidebar-open" type="button" aria-label="Open menu">☰</button>
           <div class="content-header-copy">
             <h1>Applications</h1>
             <p id="summary">Loading</p>
@@ -58,7 +57,7 @@
       </div>
     </div>
 
-    <dialog id="applicationDialog">
+    <dialog id="applicationDialog" class="modal-md">
       <form id="applicationForm" method="dialog" enctype="multipart/form-data">
         <div class="dialog-header">
           <h2>New Application</h2>
@@ -175,7 +174,7 @@
       </form>
     </dialog>
 
-    <dialog id="applicationEditDialog">
+    <dialog id="applicationEditDialog" class="modal-md">
       <form id="applicationEditForm" method="dialog">
         <div class="dialog-header">
           <h2>Edit Application</h2>
@@ -273,7 +272,7 @@
       </form>
     </dialog>
 
-    <dialog id="detailDialog">
+    <dialog id="detailDialog" class="modal-lg">
       <div class="dialog-header">
         <h2 id="detailTitle">Application</h2>
         <button class="secondary" type="button" data-close-dialog>Close</button>
@@ -281,7 +280,7 @@
       <div id="detailContent" class="detail-layout"></div>
     </dialog>
 
-    <dialog id="cvDialog">
+    <dialog id="cvDialog" class="modal-md">
       <div class="dialog-header">
         <h2>CV Versions</h2>
         <button class="secondary" type="button" data-close-dialog>Close</button>
@@ -305,7 +304,7 @@
       <div id="cvList" class="cv-list"></div>
     </dialog>
 
-    <dialog id="jobBoardDialog">
+    <dialog id="jobBoardDialog" class="modal-md">
       <form id="jobBoardForm" method="dialog">
         <div class="dialog-header">
           <h2 id="jobBoardDialogTitle">Add Job Board</h2>
@@ -342,7 +341,7 @@
       </form>
     </dialog>
 
-    <dialog id="targetCompanyDialog">
+    <dialog id="targetCompanyDialog" class="modal-md">
       <form id="targetCompanyForm" method="dialog">
         <div class="dialog-header">
           <h2 id="targetCompanyDialogTitle">Add Company</h2>
@@ -439,7 +438,7 @@
       </form>
     </dialog>
 
-    <dialog id="confirmDialog">
+    <dialog id="confirmDialog" class="modal-sm">
       <div class="dialog-header">
         <h2 id="confirmDialogTitle">Confirm Action</h2>
         <button class="secondary" type="button" data-close-dialog>Close</button>

@@ -44,7 +44,9 @@ export const state = {
     region: '',
     visa: '',
     workMode: '',
-    industry: ''
+    industry: '',
+    page: 1,
+    limit: 20
   },
   contentWorkspace: {
     search: '',

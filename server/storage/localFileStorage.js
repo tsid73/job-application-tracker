@@ -129,7 +129,7 @@ export class LocalFileStorage {
 
   resolveSafe(relativePath) {
     const absolutePath = resolve(process.cwd(), relativePath);
-    const allowedRoots = [this.baseDir, resolve(process.cwd(), 'sample-data')];
+    const allowedRoots = [this.baseDir, resolve(process.cwd(), 'sample-data'), resolve(process.cwd(), 'uploads')];
     const isAllowed = allowedRoots.some((root) =>
       absolutePath === root || absolutePath.startsWith(`${root}/`) || absolutePath.startsWith(`${root}\\`)
     );
