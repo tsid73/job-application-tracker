@@ -75,8 +75,7 @@ const workspaceKeys = [
   'listView',
   'remindersView',
   'kanbanView',
-  'reportsView',
-  'statsView',
+  'insightsView',
   'activityView',
   'boardsView',
   'companiesView',
@@ -84,8 +83,7 @@ const workspaceKeys = [
   'settingsView',
   'remindersList',
   'kanbanBoard',
-  'reportsContent',
-  'statsContent',
+  'insightsContent',
   'toolkitContent',
   'settingsContent',
   'activitySearch',
@@ -155,8 +153,7 @@ export function bindWorkspaceElements(root = els.workspaceRoot) {
   els.listView = root.querySelector('#listView');
   els.remindersView = root.querySelector('#remindersView');
   els.kanbanView = root.querySelector('#kanbanView');
-  els.reportsView = root.querySelector('#reportsView');
-  els.statsView = root.querySelector('#statsView');
+  els.insightsView = root.querySelector('#insightsView');
   els.activityView = root.querySelector('#activityView');
   els.boardsView = root.querySelector('#boardsView');
   els.companiesView = root.querySelector('#companiesView');
@@ -164,8 +161,7 @@ export function bindWorkspaceElements(root = els.workspaceRoot) {
   els.settingsView = root.querySelector('#settingsView');
   els.remindersList = root.querySelector('#remindersList');
   els.kanbanBoard = root.querySelector('#kanbanBoard');
-  els.reportsContent = root.querySelector('#reportsContent');
-  els.statsContent = root.querySelector('#statsContent');
+  els.insightsContent = root.querySelector('#insightsContent');
   els.toolkitContent = root.querySelector('#toolkitContent');
   els.settingsContent = root.querySelector('#settingsContent');
   els.activitySearch = root.querySelector('#activitySearchInput');

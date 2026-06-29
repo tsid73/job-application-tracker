@@ -130,12 +130,8 @@ export function renderHomeWorkspace() {
         <div id="kanbanBoard" class="kanban-board"></div>
       </section>
 
-      <section id="reportsView" class="view-panel" hidden>
-        <div id="reportsContent" class="reports-grid"></div>
-      </section>
-
-      <section id="statsView" class="view-panel" hidden>
-        <div id="statsContent" class="reports-grid"></div>
+      <section id="insightsView" class="view-panel" hidden>
+        <div id="insightsContent" class="reports-grid"></div>
       </section>
 
       <section id="activityView" class="surface-panel" hidden>
@@ -240,45 +236,8 @@ export function renderHomeWorkspace() {
   `;
 }
 
-export function renderReports(els, report, statusLabels) {
-  els.reportsContent.innerHTML = `
-    <section class="report-panel report-panel-status">
-      <div class="panel-kicker">Snapshot</div>
-      <h3>Status</h3>
-      ${report.status_counts.map((row) => reportRow(statusLabels[row.status] || row.status, Number(row.count), maxCount(report.status_counts), { status: row.status })).join('') || '<p>No status data.</p>'}
-    </section>
-    <section class="report-panel report-panel-lifecycle">
-      <div class="panel-kicker">Portfolio</div>
-      <h3>Lifecycle</h3>
-      ${[
-        { label: 'Active', count: Number(report.lifecycle_counts.active || 0), jump: { view: 'false' } },
-        { label: 'Closed', count: Number(report.lifecycle_counts.closed || 0), jump: { view: 'closed' } },
-        { label: 'Archived', count: Number(report.lifecycle_counts.archived || 0), jump: { view: 'true' } }
-      ].map((row) => reportRow(row.label, row.count, Number(report.lifecycle_counts.total || 1), row.jump)).join('')}
-    </section>
-    <section class="report-panel report-panel-monthly">
-      <div class="panel-kicker">Velocity</div>
-      <h3>Monthly Applications</h3>
-      ${report.monthly_counts.map((row) => reportRow(formatMonthLabel(row.month), Number(row.count), maxCount(report.monthly_counts), { month: row.month })).join('') || '<p>No monthly data.</p>'}
-    </section>
-    <section class="report-panel report-panel-upcoming">
-      <div class="panel-kicker">Watchlist</div>
-      <h3>Upcoming Interviews</h3>
-      <div class="upcoming-list">
-        ${report.upcoming_interviews.map((item) => `
-          <button type="button" class="upcoming-card ${daysClass(item.days_remaining).replace('days-badge', '').trim()}" data-jump-status="interview_scheduled" data-jump-date-from="${escapeAttribute(item.interview_date)}" data-jump-date-to="${escapeAttribute(item.interview_date)}">
-            <strong>${escapeHtml(item.company_name)}</strong>
-            <span>${formatDate(item.interview_date)}</span>
-            ${renderDays(item.days_remaining)}
-          </button>
-        `).join('') || '<p>No upcoming interviews.</p>'}
-      </div>
-    </section>
-  `;
-}
-
-export function renderStats(els, stats) {
-  const total = Number(stats.totals.active || 0);
+export function renderInsights(els, report, stats, statusLabels) {
+  const total = Number(stats.totals.total || 0);
   const funnelRows = [
     { label: 'Applied', count: total },
     { label: 'Interview', count: Number(stats.funnel.interviewed || 0) },
@@ -286,43 +245,99 @@ export function renderStats(els, stats) {
     { label: 'Accepted', count: Number(stats.funnel.accepted || 0) }
   ];
   const funnelMax = Math.max(1, ...funnelRows.map((row) => row.count));
-  const rate = (part, whole) => (whole ? `${Math.round((Number(part || 0) / whole) * 100)}%` : '0%');
+  const rate = (part, whole) => {
+    if (!whole) return '0%';
+    const p = Math.round((Number(part || 0) / whole) * 100);
+    return p > 0 ? `${p}%` : '0%';
+  };
   const tagMax = Math.max(1, ...stats.tags.map((row) => Number(row.applications || 0)));
+  const tagHtml = stats.tags.map((row) => {
+    let toIntStr = '';
+    const rateVal = Math.round((Number(row.interviewed || 0) / Number(row.applications || 1)) * 100);
+    if (rateVal > 0) toIntStr = `${rateVal}% to int`;
+    return reportRow(row.tag, Number(row.applications), tagMax, {}, toIntStr, '--focus');
+  }).join('') || '<p>No tag data.</p>';
 
-  els.statsContent.innerHTML = `
-    <section class="report-panel">
-      <div class="panel-kicker">Funnel</div>
-      <h3>Application Funnel</h3>
-      ${funnelRows.map((row) => reportRow(row.label, row.count, funnelMax)).join('')}
-      <p class="section-help">Interview rate ${rate(stats.funnel.interviewed, total)} · Offer rate ${rate(stats.funnel.offers, total)} of ${total} applications.</p>
+  els.insightsContent.innerHTML = `
+    <!-- Top Row -->
+    <section class="report-panel wide" style="grid-column: 1 / -1; display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px;">
+      <div>
+        <div class="panel-kicker">Funnel</div>
+        <h3>Application Funnel</h3>
+        ${reportRow('Applied', funnelRows[0].count, funnelMax, null, total, '--app')}
+        ${reportRow('Interview', funnelRows[1].count, funnelMax, null, total, '--int')}
+        ${reportRow('Offer', funnelRows[2].count, funnelMax, null, total, '--act')}
+        ${reportRow('Accepted', funnelRows[3].count, funnelMax, null, total, '--act')}
+        <p class="section-help">Interview rate ${rate(stats.funnel.interviewed, total)} · Offer rate ${rate(stats.funnel.offers, total)}</p>
+      </div>
+      <div>
+        <div class="panel-kicker">Outcomes</div>
+        <h3>Responses</h3>
+        ${reportRow('Responded', Number(stats.funnel.responded || 0), Math.max(1, total), null, total, '--app')}
+        ${reportRow('Rejected', Number(stats.funnel.rejected || 0), Math.max(1, total), null, total, '--cls')}
+        ${reportRow('Ghosted', Number(stats.totals.ghosted || 0), Math.max(1, total), null, total, '--muted')}
+        <p class="section-help">Response rate ${rate(stats.funnel.responded, total)}</p>
+      </div>
     </section>
-    <section class="report-panel">
-      <div class="panel-kicker">Outcomes</div>
-      <h3>Responses</h3>
-      ${reportRow('Responded', Number(stats.funnel.responded || 0), Math.max(1, total))}
-      ${reportRow('Rejected', Number(stats.funnel.rejected || 0), Math.max(1, total))}
-      ${reportRow('Ghosted', Number(stats.totals.ghosted || 0), Math.max(1, total))}
-      <p class="section-help">Response rate ${rate(stats.funnel.responded, total)} — any recorded interview, offer, or acceptance.</p>
+
+    <!-- Middle Row -->
+    <section class="report-panel report-panel-lifecycle">
+      <div class="panel-kicker">Portfolio</div>
+      <h3>Lifecycle</h3>
+      ${[
+        { label: 'Active', count: Number(report.lifecycle_counts.active || 0), jump: { view: 'false' }, color: '--app' },
+        { label: 'Closed', count: Number(report.lifecycle_counts.closed || 0), jump: { view: 'closed' }, color: '--cls' },
+        { label: 'Archived', count: Number(report.lifecycle_counts.archived || 0), jump: { view: 'true' }, color: '--muted' }
+      ].map((row) => reportRow(row.label, row.count, Number(report.lifecycle_counts.total || 1), row.jump, Number(report.lifecycle_counts.total || 0), row.color)).join('')}
     </section>
+    
+    <section class="report-panel report-panel-status">
+      <div class="panel-kicker">Snapshot</div>
+      <h3>Status Distribution</h3>
+      ${(() => {
+        const statusTotal = report.status_counts.reduce((sum, row) => sum + Number(row.count), 0);
+        const getStatusColor = (status) => {
+          if (['applied'].includes(status)) return '--app';
+          if (['interview_scheduled', 'interviewing'].includes(status)) return '--int';
+          if (['offer_received', 'accepted'].includes(status)) return '--act';
+          if (['rejected', 'withdrawn'].includes(status)) return '--cls';
+          if (['ghosted'].includes(status)) return '--muted';
+          return '--accent';
+        };
+        return report.status_counts.map((row) => reportRow(statusLabels[row.status] || row.status, Number(row.count), maxCount(report.status_counts), { status: row.status }, statusTotal, getStatusColor(row.status))).join('') || '<p>No status data.</p>';
+      })()}
+    </section>
+
+    <!-- Bottom Row -->
     <section class="report-panel">
       <div class="panel-kicker">Velocity</div>
       <h3>Time in Stage</h3>
       <div class="stat-figures">
         <article>
           <strong>${stats.timing.avg_days_to_interview ?? '—'}</strong>
-          <span>avg days from applied to interview</span>
+          <span>avg days to interview</span>
         </article>
         <article>
           <strong>${stats.timing.avg_days_to_rejection ?? '—'}</strong>
-          <span>avg days from applied to rejection</span>
+          <span>avg days to rejection</span>
         </article>
       </div>
     </section>
-    <section class="report-panel wide">
-      <div class="panel-kicker">Channels</div>
-      <h3>Interview Rate by Tag</h3>
-      <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 1rem;">
-        ${stats.tags.map((row) => reportRow(`${row.tag} — ${rate(row.interviewed, Number(row.applications || 0))} interviews`, Number(row.applications || 0), tagMax)).join('') || '<p>No tagged applications yet.</p>'}
+    
+    <section class="report-panel report-panel-monthly">
+      <div class="panel-kicker">Velocity</div>
+      <h3>Monthly Applications</h3>
+      ${(() => {
+        const monthlyTotal = report.monthly_counts.reduce((sum, row) => sum + Number(row.count), 0);
+        return report.monthly_counts.map((row) => reportRow(formatMonthLabel(row.month), Number(row.count), maxCount(report.monthly_counts), { month: row.month }, monthlyTotal, '--focus')).join('') || '<p>No monthly data.</p>';
+      })()}
+    </section>
+
+    <section class="report-panel report-panel-tags wide" style="grid-column: 1 / -1;">
+      <div class="panel-kicker">Skills</div>
+      <h3>Top Tags</h3>
+      <div style="column-count: 2; column-gap: 24px;">
+        ${tagHtml}
       </div>
     </section>
   `;
@@ -522,14 +537,16 @@ export function renderKanban(els, applications, statusLabels) {
         </div>
         <span class="kanban-count">${group.items.length}</span>
       </div>
-      ${group.items.map((item) => `
-        <article class="kanban-card">
-          <strong>${escapeHtml(item.company_name)}</strong>
-          <span class="role-title">${escapeHtml(item.role_title || 'N/A')}</span>
-          <span>${formatDate(item.applied_date)}</span>
-          ${item.interview_date ? renderDays(item.days_remaining) : ''}
-        </article>
-      `).join('') || '<p class="empty small">No entries.</p>'}
+      <div class="kanban-cards-container">
+        ${group.items.map((item) => `
+          <article class="kanban-card">
+            <strong>${escapeHtml(item.company_name)}</strong>
+            <span class="role-title">${escapeHtml(item.role_title || 'N/A')}</span>
+            <span>${formatDate(item.applied_date)}</span>
+            ${item.interview_date ? renderDays(item.days_remaining) : ''}
+          </article>
+        `).join('') || '<p class="empty small">No entries.</p>'}
+      </div>
     </section>
   `).join('');
   if (!applications.some((application) => !application.archived_at)) {
@@ -639,29 +656,57 @@ function renderTargetCompanySection(title, description, companies, options = {})
   if (!companies.length) return '';
   return `
     <section class="board-section${options.fullWidth ? ' board-section-wide' : ''}">
-      <div class="board-section-grid${options.fullWidth ? ' board-section-grid-wide' : ''}">
-        ${companies.map((company) => `
-          <article class="board-card target-company-card ${company.is_active ? '' : 'is-inactive'} ${jobBoardFreshnessClass(company)}">
-            <div class="company-card-header">
-              <div class="company-card-title">
-                <strong>${escapeHtml(company.name)}</strong>
-                <span class="muted-text company-card-meta">${escapeHtml([company.region, company.primary_location, company.industry].filter(Boolean).join(' · ') || 'No context')}</span>
-              </div>
-              <div class="company-card-links">
-                ${company.career_url ? `<button class="icon-button" type="button" data-target-company-open="${company.id}" data-target-company-url="career" aria-label="Careers" title="Careers"><i class="bi bi-briefcase"></i></button>` : ''}
-                ${company.linkedin_url ? `<button class="icon-button" type="button" data-target-company-open="${company.id}" data-target-company-url="linkedin" aria-label="LinkedIn" title="LinkedIn"><i class="bi bi-linkedin"></i></button>` : ''}
-                ${company.company_url ? `<button class="icon-button" type="button" data-target-company-open="${company.id}" data-target-company-url="company" aria-label="Website" title="Website"><i class="bi bi-globe"></i></button>` : ''}
-              </div>
-            </div>
-            ${company.description || company.fit_notes ? `<p class="company-card-notes" title="${escapeAttribute(company.fit_notes || company.description)}">${escapeHtml(truncateText(company.fit_notes || company.description, 80))}</p>` : ''}
-            <div class="company-card-actions">
-              <span class="state ${company.is_active ? 'active-state' : 'closed-state'}">${company.is_active ? 'Active' : 'Inactive'}</span>
-              <button class="icon-button text-primary" type="button" data-target-company-edit="${company.id}" title="Edit"><i class="bi bi-pencil"></i></button>
-              <button class="icon-button text-warning" type="button" data-target-company-toggle="${company.id}" data-target-company-active="${company.is_active ? 'true' : 'false'}" title="${company.is_active ? 'Deactivate' : 'Activate'}"><i class="bi bi-power"></i></button>
-              <button class="icon-button text-danger" type="button" data-target-company-delete="${company.id}" title="Delete"><i class="bi bi-trash"></i></button>
-            </div>
-          </article>
-        `).join('')}
+      <h3>${title}</h3>
+      <div class="table-container">
+        <table class="companies-table">
+          <thead>
+            <tr>
+              <th style="width: 220px;">Company</th>
+              <th>Location</th>
+              <th style="width: 120px;">Work Mode</th>
+              <th style="width: 100px;">Links</th>
+              <th style="width: 60px;"></th>
+            </tr>
+          </thead>
+          <tbody>
+            ${companies.map((company) => {
+              const workModeBadge = company.work_mode
+                ? `<span class="work-mode-badge">${escapeHtml(company.work_mode)}</span>`
+                : '';
+              const linksHtml = [
+                company.career_url ? `<button class="icon-button" type="button" data-target-company-open="${company.id}" data-target-company-url="career" aria-label="Careers" title="Careers"><i class="bi bi-briefcase"></i></button>` : '',
+                company.linkedin_url ? `<button class="icon-button" type="button" data-target-company-open="${company.id}" data-target-company-url="linkedin" aria-label="LinkedIn" title="LinkedIn"><i class="bi bi-link-45deg"></i></button>` : '',
+                company.company_url ? `<button class="icon-button" type="button" data-target-company-open="${company.id}" data-target-company-url="company" aria-label="Website" title="Website"><i class="bi bi-globe"></i></button>` : ''
+              ].filter(Boolean).join('');
+
+              return `
+                <tr class="company-row ${company.is_active ? '' : 'is-inactive'}">
+                  <td>
+                    <div class="company-name-cell">
+                      <strong>${escapeHtml(company.name)}</strong>
+                      <span class="muted-text font-xs">${escapeHtml(company.industry || 'No industry info')}</span>
+                    </div>
+                  </td>
+                  <td>${escapeHtml(company.primary_location || '—')}</td>
+                  <td>${workModeBadge}</td>
+                  <td><div class="company-links-cell">${linksHtml}</div></td>
+                  <td class="action-col">
+                    <div class="dropdown-container">
+                      <button class="icon-button dropdown-toggle" type="button" aria-label="Actions" title="Actions">
+                        <i class="bi bi-three-dots"></i>
+                      </button>
+                      <div class="dropdown-menu">
+                        <button type="button" class="dropdown-item" data-target-company-edit="${company.id}"><i class="bi bi-pencil"></i> Edit</button>
+                        <button type="button" class="dropdown-item text-warning" data-target-company-toggle="${company.id}" data-target-company-active="${company.is_active ? 'true' : 'false'}"><i class="bi bi-power"></i> ${company.is_active ? 'Deactivate' : 'Activate'}</button>
+                        <button type="button" class="dropdown-item text-danger" data-target-company-delete="${company.id}"><i class="bi bi-trash"></i> Delete</button>
+                      </div>
+                    </div>
+                  </td>
+                </tr>
+              `;
+            }).join('')}
+          </tbody>
+        </table>
       </div>
     </section>
   `;
@@ -2042,6 +2087,34 @@ export function renderRouteLoadingState(title, subtitle = 'Loading workspace') {
 }
 
 export function renderCalendar(els, calendarDate, reminders) {
+  const getBadgeDetails = (type) => {
+    if (type === 'applied') return { css: 'badge-app', label: 'APP' };
+    if (type === 'interview') return { css: 'badge-int', label: 'INT' };
+    if (type === 'next_action') return { css: 'badge-act', label: 'ACT' };
+    if (type.startsWith('status_change_')) {
+      const status = type.replace('status_change_', '');
+      if (['rejected', 'withdrawn', 'ghosted'].includes(status)) {
+        return { css: 'badge-cls', label: 'CLS' };
+      }
+      return { css: 'badge-default', label: 'UPD' };
+    }
+    return { css: 'badge-default', label: 'EVT' };
+  };
+
+  const getTimelineLabel = (event) => {
+    let label = event.company_name;
+    if (event.type.startsWith('status_change_')) {
+      const newStatus = event.type.replace('status_change_', '');
+      if (!['rejected', 'withdrawn', 'ghosted'].includes(newStatus)) {
+        const displayStatus = statusLabels[newStatus] || newStatus;
+        label += ` (${displayStatus.charAt(0).toUpperCase() + displayStatus.slice(1)})`;
+      }
+    } else if (event.type === 'next_action' && event.details) {
+       label += `: ${event.details}`;
+    }
+    return label;
+  };
+
   const month = new Date(calendarDate.getFullYear(), calendarDate.getMonth(), 1);
   const firstDay = month.getDay();
   const daysInMonth = new Date(month.getFullYear(), month.getMonth() + 1, 0).getDate();
@@ -2055,69 +2128,68 @@ export function renderCalendar(els, calendarDate, reminders) {
       day,
       iso,
       today: iso === isoDate(new Date()),
-      events: reminders.filter((item) => item.event_date === iso)
+      events: reminders.filter((item) => String(item.event_date).slice(0, 10) === iso)
     });
   }
   while (cells.length % 7) cells.push({ empty: true });
 
-  const getTimelineIcon = (type) => {
-    if (type === 'interview') return 'bi-calendar-event text-primary';
-    if (type === 'next_action') return 'bi-check2-circle text-info';
-    if (type === 'applied') return 'bi-send text-success';
-    if (type === 'status_change_rejected') return 'bi-x-circle text-danger';
-    if (type === 'status_change_offer') return 'bi-trophy text-warning';
-    if (type === 'status_change_accepted') return 'bi-hand-thumbs-up-fill text-success';
-    if (type === 'status_change_ghosted') return 'bi-eye-slash text-muted';
-    if (type === 'status_change_withdrawn') return 'bi-arrow-left-circle text-muted';
-    return 'bi-arrow-right-circle';
-  };
-
-  const getTimelineLabel = (event) => {
-    let label = event.company_name;
-    if (event.type === 'applied') {
-      label += ' (Applied)';
-    } else if (event.type === 'interview') {
-      label += ' (Interview)';
-    } else if (event.type === 'next_action') {
-      label += ' (Next Action)';
-    } else if (event.type.startsWith('status_change_')) {
-      const newStatus = event.type.replace('status_change_', '');
-      const displayStatus = statusLabels[newStatus] || newStatus;
-      const capitalized = displayStatus.charAt(0).toUpperCase() + displayStatus.slice(1);
-      label += ` (${capitalized})`;
-    }
-    return label;
-  };
+  const currentMonthEvents = reminders.filter((item) => {
+    const itemDate = new Date(`${String(item.event_date).slice(0, 10)}T00:00:00`);
+    const nextMonth = new Date(calendarDate.getFullYear(), calendarDate.getMonth() + 1, 1);
+    return itemDate >= month && itemDate < nextMonth;
+  });
 
   els.remindersList.innerHTML = `
-    <div class="calendar-header">
-      <div>
-        <h2>${formatMonthTitle(month)}</h2>
-        <p>${reminders.length} timeline events</p>
-      </div>
-      <div class="calendar-actions">
-        <button class="secondary" type="button" data-calendar-action="prev">Prev</button>
-        <button class="secondary" type="button" data-calendar-action="current">Current</button>
-        <button class="secondary" type="button" data-calendar-action="next">Next</button>
-      </div>
-    </div>
-    <div class="calendar-grid">
-      ${['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day) => `<div class="calendar-weekday">${day}</div>`).join('')}
-      ${cells.map((cell) => {
-        if (cell.empty) return '<div class="calendar-day is-empty"></div>';
-        return `
-          <div class="calendar-day${cell.today ? ' is-today' : ''}">
-            <span class="calendar-date">${cell.day}</span>
-            <div class="calendar-events">
-              ${cell.events.map((event) => `
-                <article class="calendar-event ${daysClass(event.days_remaining).replace('days-badge', '').trim()}" title="${escapeHtml(event.type)}" data-calendar-detail="${event.id}">
-                  <strong><i class="bi ${getTimelineIcon(event.type)}"></i> ${escapeHtml(getTimelineLabel(event))}</strong>
-                </article>
-              `).join('')}
-            </div>
+    <div class="timeline-layout">
+      <div class="timeline-main">
+        <div class="calendar-header">
+          <div>
+            <h2>${formatMonthTitle(month)}</h2>
+            <p>${currentMonthEvents.length} events</p>
           </div>
-        `;
-      }).join('')}
+          <div class="calendar-actions">
+            <button class="secondary" type="button" data-calendar-action="prev"><i class="bi bi-chevron-left"></i></button>
+            <button class="secondary" type="button" data-calendar-action="current">Today</button>
+            <button class="secondary" type="button" data-calendar-action="next"><i class="bi bi-chevron-right"></i></button>
+          </div>
+        </div>
+        <div class="calendar-grid">
+          ${['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day) => `<div class="calendar-weekday">${day}</div>`).join('')}
+          ${cells.map((cell) => {
+            if (cell.empty) return '<div class="calendar-day is-empty"></div>';
+            return `
+              <div class="calendar-day${cell.today ? ' is-today' : ''}">
+                <span class="calendar-date">${cell.day}</span>
+                <div class="calendar-events">
+                  ${cell.events.map((event) => {
+                    const badge = getBadgeDetails(event.type);
+                    return `
+                    <article class="calendar-event ${badge.css}" title="${escapeAttribute(getTimelineLabel(event))}" data-calendar-detail="${event.id}">
+                      ${escapeHtml(getTimelineLabel(event))}
+                    </article>
+                    `;
+                  }).join('')}
+                </div>
+              </div>
+            `;
+          }).join('')}
+        </div>
+      </div>
+      <div class="timeline-sidebar">
+        <h3>Legend</h3>
+        <div class="legend-item">
+          <span class="badge badge-app">APP</span> Applied date
+        </div>
+        <div class="legend-item">
+          <span class="badge badge-int">INT</span> Interview
+        </div>
+        <div class="legend-item">
+          <span class="badge badge-act">ACT</span> Next action due
+        </div>
+        <div class="legend-item">
+          <span class="badge badge-cls">CLS</span> Rejected / Withdrawn
+        </div>
+      </div>
     </div>
   `;
 }

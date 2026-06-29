@@ -1,13 +1,13 @@
 :root {
   color-scheme: light;
-  --bg: #eceff3;
-  --bg-deep: #e2e7ee;
+  --bg: #f8fafc;
+  --bg-deep: #f1f5f9;
   --panel: #ffffff;
   --panel-strong: #ffffff;
   --card: #ffffff;
-  --text: #16202c;
-  --muted: #637182;
-  --line: #e0e5ec;
+  --text: #0f172a;
+  --muted: #64748b;
+  --line: #e2e8f0;
   --accent: #2f6f9f;
   --accent-dark: #255b82;
   --accent-soft: #e4eef6;
@@ -33,9 +33,13 @@
   --danger: #a23b3b;
   --danger-soft: #f9ecec;
   --focus: #2f6f9f;
-  --shadow-sm: 0 1px 2px rgba(16, 32, 45, 0.05);
-  --shadow-md: 0 10px 28px rgba(16, 32, 45, 0.06);
-  --shadow-lg: 0 16px 40px rgba(16, 32, 45, 0.10);
+  --app: #0284c7;
+  --int: #a16207;
+  --act: #15803d;
+  --cls: #b91c1c;
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.05), 0 4px 6px -4px rgba(0, 0, 0, 0.05);
 }
 
 * {
@@ -46,7 +50,7 @@ body {
   margin: 0;
   background: var(--bg);
   color: var(--text);
-  font-family: "Segoe UI Variable", "Segoe UI", "Aptos", "Helvetica Neue", system-ui, sans-serif;
+  font-family: "Inter", "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
   font-size: 13px;
   min-height: 100vh;
   position: relative;
@@ -1245,10 +1249,23 @@ tr:last-child td {
 
 .kanban-column {
   min-height: 240px;
+  max-height: calc(100vh - 160px);
   background: var(--card);
   border: 1px solid var(--line);
-  border-radius: 24px;
+  border-radius: 16px;
   padding: 14px;
+  display: flex;
+  flex-direction: column;
+}
+
+.kanban-column-head {
+  flex-shrink: 0;
+}
+
+.kanban-cards-container {
+  overflow-y: auto;
+  flex-grow: 1;
+  padding-right: 4px;
 }
 
 .kanban-column-head {
@@ -1295,7 +1312,7 @@ tr:last-child td {
 
 .report-row {
   display: grid;
-  grid-template-columns: 110px 1fr 36px;
+  grid-template-columns: 110px 1fr 70px;
   align-items: center;
   gap: 10px;
   margin: 9px 0;
@@ -1367,21 +1384,6 @@ button.report-row:focus-visible {
   width: fit-content;
 }
 
-.report-panel-status {
-  background: #edf4f9;
-}
-
-.report-panel-lifecycle {
-  background: #f7f2e7;
-}
-
-.report-panel-monthly {
-  background: #eef6ef;
-}
-
-.report-panel-upcoming {
-  background: #fbf1ea;
-}
 
 .pagination {
   display: flex;
@@ -3847,3 +3849,320 @@ a {
 .text-danger { color: var(--danger) !important; }
 .text-success { color: #2e7d32 !important; }
 .text-muted { color: var(--muted) !important; }
+
+/* Vertical Timeline Layout */
+.timeline-layout-vertical {
+  max-width: 700px;
+  margin: 0 auto;
+}
+
+.timeline-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  margin-top: 16px;
+}
+
+.timeline-layout {
+  display: grid;
+  grid-template-columns: 1fr 280px;
+  gap: 24px;
+}
+
+.timeline-main {
+  background: var(--card);
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
+}
+
+.calendar-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--line);
+}
+
+.calendar-header h2 {
+  font-size: 18px;
+}
+
+.calendar-header p {
+  color: var(--muted);
+  margin-top: 3px;
+  font-size: 13px;
+}
+
+.calendar-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+}
+
+.calendar-weekday {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+  padding: 8px 0;
+  text-transform: uppercase;
+  text-align: center;
+  border-bottom: 1px solid var(--line);
+}
+
+.calendar-day {
+  min-height: 90px;
+  padding: 6px;
+  border-bottom: 1px solid var(--line);
+  border-right: 1px solid var(--line);
+}
+
+.calendar-day:nth-child(7n) {
+  border-right: 0;
+}
+
+.calendar-day.is-empty {
+  background: rgba(0,0,0,0.02);
+}
+
+.calendar-date {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  color: var(--muted);
+  font-weight: 700;
+  font-size: 12px;
+  border-radius: 50%;
+  margin-bottom: 4px;
+}
+
+.calendar-day.is-today .calendar-date {
+  background: var(--accent);
+  color: white;
+}
+
+.calendar-events {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.calendar-event {
+  display: block;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 4px;
+  border-radius: 4px;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.calendar-event:hover {
+  opacity: 0.8;
+}
+
+.timeline-sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.timeline-sidebar h3 {
+  font-size: 12px;
+  text-transform: uppercase;
+  color: var(--muted);
+  letter-spacing: 0.5px;
+  margin-bottom: 8px;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--muted);
+  margin-bottom: 6px;
+}
+
+/* State Badges */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px 8px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+}
+.badge-app { background: var(--active-bg); color: var(--active-text); }
+.badge-int { background: #fbf4e6; color: #a67215; }
+.badge-act { background: #e6f4ea; color: #1e7033; }
+.badge-cls { background: var(--closed-bg); color: var(--closed-text); }
+.badge-default { background: var(--bg-deep); color: var(--muted); }
+
+.calendar-event {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  padding: 6px;
+  border-radius: 8px;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  margin-bottom: 6px;
+}
+.calendar-event .event-text {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text);
+  line-height: 1.2;
+}
+
+/* Animations */
+.kanban-card {
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+.kanban-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+}
+.upcoming-card {
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+.upcoming-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+}
+
+/* Job Board Hover Actions */
+.board-card .board-actions-grid {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s ease-in-out;
+}
+
+.board-card:hover .board-actions-grid {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* Target Companies Table Styles */
+.companies-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.companies-table th,
+.companies-table td {
+  padding: 12px 16px !important;
+  text-align: left;
+  border-bottom: 1px solid var(--line);
+}
+
+.companies-table th {
+  font-weight: 600;
+  color: var(--muted);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  background: var(--bg);
+}
+
+.company-row {
+  transition: background-color 0.15s ease;
+}
+
+.company-row:hover {
+  background-color: var(--accent-tint) !important;
+}
+
+.company-name-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.company-name-cell strong {
+  font-size: 14px;
+  color: var(--text);
+  line-height: 1.2;
+}
+
+.font-xs {
+  font-size: 11px;
+}
+
+.work-mode-badge {
+  display: inline-flex;
+  padding: 2px 10px;
+  background: var(--bg-deep);
+  color: var(--muted);
+  border-radius: 99px;
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.company-links-cell {
+  display: flex;
+  gap: 8px;
+}
+
+/* Dropdown Styles */
+.dropdown-container {
+  position: relative;
+  display: inline-block;
+}
+
+.dropdown-menu {
+  display: none;
+  position: absolute;
+  right: 0;
+  top: 100%;
+  z-index: 100;
+  min-width: 140px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: var(--shadow-lg);
+  padding: 4px 0;
+  margin-top: 4px;
+}
+
+.dropdown-menu.open {
+  display: block;
+}
+
+.dropdown-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 12px;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  font-size: 12px;
+  color: var(--text);
+  cursor: pointer;
+  transition: background-color 0.15s;
+}
+
+.dropdown-item:hover {
+  background-color: var(--bg-deep);
+}
+
+.dropdown-item i {
+  font-size: 14px;
+}

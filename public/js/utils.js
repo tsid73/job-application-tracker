@@ -67,18 +67,32 @@ export function formatDateTime(value) {
   return date.toLocaleString(undefined, { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' });
 }
 
-export function reportRow(label, value, max, jump = null) {
+export function reportRow(label, value, max, jump = null, totalOrExtra = null, color = null) {
   const percent = max ? Math.max(3, Math.round((value / max) * 100)) : 0;
   const jumpAttrs = jump
     ? `${jump.status ? ` data-jump-status="${escapeHtml(jump.status)}"` : ''}${jump.view ? ` data-jump-view="${escapeHtml(jump.view)}"` : ''}${jump.month ? ` data-jump-month="${escapeHtml(jump.month)}"` : ''}`
     : '';
   const tag = jump ? 'button' : 'div';
   const typeAttr = jump ? ' type="button"' : '';
+
+  let displayVal = String(value);
+  if (typeof totalOrExtra === 'string' && totalOrExtra.trim() !== '') {
+    displayVal = `${value} (${totalOrExtra})`;
+  } else if (typeof totalOrExtra === 'number' && totalOrExtra > 0) {
+    const pStr = ((value / totalOrExtra) * 100).toFixed(1);
+    const pNum = parseFloat(pStr);
+    if (pNum > 0) {
+      displayVal = `${value} (${pStr.replace('.0', '')}%)`;
+    }
+  }
+
+  const colorStyle = color ? `background: var(${color});` : '';
+
   return `
     <${tag}${typeAttr} class="report-row${jump ? ' report-row-jump' : ''}"${jumpAttrs}>
       <span>${escapeHtml(label)}</span>
-      <div class="report-bar"><i style="width:${percent}%"></i></div>
-      <strong>${value}</strong>
+      <div class="report-bar"><i style="width:${percent}%;${colorStyle}"></i></div>
+      <strong>${displayVal}</strong>
     </${tag}>
   `;
 }

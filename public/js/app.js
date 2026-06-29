@@ -15,8 +15,7 @@ import {
   renderKanban,
   renderNotifications,
   renderRouteLoadingState,
-  renderReports,
-  renderStats,
+  renderInsights,
   renderSavedFilters,
   renderTargetCompanies,
   renderTargetCompanyFilters,
@@ -81,8 +80,7 @@ function currentHomeViewTitle(view = state.view) {
     list: 'Applications',
     reminders: 'Timeline',
     kanban: 'Kanban',
-    reports: 'Reports',
-    stats: 'Stats',
+    insights: 'Insights',
     activity: 'Activity',
     boards: 'Job Boards',
     companies: 'Company List',
@@ -142,6 +140,14 @@ function bindGlobalEvents() {
     if (!link || link.target === '_blank' || event.defaultPrevented) return;
     event.preventDefault();
     navigateTo(link.getAttribute('href'));
+  });
+
+  document.addEventListener('click', (event) => {
+    if (!event.target.closest('.dropdown-container')) {
+      document.querySelectorAll('.dropdown-menu.open').forEach((menu) => {
+        menu.classList.remove('open');
+      });
+    }
   });
 
   window.addEventListener('popstate', () => {
@@ -397,7 +403,7 @@ function bindHomeWorkspaceEvents() {
     }
     if (detail) navigateTo(`/applications/${detail.dataset.calendarDetail}`);
   });
-  [els.reportsContent, els.statsContent].forEach((container) => {
+  [els.insightsContent].forEach((container) => {
     container?.addEventListener('click', (event) => {
       const row = event.target.closest('[data-jump-status], [data-jump-view], [data-jump-month]');
       if (!row) return;
@@ -588,8 +594,7 @@ async function switchView(view) {
   els.listView.hidden = view !== 'list';
   els.remindersView.hidden = view !== 'reminders';
   els.kanbanView.hidden = view !== 'kanban';
-  els.reportsView.hidden = view !== 'reports';
-  if (els.statsView) els.statsView.hidden = view !== 'stats';
+  if (els.insightsView) els.insightsView.hidden = view !== 'insights';
   els.activityView.hidden = view !== 'activity';
   els.boardsView.hidden = view !== 'boards';
   els.companiesView.hidden = view !== 'companies';
@@ -603,13 +608,9 @@ async function switchView(view) {
     await loadReminders();
   }
   if (view === 'kanban') renderKanban(els, state.applications, statusLabels);
-  if (view === 'reports') {
-    renderSectionLoading(els.reportsContent, 'Loading reports');
-    await loadReports();
-  }
-  if (view === 'stats') {
-    renderSectionLoading(els.statsContent, 'Loading stats');
-    await loadStats();
+  if (view === 'insights') {
+    renderSectionLoading(els.insightsContent, 'Loading insights');
+    await loadInsights();
   }
   if (view === 'activity') {
     renderSectionLoading(els.activityTable, 'Loading activity');
@@ -763,14 +764,12 @@ async function loadNotifications() {
   }
 }
 
-async function loadReports() {
-  const payload = await api('/api/reports');
-  if (els.reportsContent) renderReports(els, payload, statusLabels);
-}
-
-async function loadStats() {
-  const payload = await api('/api/stats');
-  if (els.statsContent) renderStats(els, payload);
+async function loadInsights() {
+  const [reportsPayload, statsPayload] = await Promise.all([
+    api('/api/reports'),
+    api('/api/stats')
+  ]);
+  if (els.insightsContent) renderInsights(els, reportsPayload, statsPayload, statusLabels);
 }
 
 async function loadActivity() {
@@ -1162,6 +1161,18 @@ function bindTargetCompanyActions() {
       });
     });
   });
+
+  els.targetCompaniesList?.querySelectorAll('.dropdown-toggle').forEach((button) => {
+    button.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const menu = button.nextElementSibling;
+      const isOpen = menu.classList.contains('open');
+      document.querySelectorAll('.dropdown-menu.open').forEach((m) => {
+        if (m !== menu) m.classList.remove('open');
+      });
+      menu.classList.toggle('open', !isOpen);
+    });
+  });
 }
 
 function resetJobBoardForm() {
@@ -1319,8 +1330,7 @@ function bindHomeWorkspaceElements() {
   bindHomeWorkspaceEvents();
   bindJobBoardActions();
   if (state.view === 'kanban') renderKanban(els, state.applications, statusLabels);
-  if (state.view === 'reports') loadReports();
-  if (state.view === 'stats') loadStats();
+  if (state.view === 'insights') loadInsights();
   if (state.view === 'activity') loadActivity();
   if (state.view === 'reminders') loadReminders();
 }
@@ -2403,8 +2413,7 @@ function unmountInactiveHomeViews(activeView) {
   };
   if (activeView !== 'reminders') clear(els.remindersList);
   if (activeView !== 'kanban') clear(els.kanbanBoard);
-  if (activeView !== 'reports') clear(els.reportsContent);
-  if (activeView !== 'stats') clear(els.statsContent);
+  if (activeView !== 'insights') clear(els.insightsContent);
   if (activeView !== 'activity') {
     clear(els.activityTable);
     if (els.activityPagination) els.activityPagination.innerHTML = '';
