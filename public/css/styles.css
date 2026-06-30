@@ -1352,9 +1352,9 @@ tr:last-child td {
 
 .report-row {
   display: grid;
-  grid-template-columns: 110px 1fr 70px;
+  grid-template-columns: minmax(60px, 100px) 1fr minmax(44px, 62px);
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   margin: 9px 0;
 }
 
@@ -4657,7 +4657,6 @@ input:focus, select:focus, textarea:focus {
 }
 .report-bar i {
   border-radius: 99px !important;
-  background-image: var(--accent-gradient) !important;
 }
 
 /* Fix for row action buttons that contain text (e.g. todo edit/delete buttons) */
