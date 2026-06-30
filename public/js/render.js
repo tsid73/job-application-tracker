@@ -227,6 +227,10 @@ export function renderHomeWorkspace() {
       <section id="settingsView" class="view-panel" hidden>
         <div id="settingsContent" class="settings-grid">
           ${renderSettingsPanel()}
+          <div class="settings-section-divider">
+            <h2 class="settings-section-title"><i class="bi bi-tools"></i> Toolkit</h2>
+            <p class="settings-section-sub">Reference guides and checklists for your job search workflow.</p>
+          </div>
           <div id="toolkitContent" class="toolkit-grid"></div>
         </div>
       </section>

@@ -3202,6 +3202,28 @@ a {
   gap: 14px;
 }
 
+.settings-section-divider {
+  border-top: 2px solid var(--line);
+  padding-top: 24px;
+  margin-top: 10px;
+}
+
+.settings-section-title {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text);
+  margin: 0 0 6px 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.settings-section-sub {
+  font-size: 13px;
+  color: var(--muted);
+  margin: 0 0 16px 0;
+}
+
 .settings-action-grid {
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
 }
