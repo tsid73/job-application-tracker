@@ -224,13 +224,10 @@ export function renderHomeWorkspace() {
         </section>
       </section>
 
-      <section id="toolkitView" class="view-panel toolkit-view" hidden>
-        <div id="toolkitContent" class="toolkit-grid"></div>
-      </section>
-
       <section id="settingsView" class="view-panel" hidden>
         <div id="settingsContent" class="settings-grid">
           ${renderSettingsPanel()}
+          <div id="toolkitContent" class="toolkit-grid"></div>
         </div>
       </section>
     </section>

@@ -436,6 +436,12 @@ h3 {
   gap: 8px;
 }
 
+.sidebar-footer-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
 .sidebar-btn {
   display: flex;
   align-items: center;
@@ -448,6 +454,7 @@ h3 {
   background: var(--accent);
   color: #fff;
   border-color: transparent;
+  flex: 1;
 }
 
 .sidebar-btn.primary-btn:hover {

@@ -79,7 +79,6 @@ const workspaceKeys = [
   'activityView',
   'boardsView',
   'companiesView',
-  'toolkitView',
   'settingsView',
   'remindersList',
   'kanbanBoard',
@@ -158,7 +157,6 @@ export function bindWorkspaceElements(root = els.workspaceRoot) {
   els.activityView = root.querySelector('#activityView');
   els.boardsView = root.querySelector('#boardsView');
   els.companiesView = root.querySelector('#companiesView');
-  els.toolkitView = root.querySelector('#toolkitView');
   els.settingsView = root.querySelector('#settingsView');
   els.remindersList = root.querySelector('#remindersList');
   els.kanbanBoard = root.querySelector('#kanbanBoard');

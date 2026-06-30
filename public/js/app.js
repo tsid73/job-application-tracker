@@ -632,7 +632,6 @@ async function switchView(view) {
   els.activityView.hidden = view !== 'activity';
   els.boardsView.hidden = view !== 'boards';
   els.companiesView.hidden = view !== 'companies';
-  els.toolkitView.hidden = view !== 'toolkit';
   els.settingsView.hidden = view !== 'settings';
 
   unmountInactiveHomeViews(view);
@@ -658,8 +657,7 @@ async function switchView(view) {
     renderSectionLoading(els.targetCompaniesList, 'Loading companies');
     await loadTargetCompanies();
   }
-  if (view === 'toolkit') renderToolkit(els);
-  if (view === 'settings') bindSettingsActions();
+  if (view === 'settings') { bindSettingsActions(); renderToolkit(els); }
 }
 
 async function jumpToFilteredList({ status = '', view = '', dateFrom = '', dateTo = '', month = '' } = {}) {

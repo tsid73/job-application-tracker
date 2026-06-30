@@ -33,14 +33,15 @@
           <button class="nav-item" type="button" data-view="boards" aria-pressed="false"><span class="nav-ic" aria-hidden="true"><i class="bi bi-grid-3x3-gap"></i></span><span class="nav-text">Job Boards</span></button>
           <button class="nav-item" type="button" data-view="companies" aria-pressed="false"><span class="nav-ic" aria-hidden="true"><i class="bi bi-buildings"></i></span><span class="nav-text">Company List</span></button>
           <button class="nav-item" type="button" data-view="settings" aria-pressed="false"><span class="nav-ic" aria-hidden="true"><i class="bi bi-gear"></i></span><span class="nav-text">Settings</span></button>
-          <button class="nav-item" type="button" data-view="toolkit" aria-pressed="false"><span class="nav-ic" aria-hidden="true"><i class="bi bi-tools"></i></span><span class="nav-text">Toolkit</span></button>
         </nav>
 
         <div class="sidebar-footer">
           <input id="importCsvInput" type="file" accept=".csv,text/csv" hidden>
           <input id="restoreBackupInput" type="file" accept=".json,application/json" hidden>
-          <button id="cvManagerButton" class="secondary sidebar-btn" type="button"><span class="nav-ic" aria-hidden="true"><i class="bi bi-file-earmark-person"></i></span><span class="nav-text">CVs</span></button>
-          <button id="newApplicationButton" class="sidebar-btn primary-btn" type="button"><span class="nav-ic" aria-hidden="true"><i class="bi bi-plus-lg"></i></span><span class="nav-text">New Application</span></button>
+          <div class="sidebar-footer-row">
+            <button id="cvManagerButton" class="secondary icon-button" type="button" title="Manage CVs"><i class="bi bi-file-earmark-person"></i></button>
+            <button id="newApplicationButton" class="sidebar-btn primary-btn" type="button"><span class="nav-ic" aria-hidden="true"><i class="bi bi-plus-lg"></i></span><span class="nav-text">New Application</span></button>
+          </div>
         </div>
       </aside>
 
