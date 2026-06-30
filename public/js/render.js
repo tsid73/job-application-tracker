@@ -256,7 +256,7 @@ export function renderInsights(els, report, stats, statusLabels, mode = 'active'
   const tagHtml = stats.tags.map((row) => {
     let toIntStr = '';
     const rateVal = Math.round((Number(row.interviewed || 0) / Number(row.applications || 1)) * 100);
-    if (rateVal > 0) toIntStr = `${rateVal}% to int`;
+    if (rateVal > 0) toIntStr = `${rateVal}% interview rate`;
     return reportRow(row.tag, Number(row.applications), tagMax, {}, toIntStr, '--focus');
   }).join('') || '<p>No tag data.</p>';
 
