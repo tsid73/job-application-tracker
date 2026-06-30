@@ -4271,9 +4271,11 @@ button.secondary:hover {
 .nav-item.is-active {
   background-color: var(--sidebar-active) !important;
   color: #3b82f6 !important;
-  border-left: 3px solid #3b82f6;
-  border-top-left-radius: 0;
-  border-bottom-left-radius: 0;
+}
+
+.nav-item:focus,
+.nav-item:focus-visible {
+  outline: none !important;
 }
 
 
