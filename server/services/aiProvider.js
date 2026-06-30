@@ -143,7 +143,15 @@ class MockAIProvider extends AIProvider {
   }
 }
 
+const GEMINI_BASE_URL = 'https://generativelanguage.googleapis.com/v1beta/openai';
+const OLLAMA_BASE_URL = 'http://localhost:11434/v1';
+
 class OpenAICompatibleProvider extends AIProvider {
+  constructor(baseUrl) {
+    super();
+    this.baseUrl = baseUrl;
+  }
+
   async generateCV(input) {
     return this.chat(buildGenerationPrompt('tailored_cv', input));
   }
@@ -166,12 +174,12 @@ class OpenAICompatibleProvider extends AIProvider {
 
   async chat(prompt) {
     if (!config.aiApiKey) {
-      const error = new Error('AI API key is missing. Set AI_API_KEY or use the mock provider.');
+      const error = new Error('AI API key is missing. Set AI_API_KEY in your .env file.');
       error.statusCode = 400;
       throw error;
     }
 
-    const response = await fetch(`${config.aiApiBaseUrl.replace(/\/$/, '')}/chat/completions`, {
+    const response = await fetch(`${this.baseUrl.replace(/\/$/, '')}/chat/completions`, {
       method: 'POST',
       headers: {
         'content-type': 'application/json',
@@ -205,7 +213,12 @@ class OpenAICompatibleProvider extends AIProvider {
 }
 
 export function createAIProvider(providerName = config.aiProvider) {
-  if (providerName === 'openai-compatible' || providerName === 'gemini') return new OpenAICompatibleProvider();
+  if (providerName === 'openai-compatible' || providerName === 'gemini') {
+    // Respect explicit AI_API_BASE_URL if set; otherwise derive from the requested provider.
+    const baseUrl = process.env.AI_API_BASE_URL ||
+      (providerName === 'gemini' ? GEMINI_BASE_URL : OLLAMA_BASE_URL);
+    return new OpenAICompatibleProvider(baseUrl);
+  }
   return new MockAIProvider();
 }
 
