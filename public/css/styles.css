@@ -1351,48 +1351,37 @@ tr:last-child td {
 }
 
 .report-row {
-  display: grid;
-  grid-template-columns: minmax(60px, 100px) 1fr minmax(44px, 62px);
+  display: flex;
+  justify-content: space-between;
   align-items: center;
   gap: 8px;
-  margin: 9px 0;
+  margin: 2px 0;
+  padding: 5px 8px;
+  border-radius: 6px;
+  transition: background 0.12s ease;
+  background: linear-gradient(
+    to right,
+    color-mix(in srgb, var(--row-color, transparent) 18%, transparent) var(--row-fill, 0%),
+    transparent var(--row-fill, 0%)
+  );
 }
 
 button.report-row {
   width: 100%;
   border: 0;
-  background: transparent;
-  padding: 4px 6px;
-  margin: 5px 0;
-  border-radius: 8px;
   font: inherit;
   color: inherit;
   text-align: left;
   cursor: pointer;
-  transition: background 0.12s ease;
-}
-
-button.report-row span {
-  text-align: left;
 }
 
 button.report-row:hover,
 button.report-row:focus-visible {
-  background: var(--accent-tint);
-}
-
-.report-bar {
-  height: 10px;
-  overflow: hidden;
-  border-radius: 999px;
-  background: #e5e7eb;
-}
-
-.report-bar i {
-  display: block;
-  height: 100%;
-  border-radius: inherit;
-  background: var(--accent);
+  background: linear-gradient(
+    to right,
+    color-mix(in srgb, var(--row-color, var(--accent)) 28%, transparent) var(--row-fill, 0%),
+    var(--accent-tint) var(--row-fill, 0%)
+  );
 }
 
 .upcoming-list {
@@ -4649,15 +4638,6 @@ input:focus, select:focus, textarea:focus {
   box-shadow: 0 0 0 3px var(--accent-tint) !important;
 }
 
-/* Funnel & Insights Bars Styling */
-.report-bar {
-  height: 8px !important;
-  background: var(--bg-deep) !important;
-  border-radius: 99px !important;
-}
-.report-bar i {
-  border-radius: 99px !important;
-}
 
 /* Fix for row action buttons that contain text (e.g. todo edit/delete buttons) */
 .row-actions button:not(.icon-button) {

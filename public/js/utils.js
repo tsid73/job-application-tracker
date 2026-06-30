@@ -86,12 +86,13 @@ export function reportRow(label, value, max, jump = null, totalOrExtra = null, c
     }
   }
 
-  const colorStyle = color ? `background: var(${color});` : '';
+  const rowStyle = color && percent
+    ? ` style="--row-fill:${percent}%;--row-color:var(${color});"`
+    : '';
 
   return `
-    <${tag}${typeAttr} class="report-row${jump ? ' report-row-jump' : ''}"${jumpAttrs}>
+    <${tag}${typeAttr} class="report-row${jump ? ' report-row-jump' : ''}"${jumpAttrs}${rowStyle}>
       <span>${escapeHtml(label)}</span>
-      <div class="report-bar"><i style="width:${percent}%;${colorStyle}"></i></div>
       <strong>${displayVal}</strong>
     </${tag}>
   `;
