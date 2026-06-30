@@ -1106,17 +1106,7 @@ tr:last-child td {
 }
 
 .panel-kicker {
-  display: inline-flex;
-  width: fit-content;
-  margin-bottom: 8px;
-  color: var(--accent);
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  background: var(--bg);
-  padding: 4px 10px;
-  border-radius: 99px;
+  display: none;
 }
 
 .reminder-card {
@@ -2546,9 +2536,9 @@ a {
 }
 
 .hero-inline-meta {
-  display: flex;
-  flex-wrap: wrap;
-  column-gap: 32px;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  column-gap: 24px;
   row-gap: 16px;
   padding-top: 16px;
   margin-top: 8px;
@@ -2581,64 +2571,43 @@ a {
 }
 
 .detail-tabbar {
-  display: flex;
-  gap: 24px;
-  padding: 0 16px;
-  border-bottom: 1px solid var(--line);
-  background: transparent;
-  overflow-x: auto;
-  position: sticky;
-  top: 0;
-  z-index: 5;
-  margin-bottom: 16px;
+  display: inline-flex;
+  gap: 4px;
+  padding: 4px;
+  border-radius: 12px;
+  background: rgba(0, 0, 0, 0.04);
+  margin-bottom: 8px;
+}
+.detail-tabbar::-webkit-scrollbar {
+  display: none;
 }
 
 .detail-tab {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: 12px 4px;
+  gap: 8px;
+  padding: 8px 16px;
+  border-radius: 8px;
   color: var(--muted);
   text-decoration: none;
   font-weight: 500;
   font-size: 14px;
-  border-bottom: 2px solid transparent;
   transition: all 0.2s ease;
-  margin-bottom: -1px;
 }
 
 .detail-tab:hover {
   color: var(--text);
-  border-bottom-color: var(--line);
+  background: rgba(0, 0, 0, 0.02);
 }
 
 .detail-tab.is-active {
   color: var(--primary);
-  border-bottom-color: var(--primary);
-  background: transparent;
+  background: var(--card);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.06);
+  font-weight: 600;
 }
 
-.tab-icon {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 22px;
-  height: 22px;
-  border-radius: 999px;
-  background: var(--accent-soft);
-  font-size: 11px;
-  font-weight: 800;
-}
-
-.detail-tab.is-active {
-  background: var(--sidebar);
-  color: white;
-  box-shadow: var(--shadow-sm);
-}
-
-.detail-tab.is-active .tab-icon {
-  background: rgba(255, 255, 255, 0.18);
-}
 
 .detail-tab-panel,
 .route-card {
@@ -4290,9 +4259,7 @@ button.secondary:hover {
   border-bottom-left-radius: 0;
 }
 
-.nav-item.is-active i {
-  color: var(--sidebar-text) !important;
-}
+
 
 /* Clean, modern tables */
 table {
@@ -4724,4 +4691,37 @@ input:focus, select:focus, textarea:focus {
   font-weight: 600;
   color: var(--muted);
   box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+}
+
+/* Smooth Transitions & Dialog Animations */
+button, 
+.icon-button, 
+.button-link, 
+a.button-link, 
+.route-card, 
+.artifact-card, 
+.stack-item, 
+.hero-action-row button, 
+.detail-tab {
+  transition: all 0.2s ease;
+}
+
+dialog {
+  opacity: 0;
+  transform: scale(0.95);
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+dialog[open] {
+  opacity: 1;
+  transform: scale(1);
+}
+
+dialog::backdrop {
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+dialog[open]::backdrop {
+  opacity: 1;
 }

@@ -1294,8 +1294,16 @@ async function renderCurrentRoute() {
   }
 
   if (state.route.page === 'application') {
-    mountWorkspace(renderRouteLoadingState('Loading application', 'Fetching application'), 'loading');
-    const payload = await api(`/api/applications/${state.route.applicationId}`).catch(() => null);
+    const isSameApp = state.currentApplication && state.currentApplication.application && state.currentApplication.application.id === state.route.applicationId;
+    const previousScrollY = window.scrollY;
+
+    let payload = state.currentApplication;
+    
+    if (!isSameApp) {
+      mountWorkspace(renderRouteLoadingState('Loading application', 'Fetching application'), 'loading');
+      payload = await api(`/api/applications/${state.route.applicationId}`).catch(() => null);
+    }
+
     if (!payload) {
       mountWorkspace(buildRouteErrorState('Application not found', 'This application route no longer points to an available record.'), 'error');
       return;
@@ -1312,6 +1320,11 @@ async function renderCurrentRoute() {
     bindWorkspaceElements();
     assertSingleWorkspaceView('application');
     bindApplicationPageActions(payload);
+    
+    if (isSameApp) {
+      window.scrollTo(0, previousScrollY);
+    }
+
     if (state.route.tab === 'content' && state.route.documentId) {
       const document = payload.ai_documents.find((item) => Number(item.id) === Number(state.route.documentId));
       if (document) {

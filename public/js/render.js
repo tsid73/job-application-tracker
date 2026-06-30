@@ -999,9 +999,9 @@ export function renderApplicationPage(els, payload, statusLabels, viewState) {
         </div>
       </section>
       <nav class="detail-tabbar" aria-label="Application sections">
-        ${renderDetailTab(application.id, 'workflow', 'Workflow', activeTab, 'W')}
-        ${renderDetailTab(application.id, 'content', 'Content', activeTab, 'C')}
-        ${renderDetailTab(application.id, 'history', 'History', activeTab, 'H')}
+        ${renderDetailTab(application.id, 'workflow', 'Workflow', activeTab, 'signpost-split')}
+        ${renderDetailTab(application.id, 'content', 'Content', activeTab, 'file-earmark-text')}
+        ${renderDetailTab(application.id, 'history', 'History', activeTab, 'clock-history')}
       </nav>
       <section class="detail-tab-panel">
         ${tabBodies[activeTab] || tabBodies.workflow}
@@ -1552,11 +1552,11 @@ function renderInlineMeta(label, value, muted = false) {
   `;
 }
 
-function renderDetailTab(applicationId, key, label, activeTab, icon) {
+function renderDetailTab(applicationId, key, label, activeTab, iconName) {
   const isActive = activeTab === key;
   return `
     <a class="detail-tab${isActive ? ' is-active' : ''}" href="/applications/${applicationId}?tab=${key}" ${isActive ? 'aria-current="page"' : ''}>
-      <span class="tab-icon" aria-hidden="true">${escapeHtml(icon || label.slice(0, 1))}</span>
+      <i class="bi bi-${escapeAttribute(iconName)}" aria-hidden="true"></i>
       <span>${escapeHtml(label)}</span>
     </a>
   `;
