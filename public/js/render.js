@@ -237,7 +237,7 @@ export function renderHomeWorkspace() {
   `;
 }
 
-export function renderInsights(els, report, stats, statusLabels) {
+export function renderInsights(els, report, stats, statusLabels, mode = 'active') {
   const total = Number(stats.totals.total || 0);
   const funnelRows = [
     { label: 'Applied', count: total },
@@ -272,6 +272,10 @@ export function renderInsights(els, report, stats, statusLabels) {
   };
 
   els.insightsContent.innerHTML = `
+    <div class="insights-toolbar" style="grid-column: 1 / -1; display: flex; justify-content: flex-end; gap: 6px; margin-bottom: 4px;">
+      <button class="${mode === 'active' ? '' : 'secondary'}" data-insights-mode="active" type="button">Active Pipeline</button>
+      <button class="${mode === 'all' ? '' : 'secondary'}" data-insights-mode="all" type="button">All Time</button>
+    </div>
     <!-- Top Row -->
     <section class="report-panel wide" style="grid-column: 1 / -1; display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px;">
       <div>
@@ -503,14 +507,25 @@ function renderStaleSignal(application) {
   return `<span class="muted-text">${formatDate(application.last_touched_date)}</span>`;
 }
 
+function isUrgentNotification(item) {
+  if (item.type === 'follow_up') return false;
+  const d = Number(item.days_remaining);
+  return d >= -3 && d <= 1;
+}
+
 export function renderNotifications(els, notifications, expanded = false) {
   els.notificationsPanel.hidden = notifications.length === 0;
   if (!notifications.length) {
     els.notificationsPanel.innerHTML = '';
+    els.notificationsPanel.classList.remove('has-urgent');
     return;
   }
 
-  const nextNotification = notifications[0];
+  const sorted = [...notifications].sort((a, b) => (isUrgentNotification(a) ? 0 : 1) - (isUrgentNotification(b) ? 0 : 1));
+  const anyUrgent = sorted.some(isUrgentNotification);
+  els.notificationsPanel.classList.toggle('has-urgent', anyUrgent);
+
+  const nextNotification = sorted[0];
   const preview = nextNotification
     ? `${nextNotification.company_name}: ${nextNotification.message}${nextNotification.due_date ? ` (${formatDate(nextNotification.due_date)})` : ''}`
     : '';
@@ -520,7 +535,7 @@ export function renderNotifications(els, notifications, expanded = false) {
       <div class="notifications-header">
         <button class="notifications-toggle" type="button" data-toggle-notifications aria-expanded="${expanded ? 'true' : 'false'}">
           <span class="notifications-toggle-copy">
-            <strong>Priority reminders</strong>
+            <strong>Priority reminders${anyUrgent ? ' ⚠' : ''}</strong>
             <span>${expanded ? 'Hide reminders' : escapeHtml(preview)}</span>
           </span>
           <span class="notifications-action">
@@ -530,8 +545,11 @@ export function renderNotifications(els, notifications, expanded = false) {
         </button>
       </div>
       <div class="notifications-grid" ${expanded ? '' : 'hidden'}>
-        ${notifications.map((item) => `
-          <article class="notification-card ${item.type === 'follow_up' ? 'follow-up' : item.type === 'todo' ? 'todo' : 'interview'}">
+        ${sorted.map((item) => {
+          const urgent = isUrgentNotification(item);
+          const typeClass = item.type === 'follow_up' ? 'follow-up' : item.type === 'todo' ? 'todo' : 'interview';
+          return `
+          <article class="notification-card ${typeClass}${urgent ? ' urgent-card' : ''}">
             <div>
               <strong>${escapeHtml(item.company_name)}</strong>
               <span>${escapeHtml(item.message)}</span>
@@ -548,7 +566,7 @@ export function renderNotifications(els, notifications, expanded = false) {
               <button class="secondary" type="button" data-notification-detail="${item.id}">Open</button>
             </div>
           </article>
-        `).join('')}
+        `}).join('')}
       </div>
     </div>
   `;

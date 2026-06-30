@@ -163,13 +163,14 @@ export function createReadApi({ pool, audit }) {
       };
     },
 
-    async getReports() {
+    async getReports(url) {
+      const allTime = url?.searchParams.get('mode') === 'all';
       const [statusCounts, monthlyCounts, lifecycleCounts, upcoming] = await Promise.all([
         pool.query(
           `
             SELECT status, count(*)::int AS count
             FROM applications
-            WHERE archived_at IS NULL
+            ${allTime ? '' : 'WHERE archived_at IS NULL'}
             GROUP BY status
             ORDER BY status
           `

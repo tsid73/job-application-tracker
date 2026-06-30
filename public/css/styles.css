@@ -649,6 +649,20 @@ main {
   background: rgba(240, 252, 247, 0.9);
 }
 
+.notifications-panel.has-urgent {
+  border-left-color: var(--cls);
+  background: rgba(254, 242, 242, 0.6);
+}
+
+.notification-card.urgent-card {
+  border-left: 3px solid var(--cls);
+  background: rgba(254, 242, 242, 0.5);
+}
+
+.notifications-grid .notification-card:not(.urgent-card) {
+  opacity: 0.65;
+}
+
 .notification-card > div:first-child {
   display: grid;
   gap: 4px;
@@ -1075,6 +1089,12 @@ tr:last-child td {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
   gap: 12px;
+  align-items: stretch;
+}
+
+.report-panel-monthly {
+  max-height: 350px;
+  overflow-y: auto;
 }
 
 .boards-layout,
@@ -4034,10 +4054,10 @@ a {
   font-weight: 700;
   letter-spacing: 0.5px;
 }
-.badge-app { background: var(--active-bg); color: var(--active-text); }
-.badge-int { background: #fbf4e6; color: #a67215; }
-.badge-act { background: #e6f4ea; color: #1e7033; }
-.badge-cls { background: var(--closed-bg); color: var(--closed-text); }
+.badge-app { background: var(--app); color: white; }
+.badge-int { background: var(--int); color: white; }
+.badge-act { background: var(--act); color: white; }
+.badge-cls { background: var(--cls); color: white; }
 .badge-default { background: var(--bg-deep); color: var(--muted); }
 
 .calendar-event {
@@ -4057,6 +4077,14 @@ a {
   color: var(--text);
   line-height: 1.2;
 }
+.calendar-event.badge-app { background: var(--app); border-color: transparent; }
+.calendar-event.badge-int { background: var(--int); border-color: transparent; }
+.calendar-event.badge-act { background: var(--act); border-color: transparent; }
+.calendar-event.badge-cls { background: var(--cls); border-color: transparent; }
+.calendar-event.badge-app .event-text,
+.calendar-event.badge-int .event-text,
+.calendar-event.badge-act .event-text,
+.calendar-event.badge-cls .event-text { color: white; }
 
 /* Animations */
 .kanban-card {

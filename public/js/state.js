@@ -57,7 +57,8 @@ export const state = {
     latestOnly: false,
     sort: 'newest'
   },
-  toasts: []
+  toasts: [],
+  insightsMode: 'active'
 };
 
 export const statusLabels = {

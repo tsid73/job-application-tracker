@@ -71,7 +71,7 @@ const routeApi = createApiRouter({
   }),
   getReminders: async (req, res) => sendJson(res, 200, await readApi.getReminders()),
   getNotifications: async (req, res) => sendJson(res, 200, await readApi.getNotifications()),
-  getReports: async (req, res) => sendJson(res, 200, await readApi.getReports()),
+  getReports: async (req, res, url) => sendJson(res, 200, await readApi.getReports(url)),
   getActivity: async (req, res, url) => sendJson(res, 200, await readApi.getActivity(url)),
   deleteActivityLogs,
   getAudit: async (req, res, url) => sendJson(res, 200, await readApi.getAudit(url)),
@@ -623,12 +623,14 @@ function icsEscape(value) {
     .replace(/\r?\n/g, '\\n');
 }
 
-async function getStats(req, res) {
+async function getStats(req, res, url) {
+  const allTime = url?.searchParams.get('mode') === 'all';
+
   const totals = await pool.query(
     `
       SELECT count(*)::int AS total,
         count(*) FILTER (WHERE archived_at IS NULL)::int AS active,
-        count(*) FILTER (WHERE archived_at IS NULL AND status = 'ghosted')::int AS ghosted
+        count(*) FILTER (WHERE ${allTime ? 'TRUE' : 'archived_at IS NULL'} AND status = 'ghosted')::int AS ghosted
       FROM applications
     `
   );
@@ -643,7 +645,7 @@ async function getStats(req, res) {
         count(DISTINCT sh.application_id) FILTER (WHERE sh.to_status IN ('interview_scheduled', 'offer', 'accepted'))::int AS responded
       FROM status_history sh
       JOIN applications a ON a.id = sh.application_id
-      WHERE a.archived_at IS NULL
+      ${allTime ? '' : 'WHERE a.archived_at IS NULL'}
     `
   );
 
@@ -654,14 +656,14 @@ async function getStats(req, res) {
           SELECT min(sh.changed_at)::date - a.applied_date AS days
           FROM applications a
           JOIN status_history sh ON sh.application_id = a.id AND sh.to_status = 'interview_scheduled' AND sh.from_status IS NOT NULL
-          WHERE a.applied_date IS NOT NULL AND a.archived_at IS NULL
+          WHERE a.applied_date IS NOT NULL ${allTime ? '' : 'AND a.archived_at IS NULL'}
           GROUP BY a.id, a.applied_date
         ) interview_days) AS avg_days_to_interview,
         (SELECT round(avg(days))::int FROM (
           SELECT min(sh.changed_at)::date - a.applied_date AS days
           FROM applications a
           JOIN status_history sh ON sh.application_id = a.id AND sh.to_status = 'rejected' AND sh.from_status IS NOT NULL
-          WHERE a.applied_date IS NOT NULL AND a.archived_at IS NULL
+          WHERE a.applied_date IS NOT NULL ${allTime ? '' : 'AND a.archived_at IS NULL'}
           GROUP BY a.id, a.applied_date
         ) rejection_days) AS avg_days_to_rejection
     `
@@ -678,7 +680,7 @@ async function getStats(req, res) {
       FROM tags t
       JOIN application_tags at ON at.tag_id = t.id
       JOIN applications a ON a.id = at.application_id
-      WHERE a.archived_at IS NULL
+      ${allTime ? '' : 'WHERE a.archived_at IS NULL'}
       GROUP BY t.name
       ORDER BY applications DESC, t.name
       LIMIT 12

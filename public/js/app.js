@@ -153,6 +153,16 @@ function bindGlobalEvents() {
     }
   });
 
+  document.addEventListener('click', (event) => {
+    const btn = event.target.closest('[data-insights-mode]');
+    if (!btn) return;
+    const mode = btn.dataset.insightsMode;
+    if (state.insightsMode === mode) return;
+    state.insightsMode = mode;
+    renderSectionLoading(els.insightsContent, 'Loading insights');
+    loadInsights().catch((err) => showToast(err.message, 'error'));
+  });
+
   window.addEventListener('popstate', () => {
     renderCurrentRoute().catch((error) => {
       showToast(error.message, 'error');
@@ -789,11 +799,13 @@ async function loadNotifications() {
 }
 
 async function loadInsights() {
+  const mode = state.insightsMode;
+  const qs = mode === 'all' ? '?mode=all' : '';
   const [reportsPayload, statsPayload] = await Promise.all([
-    api('/api/reports'),
-    api('/api/stats')
+    api(`/api/reports${qs}`),
+    api(`/api/stats${qs}`)
   ]);
-  if (els.insightsContent) renderInsights(els, reportsPayload, statsPayload, statusLabels);
+  if (els.insightsContent) renderInsights(els, reportsPayload, statsPayload, statusLabels, mode);
 }
 
 async function loadActivity() {
