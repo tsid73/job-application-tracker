@@ -1,6 +1,6 @@
 /**
  * Enriches existing test data for stress-testing the insights page.
- * Run while server is stopped: node scripts/update-test-data.js
+ * Run while server is stopped: node --env-file=.env.development scripts/update-test-data.js
  */
 import { pool } from '../server/db/pool.js';
 
