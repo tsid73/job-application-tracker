@@ -5,6 +5,7 @@ import {
   buildApplicationRow,
   renderActivity,
   renderApplicationCVSelect,
+  renderApplicationPagination,
   renderDocumentContent,
   renderApplicationPage,
   renderApplications,
@@ -34,7 +35,7 @@ const aiEndpoints = {
 
 bindGlobalEvents();
 
-Promise.all([loadApplications(), loadCVs(), loadSavedFilters(), loadReminders(), loadNotifications(), loadJobBoards(), loadTargetCompanies()])
+Promise.all([loadApplications(), loadSavedFilters(), loadNotifications()])
   .then(async () => {
     await loadAppConfig();
     await renderCurrentRoute();
@@ -181,21 +182,25 @@ function bindHomeWorkspaceEvents() {
   els.targetCompanyOpenButton?.addEventListener('click', () => openTargetCompanyDialog());
   els.search?.addEventListener('input', debounce(() => {
     state.filters.search = els.search.value.trim();
+    state.filters.page = 1;
     els.savedFilterSelect.value = '';
     loadApplications();
   }, 250));
   els.statusFilter?.addEventListener('change', () => {
     state.filters.status = els.statusFilter.value;
+    state.filters.page = 1;
     els.savedFilterSelect.value = '';
     loadApplications();
   });
   els.tagFilter?.addEventListener('input', debounce(() => {
     state.filters.tag = els.tagFilter.value.trim();
+    state.filters.page = 1;
     els.savedFilterSelect.value = '';
     loadApplications();
   }, 250));
   els.archiveFilter?.addEventListener('change', () => {
     state.filters.archived = els.archiveFilter.value;
+    state.filters.page = 1;
     els.savedFilterSelect.value = '';
     loadApplications();
   });
@@ -205,6 +210,7 @@ function bindHomeWorkspaceEvents() {
       showToast('From date cannot be after To date.');
     }
     state.filters.dateFrom = els.dateFromFilter.value;
+    state.filters.page = 1;
     els.savedFilterSelect.value = '';
     loadApplications();
   });
@@ -214,6 +220,7 @@ function bindHomeWorkspaceEvents() {
       showToast('To date cannot be before From date.');
     }
     state.filters.dateTo = els.dateToFilter.value;
+    state.filters.page = 1;
     els.savedFilterSelect.value = '';
     loadApplications();
   });
@@ -224,6 +231,7 @@ function bindHomeWorkspaceEvents() {
     state.filters.archived = 'false';
     state.filters.dateFrom = '';
     state.filters.dateTo = '';
+    state.filters.page = 1;
     if (els.search) els.search.value = '';
     if (els.statusFilter) els.statusFilter.value = '';
     if (els.tagFilter) els.tagFilter.value = '';
@@ -279,6 +287,12 @@ function bindHomeWorkspaceEvents() {
     if (checkbox.checked) state.selectedIds.add(id);
     else state.selectedIds.delete(id);
     updateSelectionUI();
+  });
+  els.applicationPagination?.addEventListener('click', (event) => {
+    const button = event.target.closest('[data-app-page]');
+    if (!button) return;
+    state.filters.page = Number(button.dataset.appPage);
+    loadApplications();
   });
   els.activitySearch?.addEventListener('input', debounce(() => {
     state.activity.search = els.activitySearch.value.trim();
@@ -699,20 +713,28 @@ function applicationQueryParams() {
   if (state.filters.dateFrom) params.set('dateFrom', state.filters.dateFrom);
   if (state.filters.dateTo) params.set('dateTo', state.filters.dateTo);
   params.set('archived', state.filters.archived);
+  if (state.filters.page > 1) params.set('page', state.filters.page);
   return params;
 }
 
 async function loadApplications() {
   const payload = await api(`/api/applications?${applicationQueryParams().toString()}`);
   state.applications = payload.applications;
+  state.applicationTotal = payload.total ?? state.applications.length;
   if (els.table) renderApplications(els, state, statusOptions);
+  if (els.applicationPagination) renderApplicationPagination(els, state);
   updateSelectionUI();
   if (state.view === 'kanban' && els.kanbanBoard) renderKanban(els, state.applications, statusLabels);
 }
 
 async function refreshApplicationRow(id) {
-  const payload = await api(`/api/applications?${applicationQueryParams().toString()}`);
-  state.applications = payload.applications;
+  const payload = await api(`/api/applications?id=${id}`);
+  const updated = payload.applications[0];
+  if (updated) {
+    const idx = state.applications.findIndex((item) => item.id === id);
+    if (idx !== -1) state.applications[idx] = updated;
+    else state.applications.push(updated);
+  }
   const row = els.table?.querySelector(`tr[data-id="${id}"]`);
   const application = state.applications.find((item) => item.id === id);
   if (!row || !application) {
@@ -1352,6 +1374,16 @@ function mountWorkspace(markup, viewName) {
   assertSingleWorkspaceView(viewName);
 }
 
+function buildStatChips(counts) {
+  const chips = [
+    counts.active    && `<span class="stat-chip stat-active"><span class="stat-dot"></span>${counts.active} Active</span>`,
+    counts.interview && `<span class="stat-chip stat-interview"><span class="stat-dot"></span>${counts.interview} Interviews</span>`,
+    counts.offer     && `<span class="stat-chip stat-offer"><span class="stat-dot"></span>${counts.offer} Offers</span>`,
+    counts.accepted  && `<span class="stat-chip stat-accepted"><span class="stat-dot"></span>${counts.accepted} Accepted</span>`,
+  ].filter(Boolean);
+  return chips.length ? chips.join('') : '';
+}
+
 function bindHomeWorkspaceElements() {
   bindWorkspaceElements();
   if (els.filterPanel) {
@@ -1360,9 +1392,10 @@ function bindHomeWorkspaceElements() {
   syncContentHeader();
   if (els.summary) {
     const interviews = state.applications.filter((item) => item.status === 'interview_scheduled').length;
-    const archived = state.applications.filter((item) => item.archived_at).length;
-    const viewName = { true: 'archived', all: 'total', closed: 'closed', false: 'active' }[state.filters.archived] || 'active';
-    els.summary.textContent = `${state.applications.length} ${viewName}, ${interviews} interviews scheduled, ${archived} archived shown`;
+    const active = state.applications.filter((item) => item.status === 'applied').length;
+    const offers = state.applications.filter((item) => item.status === 'offer').length;
+    const accepted = state.applications.filter((item) => item.status === 'accepted').length;
+    els.summary.innerHTML = buildStatChips({ active, interview: interviews, offer: offers, accepted });
   }
   if (els.search) els.search.value = state.filters.search;
   if (els.statusFilter) els.statusFilter.value = state.filters.status;
@@ -1486,53 +1519,56 @@ function bindApplicationPageActions(payload) {
     });
   });
 
-  root.querySelector('[data-preparation-form]')?.addEventListener('submit', async (event) => {
-    event.preventDefault();
-    const form = new FormData(event.target);
-    const values = ['about_company', 'company_values', 'application_notes'].map((key) => String(form.get(key) || '').trim());
-    if (!values.some(Boolean)) {
-      setFormError(event.target, 'Add at least one note before saving.');
-      showToast('Validation error.', 'warning');
-      return;
-    }
-    await withAsyncForm(event.target, async () => {
-      await api(`/api/applications/${application.id}/preparation`, {
-        method: 'PUT',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
-          about_company: String(form.get('about_company') || '').trim(),
-          company_values: String(form.get('company_values') || '').trim(),
-          application_notes: String(form.get('application_notes') || '').trim()
-        })
-      });
-      showToast('Research notes saved.');
-      await renderCurrentRoute();
+  root.querySelector('[data-research-edit-all]')?.addEventListener('click', (event) => {
+    const btn = event.currentTarget;
+    const appId = btn.dataset.researchEditAll;
+    const dlg = document.createElement('dialog');
+    dlg.className = 'modal-md';
+    dlg.innerHTML = `
+      <form method="dialog">
+        <div class="dialog-header">
+          <h2>Edit Company Notes</h2>
+          <button class="secondary" type="button" data-close-dialog>Close</button>
+        </div>
+        <div class="dialog-body" style="display:flex;flex-direction:column;gap:12px;padding:16px 24px">
+          <label class="wide"><span>About The Company</span><textarea name="about_company" rows="4" placeholder="Products, market, competitors, roadmap, team shape">${escapeHtml(btn.dataset.about || '')}</textarea></label>
+          <label class="wide"><span>Company Values</span><textarea name="company_values" rows="3" placeholder="Culture signals, values, leadership principles">${escapeHtml(btn.dataset.values || '')}</textarea></label>
+          <label class="wide"><span>Application Notes</span><textarea name="application_notes" rows="3" placeholder="Fit summary, risks, strengths, stories to prepare">${escapeHtml(btn.dataset.notes || '')}</textarea></label>
+          <p class="form-error" hidden></p>
+        </div>
+        <div class="dialog-actions">
+          <button class="secondary" type="button" data-close-dialog>Cancel</button>
+          <button type="submit" id="researchSaveBtn">Save</button>
+        </div>
+      </form>`;
+    document.body.appendChild(dlg);
+    dlg.querySelector('[data-close-dialog]')?.addEventListener('click', () => { dlg.close(); dlg.remove(); });
+    dlg.querySelector('[data-close-dialog]:last-of-type')?.addEventListener('click', () => { dlg.close(); dlg.remove(); });
+    dlg.addEventListener('close', () => dlg.remove());
+    dlg.querySelector('form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const fd = new FormData(e.target);
+      const saveBtn = dlg.querySelector('#researchSaveBtn');
+      saveBtn.disabled = true;
+      try {
+        await api(`/api/applications/${appId}/preparation`, {
+          method: 'PUT',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+            about_company: String(fd.get('about_company') || '').trim(),
+            company_values: String(fd.get('company_values') || '').trim(),
+            application_notes: String(fd.get('application_notes') || '').trim()
+          })
+        });
+        showToast('Research notes saved.');
+        dlg.close();
+        await renderCurrentRoute();
+      } catch {
+        showToast('Save failed.', 'warning');
+        saveBtn.disabled = false;
+      }
     });
-  });
-
-  root.querySelectorAll('[data-research-edit]').forEach((button) => {
-    button.addEventListener('click', () => {
-      const field = button.closest('.research-field');
-      const preview = field?.querySelector('[data-research-preview]');
-      const textarea = field?.querySelector('textarea');
-      if (!textarea) return;
-      if (preview) preview.hidden = true;
-      textarea.hidden = false;
-      textarea.focus();
-    });
-  });
-
-  root.querySelectorAll('[data-research-view]').forEach((button) => {
-    button.addEventListener('click', () => {
-      const field = button.closest('.research-field');
-      const textarea = field?.querySelector('textarea');
-      if (!textarea) return;
-      openDetailDialog(button.dataset.researchLabel || 'Notes', `
-        <section class="route-card detail-dialog-card">
-          <p class="description research-view-body">${escapeHtml(textarea.value)}</p>
-        </section>
-      `);
-    });
+    dlg.showModal();
   });
 
   root.querySelector('[data-question-form]')?.addEventListener('submit', async (event) => {
@@ -1592,6 +1628,13 @@ function bindApplicationPageActions(payload) {
   bindContentWorkspaceActions(application.id, payload);
   root.querySelectorAll('[data-date-input]').forEach(attachDateMask);
   bindPreparationActions(application.id, recruiterQuestions, todos, root);
+
+  root.querySelectorAll('[data-tags-expand]').forEach((chip) => {
+    chip.addEventListener('click', () => {
+      const row = chip.closest('.tag-row');
+      if (row) row.dataset.tagsCollapsed = 'false';
+    });
+  });
 }
 
 function bindPreparationActions(applicationId, recruiterQuestions, todos, root) {
@@ -2713,20 +2756,23 @@ function openDocumentPreview(application, document, relatedDocuments = []) {
       <section class="document-viewer-shell">
         <header class="document-viewer-header">
           <div class="document-viewer-header-copy">
-            <div class="panel-kicker">${escapeHtml(formatDocType(document.document_type))}</div>
-            <h3>${escapeHtml(document.title)}</h3>
             <div class="document-card-meta">
               <span class="pill subtle">${escapeHtml(friendlyProviderLabel(document))}</span>
-              <span class="pill info-pill">Version ${versionNumber}${currentIndex === 0 ? ' • Latest' : ''}</span>
-              <span class="pill subtle">${escapeHtml(formatDateTime(document.created_at))}</span>
               ${document.model_name ? `<span class="pill subtle">${escapeHtml(document.model_name)}</span>` : ''}
+              <span class="pill info-pill">Version ${versionNumber}${currentIndex === 0 ? ' · Latest' : ''}</span>
+              <span class="pill subtle">${escapeHtml(formatDateTime(document.created_at))}</span>
             </div>
           </div>
           <div class="document-card-actions document-viewer-actions">
             <a class="button-link secondary" href="${escapeAttribute(document.download_url)}">Download</a>
-            <button type="button" data-preview-copy="${document.id}">Copy Text</button>
+            <button class="secondary" type="button" data-preview-copy="${document.id}">Copy Text</button>
             <button class="secondary" type="button" data-preview-regenerate="${document.id}">Regenerate</button>
-            <button class="danger" type="button" data-preview-delete="${document.id}">Delete</button>
+            <details class="inline-menu">
+              <summary class="button-link tertiary" aria-label="More actions">More</summary>
+              <div class="inline-menu-list">
+                <button class="danger" type="button" data-preview-delete="${document.id}">Delete</button>
+              </div>
+            </details>
           </div>
         </header>
         <div class="document-viewer-layout">
@@ -2737,35 +2783,15 @@ function openDocumentPreview(application, document, relatedDocuments = []) {
           </article>
           <aside class="document-viewer-sidebar">
             <section class="route-card document-viewer-sidecard">
-              <div class="panel-kicker">Document Details</div>
-              <div class="metadata-list">
-                <div class="metadata-row">
-                  <span>Status</span>
-                  <strong>${escapeHtml(document.generation_status || 'completed')}</strong>
-                </div>
-                <div class="metadata-row">
-                  <span>Saved Versions</span>
-                  <strong>${escapeHtml(String(orderedDocuments.length))}</strong>
-                </div>
-                <div class="metadata-row">
-                  <span>Format</span>
-                  <strong>DOCX + Text</strong>
-                </div>
-              </div>
-            </section>
-            <section class="route-card document-viewer-sidecard">
               <div class="section-heading">
-                <div>
-                  <div class="panel-kicker">Versions</div>
-                  <h4>${orderedDocuments.length} saved</h4>
-                </div>
+                <div class="panel-kicker">Versions</div>
                 ${currentIndex !== 0 ? '<button class="secondary" type="button" data-view-restore>Restore</button>' : ''}
               </div>
               <div class="document-viewer-version-list">
                 ${orderedDocuments.map((item, index) => `
                   <article class="document-viewer-version-item ${Number(item.id) === Number(document.id) ? 'is-current' : ''}">
                     <div>
-                      <strong>Version ${orderedDocuments.length - index}${index === 0 ? ' • Latest' : ''}</strong>
+                      <strong>Version ${orderedDocuments.length - index}${index === 0 ? ' · Latest' : ''}</strong>
                       <p>${escapeHtml(formatDateTime(item.created_at))}</p>
                     </div>
                     <div class="document-card-actions">

@@ -8,7 +8,15 @@ export async function api(path, options = {}) {
 
 export function renderTags(tags = []) {
   if (!tags.length) return '';
-  return `<div class="tag-list">${tags.map((tag) => `<span class="tag">${escapeHtml(tag)}</span>`).join('')}</div>`;
+  const visible = tags.slice(0, 5);
+  const hidden = tags.slice(5);
+  return `
+    <div class="tag-row" data-tags-collapsed="${hidden.length > 0 ? 'true' : 'false'}">
+      ${visible.map((tag) => `<span class="tag">${escapeHtml(tag)}</span>`).join('')}
+      ${hidden.length > 0 ? `<span class="tag-more-chip" data-tags-expand>+${hidden.length} more</span>
+      <span class="tag-hidden">${hidden.map((tag) => `<span class="tag">${escapeHtml(tag)}</span>`).join('')}</span>` : ''}
+    </div>
+  `;
 }
 
 export function daysClass(value) {

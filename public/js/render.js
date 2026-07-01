@@ -110,6 +110,7 @@ export function renderHomeWorkspace() {
             <tbody id="applicationsTable"></tbody>
           </table>
           <div id="emptyState" class="empty" hidden>No applications match the current filters.</div>
+          <div id="applicationPagination" class="pagination"></div>
         </section>
         <div id="bulkActionsBar" class="bulk-bar" hidden>
           <strong id="bulkCount">0 selected</strong>
@@ -138,7 +139,6 @@ export function renderHomeWorkspace() {
         <section class="toolbar" aria-label="Activity filters">
           <div class="toolbar-main-row">
             <label>
-              <span>Activity Query</span>
               <input id="activitySearchInput" type="search" placeholder="Company, action, detail">
             </label>
             <button id="activityResetButton" class="icon-button" type="button" aria-label="Clear filters" title="Clear filters" style="align-self: flex-end; margin-bottom: 4px;">
@@ -184,7 +184,6 @@ export function renderHomeWorkspace() {
         <section class="detail-section boards-surface">
           <div class="section-heading boards-heading">
             <div>
-              <h3>Company List</h3>
             </div>
             <div style="display: flex; gap: 8px; align-items: center;">
               <button id="targetCompanyFilterToggle" class="icon-button" type="button" aria-label="Toggle filters" title="Filters">
@@ -260,18 +259,6 @@ export function renderInsights(els, report, stats, statusLabels, mode = 'active'
     return reportRow(row.tag, Number(row.applications), tagMax, {}, toIntStr, '--focus');
   }).join('') || '<p>No tag data.</p>';
 
-  const getW = (count) => total > 0 ? Math.max(15, (count / total) * 100) : 100;
-  const w0 = getW(funnelRows[0].count);
-  const w1 = getW(funnelRows[1].count);
-  const w2 = getW(funnelRows[2].count);
-  const w3 = getW(funnelRows[3].count);
-
-  const poly = (topW, botW) => {
-    const tl = (100 - topW) / 2, tr = 100 - tl;
-    const bl = (100 - botW) / 2, br = 100 - bl;
-    return `clip-path: polygon(${tl}% 0%, ${tr}% 0%, ${br}% 100%, ${bl}% 100%);`;
-  };
-
   els.insightsContent.innerHTML = `
     <div class="insights-toolbar" style="grid-column: 1 / -1; display: flex; justify-content: flex-end; gap: 6px; margin-bottom: 4px;">
       <button class="${mode === 'active' ? '' : 'secondary'}" data-insights-mode="active" type="button">Active Pipeline</button>
@@ -282,50 +269,36 @@ export function renderInsights(els, report, stats, statusLabels, mode = 'active'
       <div>
         <div class="panel-kicker">Funnel</div>
         <h3>Application Funnel</h3>
-        <div class="true-funnel">
-          <div class="funnel-stage">
-            <div class="funnel-stage-label">Applied</div>
-            <div class="funnel-shape-container">
-              <div class="funnel-shape" style="${poly(w0, w1)} background: var(--accent); border-radius: 8px 8px 0 0;"></div>
-            </div>
-            <div class="funnel-stage-count">${funnelRows[0].count}</div>
+        <div class="funnel-bars">
+          <div class="funnel-bar-row">
+            <span class="funnel-bar-label">Applied</span>
+            <div class="funnel-bar-track"><div class="funnel-bar-fill" style="width: 100%; background: var(--accent);"></div></div>
+            <span class="funnel-bar-count">${total}</span>
           </div>
-          <div class="funnel-conv"><span class="conv-pill">↓ ${rate(stats.funnel.interviewed, total)} to Interview</span></div>
-          
-          <div class="funnel-stage">
-            <div class="funnel-stage-label">Interview</div>
-            <div class="funnel-shape-container">
-              <div class="funnel-shape" style="${poly(w1, w2)} background: var(--int);"></div>
-            </div>
-            <div class="funnel-stage-count">${funnelRows[1].count}</div>
+          <div class="funnel-bar-row">
+            <span class="funnel-bar-label">Interview</span>
+            <div class="funnel-bar-track"><div class="funnel-bar-fill" style="width: ${total > 0 ? Math.max(2, (funnelRows[1].count / total) * 100) : 0}%; background: var(--int);"></div></div>
+            <span class="funnel-bar-count">${funnelRows[1].count} <span class="funnel-conv-rate">${rate(stats.funnel.interviewed, total)}</span></span>
           </div>
-          <div class="funnel-conv"><span class="conv-pill">↓ ${rate(stats.funnel.offers, stats.funnel.interviewed)} to Offer</span></div>
-          
-          <div class="funnel-stage">
-            <div class="funnel-stage-label">Offer</div>
-            <div class="funnel-shape-container">
-              <div class="funnel-shape" style="${poly(w2, w3)} background: var(--act);"></div>
-            </div>
-            <div class="funnel-stage-count">${funnelRows[2].count}</div>
+          <div class="funnel-bar-row">
+            <span class="funnel-bar-label">Offer</span>
+            <div class="funnel-bar-track"><div class="funnel-bar-fill" style="width: ${total > 0 ? Math.max(2, (funnelRows[2].count / total) * 100) : 0}%; background: var(--act);"></div></div>
+            <span class="funnel-bar-count">${funnelRows[2].count} <span class="funnel-conv-rate">${rate(stats.funnel.offers, stats.funnel.interviewed)}</span></span>
           </div>
-          <div class="funnel-conv"><span class="conv-pill">↓ ${rate(stats.funnel.accepted, stats.funnel.offers)} to Accept</span></div>
-          
-          <div class="funnel-stage">
-            <div class="funnel-stage-label">Accepted</div>
-            <div class="funnel-shape-container">
-              <div class="funnel-shape" style="${poly(w3, w3)} background: var(--act); border-radius: 0 0 8px 8px;"></div>
-            </div>
-            <div class="funnel-stage-count">${funnelRows[3].count}</div>
+          <div class="funnel-bar-row">
+            <span class="funnel-bar-label">Accepted</span>
+            <div class="funnel-bar-track"><div class="funnel-bar-fill" style="width: ${total > 0 ? Math.max(2, (funnelRows[3].count / total) * 100) : 0}%; background: var(--act);"></div></div>
+            <span class="funnel-bar-count">${funnelRows[3].count} <span class="funnel-conv-rate">${rate(stats.funnel.accepted, stats.funnel.offers)}</span></span>
           </div>
         </div>
       </div>
       <div>
         <div class="panel-kicker">Outcomes</div>
         <h3>Responses</h3>
+        <p class="response-rate-display">${rate(stats.funnel.responded, total)} <span>response rate</span></p>
         ${reportRow('Responded', Number(stats.funnel.responded || 0), Math.max(1, total), null, total, '--app')}
         ${reportRow('Rejected', Number(stats.funnel.rejected || 0), Math.max(1, total), null, total, '--cls')}
         ${reportRow('Ghosted', Number(stats.totals.ghosted || 0), Math.max(1, total), null, total, '--muted')}
-        <p class="section-help">Response rate ${rate(stats.funnel.responded, total)}</p>
       </div>
     </section>
 
@@ -385,7 +358,7 @@ export function renderInsights(els, report, stats, statusLabels, mode = 'active'
     <section class="report-panel report-panel-tags wide" style="grid-column: 1 / -1;">
       <div class="panel-kicker">Skills</div>
       <h3>Top Tags</h3>
-      <div style="column-count: 2; column-gap: 24px;">
+      <div class="tags-grid">
         ${tagHtml}
       </div>
     </section>
@@ -418,14 +391,25 @@ export function renderActivity(els, state, payload) {
   renderActivityPagination(els, state);
 }
 
+function buildStatChips(counts) {
+  const chips = [
+    counts.active    && `<span class="stat-chip stat-active"><span class="stat-dot"></span>${counts.active} Active</span>`,
+    counts.interview && `<span class="stat-chip stat-interview"><span class="stat-dot"></span>${counts.interview} Interviews</span>`,
+    counts.offer     && `<span class="stat-chip stat-offer"><span class="stat-dot"></span>${counts.offer} Offers</span>`,
+    counts.accepted  && `<span class="stat-chip stat-accepted"><span class="stat-dot"></span>${counts.accepted} Accepted</span>`,
+  ].filter(Boolean);
+  return chips.length ? chips.join('') : '';
+}
+
 export function renderApplications(els, state, statusOptions) {
   els.table.innerHTML = '';
   els.empty.hidden = state.applications.length !== 0;
 
   const interviews = state.applications.filter((item) => item.status === 'interview_scheduled').length;
-  const archived = state.applications.filter((item) => item.archived_at).length;
-  const viewName = { true: 'archived', all: 'total', closed: 'closed', false: 'active' }[state.filters.archived] || 'active';
-  els.summary.textContent = `${state.applications.length} ${viewName}, ${interviews} interviews scheduled, ${archived} archived shown`;
+  const active = state.applications.filter((item) => item.status === 'applied').length;
+  const offers = state.applications.filter((item) => item.status === 'offer').length;
+  const accepted = state.applications.filter((item) => item.status === 'accepted').length;
+  els.summary.innerHTML = buildStatChips({ active, interview: interviews, offer: offers, accepted });
   if (!state.applications.length) {
     els.empty.innerHTML = renderEmptyState(
       state.filters.search || state.filters.status || state.filters.tag || state.filters.archived !== 'false' ? 'No matches found' : 'Start your tracker',
@@ -516,6 +500,7 @@ function isUrgentNotification(item) {
 
 export function renderNotifications(els, notifications, expanded = false) {
   els.notificationsPanel.hidden = notifications.length === 0;
+  document.documentElement.style.setProperty('--banner-h', notifications.length === 0 ? '0px' : '36px');
   if (!notifications.length) {
     els.notificationsPanel.innerHTML = '';
     els.notificationsPanel.classList.remove('has-urgent');
@@ -655,13 +640,51 @@ export function renderCVs(els, cvs) {
 }
 
 export function renderJobBoards(els, jobBoards) {
-  const activeBoards = jobBoards.filter((board) => board.is_active);
-  const inactiveBoards = jobBoards.filter((board) => !board.is_active);
+  if (!jobBoards.length) {
+    els.jobBoardsList.innerHTML = renderEmptyState('No job boards saved', 'Add sources you check regularly so your search routine stays visible and repeatable.', 'The app now seeds common boards automatically after migrations run.');
+    return;
+  }
 
-  els.jobBoardsList.innerHTML = [
-    renderBoardSection('Active boards', 'Boards you are actively checking.', activeBoards, { fullWidth: true }),
-    inactiveBoards.length ? renderBoardSection('Inactive boards', 'Boards paused for now but kept for reference.', inactiveBoards) : ''
-  ].join('') || renderEmptyState('No job boards saved', 'Add sources you check regularly so your search routine stays visible and repeatable.', 'The app now seeds common boards automatically after migrations run.');
+  const sorted = [...jobBoards].sort((a, b) => (b.is_active ? 1 : 0) - (a.is_active ? 1 : 0));
+
+  els.jobBoardsList.innerHTML = `
+    <div class="table-shell">
+      <table>
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>Description</th>
+            <th>Last Checked</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${sorted.map((board) => `
+            <tr class="${board.is_active ? '' : 'board-inactive-row'}">
+              <td>
+                <strong>${escapeHtml(board.name)}</strong>
+                ${!board.is_active ? '<span class="board-inactive-badge">Inactive</span>' : ''}
+              </td>
+              <td>
+                <span class="board-description" title="${escapeAttribute(board.notes || '')}">${board.notes ? escapeHtml(board.notes.length > 80 ? board.notes.slice(0, 80) + '…' : board.notes) : '<span class="muted-text">—</span>'}</span>
+              </td>
+              <td>${board.last_checked_date
+                  ? `<span class="muted-text">${escapeHtml(formatDate(board.last_checked_date))}</span> <span class="freshness-badge ${jobBoardFreshnessClass(board)}">${escapeHtml(jobBoardFreshnessLabel(board))}</span>`
+                  : '<span class="freshness-badge freshness-stale">Never checked</span>'}</td>
+              <td>
+                <div class="board-actions-row">
+                  ${board.url ? `<button class="icon-button text-primary" type="button" data-job-board-open="${board.id}" title="Visit"><i class="bi bi-box-arrow-up-right"></i></button>` : ''}
+                  <button class="icon-button text-primary" type="button" data-job-board-edit="${board.id}" title="Edit"><i class="bi bi-pencil"></i></button>
+                  <button class="icon-button text-warning" type="button" data-job-board-toggle="${board.id}" data-job-board-active="${board.is_active ? 'true' : 'false'}" title="${board.is_active ? 'Mark inactive' : 'Activate'}"><i class="bi bi-power"></i></button>
+                  <button class="icon-button text-danger" type="button" data-job-board-delete="${board.id}" title="Delete"><i class="bi bi-trash"></i></button>
+                </div>
+              </td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    </div>
+  `;
 }
 
 export function renderTargetCompanyFilters(els, companies, filters) {
@@ -817,38 +840,6 @@ function renderCompanySignal(label, value) {
   `;
 }
 
-function renderBoardSection(title, description, boards, options = {}) {
-  if (!boards.length) return '';
-  return `
-    <section class="board-section${options.fullWidth ? ' board-section-wide' : ''}">
-      <div class="board-section-grid${options.fullWidth ? ' board-section-grid-wide' : ''}">
-        ${boards.map((board) => `
-          <article class="board-card ${board.is_active ? '' : 'is-inactive'} ${jobBoardFreshnessClass(board)}">
-            <div class="board-card-top">
-              <strong>${escapeHtml(board.name)}</strong>
-              <div class="board-actions-grid">
-                ${board.url ? `<button class="icon-button text-primary board-open-link" type="button" data-job-board-open="${board.id}" title="Open board"><i class="bi bi-box-arrow-up-right"></i></button>` : `<div class="placeholder-icon-button"></div>`}
-                <button class="icon-button text-primary" type="button" data-job-board-edit="${board.id}" title="Edit"><i class="bi bi-pencil"></i></button>
-                <button class="icon-button text-warning" type="button" data-job-board-toggle="${board.id}" data-job-board-active="${board.is_active ? 'true' : 'false'}" title="${board.is_active ? 'Mark inactive' : 'Activate'}"><i class="bi bi-power"></i></button>
-                <button class="icon-button text-danger" type="button" data-job-board-delete="${board.id}" title="Delete"><i class="bi bi-trash"></i></button>
-              </div>
-            </div>
-            ${board.last_checked_date ? `
-            <div class="board-status-row">
-              <span class="board-freshness ${jobBoardFreshnessClass(board)}">${jobBoardFreshnessLabel(board)}</span>
-            </div>
-            ` : ''}
-            <p>${escapeHtml(board.notes || 'No notes yet.')}</p>
-            <div class="board-meta" style="margin-top: auto; padding-top: 1rem;">
-              <span>Last checked: ${board.last_checked_date ? formatDate(board.last_checked_date) : 'Never'}</span>
-              <span>Updated: ${formatDateTime(board.updated_at)}</span>
-            </div>
-          </article>
-        `).join('')}
-      </div>
-    </section>
-  `;
-}
 
 function renderSettingsPanel() {
   return `
@@ -897,40 +888,46 @@ function renderSettingsPanel() {
 export function renderToolkit(els) {
   els.toolkitContent.innerHTML = [
     {
-      title: 'Why Toolkit Exists',
       marker: '01',
-      description: 'This is the operating manual for your search. Use it when you need a repeatable checklist, a message starter, or a research frame without opening another document.',
-      items: ['Use it before applying to tighten the CV and notes', 'Use it before recruiter calls to prep smart questions', 'Use it after interviews to decide next actions fast']
-    },
-    {
       title: 'Application Readiness',
+      description: 'Run before submitting. Confirm job link is saved, add 2–3 relevant tags, and write one sentence on why this role fits your target.',
+      items: ['Confirm job link or description is saved', 'Record 2–3 tags so the role is searchable later', 'Capture one sentence on why the role is a fit', 'Note salary range if visible']
+    },
+    {
       marker: '02',
-      description: 'Use this before hitting apply or before saving a role into the tracker.',
-      items: ['Confirm job link or description is saved', 'Record 2 to 3 tags so the role is searchable later', 'Capture one sentence on why the role is worth pursuing', 'Choose the exact CV version you want tied to the application']
-    },
-    {
       title: 'Company Research Frame',
-      marker: '03',
-      description: 'Use these prompts to fill the Preparation research block with substance instead of generic notes.',
-      items: ['What does the company sell and who pays for it?', 'What product or market change is most likely driving this hire?', 'What competitors or substitutes exist?', 'What part of your background is genuinely relevant here?']
+      description: 'Use to fill Company Notes before applying or before a call. Focus on what the interviewer already knows you should know.',
+      items: ['What does the company sell and who pays for it?', 'What product or market change is driving this hire?', 'What competitors or substitutes exist?', 'What part of your background is genuinely relevant here?']
     },
     {
+      marker: '03',
       title: 'Recruiter Call Guide',
-      marker: '04',
-      description: 'Use this when adding recruiter questions in the Preparation section.',
+      description: 'Use during a recruiter screen. Ask these to learn what actually matters, not what the JD says.',
       items: ['Ask how success is measured in the first 90 days', 'Ask what stage usually eliminates candidates', 'Ask which team problems need solving now', 'Ask what distinguishes strong candidates from average ones']
     },
     {
-      title: 'Interview Story Checklist',
-      marker: '05',
-      description: 'Use this before interviews so your notes turn into usable examples.',
-      items: ['Prepare one ownership story', 'Prepare one ambiguity or conflict story', 'Prepare one technical tradeoff story', 'Prepare one failure and recovery story']
+      marker: '04',
+      title: 'Interview Story Bank',
+      description: 'Build before interviews. Map your strongest STAR stories to the competencies this role requires so you are not improvising.',
+      items: ['List 5–7 specific situations you can describe in detail', 'Map each story to: impact, challenge, decision, collaboration', 'Identify which stories answer "tell me about a time..." questions', 'Prepare a short version (60s) and a long version (2–3 min) of each']
     },
     {
+      marker: '05',
       title: 'Follow-up Playbook',
+      description: 'Use after every call or interview. Sets the rule for when to follow up, what to say, and when to stop.',
+      items: ['Send a thank-you within 24 hours — specific, not generic', 'If no response after 5 days, one follow-up only', 'After 2 follow-ups with no response, mark as ghosted and move on', 'Keep follow-ups under 4 sentences']
+    },
+    {
       marker: '06',
-      description: 'Use this after calls or interviews to avoid stale applications.',
-      items: ['Send thank-you notes within 24 hours', 'If no reply, create a to-do for 5 to 7 business days later', 'Log every piece of recruiter or interviewer feedback', 'Archive low-signal roles instead of letting them clutter the active list']
+      title: 'Offer Evaluation',
+      description: 'Run when an offer arrives. Evaluate the full package before negotiating or accepting.',
+      items: ['Base salary vs. your target and market rate', 'Equity: amount, vesting schedule, cliff, strike price', 'Role scope: team size, reporting line, what you own', 'Growth path: promotion criteria, budget for learning', 'Team signals: who you would work with daily']
+    },
+    {
+      marker: '07',
+      title: 'Interview Day Checklist',
+      description: 'Run the morning of. Covers logistics, mindset, and the questions you will ask the panel.',
+      items: ['Confirm time zone, link or location, and interviewer names', 'Re-read your STAR stories and the job description once', 'Prepare 3 questions for the panel — at least one specific to their work', 'Know your ask: next steps, timeline, decision criteria']
     }
   ].map((section) => `
     <section class="toolkit-card">
@@ -1233,23 +1230,11 @@ function aiRecommendationReason(application) {
   return 'Generate only the document that helps the current application stage.';
 }
 
-function renderResearchField(name, label, placeholder, value) {
-  const hasContent = Boolean(value);
-  return `
-    <label class="research-field">
-      <span>${escapeHtml(label)}</span>
-      ${hasContent ? `
-        <div class="research-preview" data-research-preview="${name}">
-          <p class="research-preview-text">${escapeHtml(value)}</p>
-          <div class="research-field-actions">
-            <button type="button" class="secondary" data-research-view="${name}" data-research-label="${escapeAttribute(label)}">View</button>
-            <button type="button" class="secondary" data-research-edit="${name}">Edit</button>
-          </div>
-        </div>
-      ` : ''}
-      <textarea name="${name}" rows="4" placeholder="${escapeAttribute(placeholder)}"${hasContent ? ' hidden' : ''}>${escapeHtml(value)}</textarea>
-    </label>
-  `;
+function renderResearchPreviewRow(label, value) {
+  return `<div class="research-row">
+    <span class="research-row-label">${escapeHtml(label)}</span>
+    <span class="research-row-value${value ? '' : ' muted-text'}">${value ? escapeHtml(value.length > 80 ? value.slice(0, 80) + '…' : value) : 'Not set'}</span>
+  </div>`;
 }
 
 function renderWorkflowTab({ application, preparation, recruiterQuestions, feedbackEntries, todos }) {
@@ -1260,17 +1245,18 @@ function renderWorkflowTab({ application, preparation, recruiterQuestions, feedb
           <div>
             <div class="panel-kicker">Research</div>
             <h3>Company Notes</h3>
-            <p class="section-help">Keep research concise and focused on interview preparation and application strategy.</p>
           </div>
+          <button type="button" class="secondary icon-button" data-research-edit-all="${application.id}"
+            data-about="${escapeAttribute(preparation?.about_company || '')}"
+            data-values="${escapeAttribute(preparation?.company_values || '')}"
+            data-notes="${escapeAttribute(preparation?.application_notes || '')}"
+            title="Edit notes"><i class="bi bi-pencil"></i></button>
         </div>
-        <form class="prep-form prep-research-form" data-preparation-form="${application.id}">
-          ${renderResearchField('about_company', 'About The Company', 'Products, market, competitors, roadmap, team shape', preparation?.about_company || '')}
-          ${renderResearchField('company_values', 'Company Values', 'Culture signals, values, leadership principles', preparation?.company_values || '')}
-          ${renderResearchField('application_notes', 'Application Notes', 'Fit summary, risks, strengths, stories to prepare', preparation?.application_notes || '')}
-          <div class="inline-actions">
-            <button type="submit">Save Research</button>
-          </div>
-        </form>
+        <div class="research-rows">
+          ${renderResearchPreviewRow('About', preparation?.about_company || '')}
+          ${renderResearchPreviewRow('Values', preparation?.company_values || '')}
+          ${renderResearchPreviewRow('Notes', preparation?.application_notes || '')}
+        </div>
       </section>
       <section class="route-card route-card-soft ask-surface">
         <div class="section-heading">
@@ -1378,8 +1364,9 @@ function renderWorkflowTab({ application, preparation, recruiterQuestions, feedb
 
 function renderContentSummaryTab({ application, primaryCv, queuedJobs, failedJobs, allDocuments, allJobs, selectedProvider, capabilities, workspace }) {
   const primaryCvId = primaryCv?.id || '';
-  const documentSlots = filterDocumentSlots(buildDocumentSlots(allDocuments, allJobs), workspace);
-  const documentTypes = [...new Set(buildDocumentSlots(allDocuments, allJobs).map((item) => item.type))];
+  const isClosed = isClosedStatus(application.status) && !application.archived_at;
+  const allSlots = buildDocumentSlots(allDocuments, allJobs);
+  const documentSlots = filterDocumentSlots(allSlots, workspace);
   const recentDocumentId = Number(workspace.recentDocumentId) || null;
   const missingSlots = documentSlots.filter((slot) => slot.status === 'missing' || slot.status === 'failed');
   return `
@@ -1389,55 +1376,22 @@ function renderContentSummaryTab({ application, primaryCv, queuedJobs, failedJob
           <div>
             <div class="panel-kicker">Content Workspace</div>
             <h3>Generated Documents</h3>
-            <p class="section-help">This is the canonical document workspace. Open existing assets directly. Generate only when a document type does not exist yet.</p>
           </div>
           <div class="content-toolbar-meta">
-            ${renderSegmentedProviderControl({
+            ${!isClosed ? renderSegmentedProviderControl({
               selectedProvider: selectedProvider || 'gemini',
               awsEnabled: capabilities?.awsEnabled,
               attrName: 'data-library-provider-select'
-            })}
-            ${missingSlots.length ? `<button class="secondary" type="button" data-generate-missing data-cv-id="${escapeAttribute(primaryCvId || '')}">Generate Missing (${missingSlots.length})</button>` : ''}
+            }) : ''}
+            ${!isClosed && missingSlots.length ? `<button class="secondary" type="button" data-generate-missing data-cv-id="${escapeAttribute(primaryCvId || '')}">Generate Missing (${missingSlots.length})</button>` : ''}
             ${allDocuments.length ? `<a class="button-link secondary" href="/api/applications/${application.id}/artifacts.zip">Export Artifacts</a>` : ''}
           </div>
         </div>
         ${recentDocumentId ? '<div class="document-card-meta"><span class="pill info-pill">Recent update available in the list below.</span></div>' : ''}
-        <div class="content-filter-bar" hidden style="display: none !important;">
-          <label>
-            <span>Search</span>
-            <input type="search" value="${escapeAttribute(workspace.search || '')}" placeholder="Title or provider" data-content-search>
-          </label>
-          <label>
-            <span>Type</span>
-            <select data-content-type>
-              <option value="all">All types</option>
-              ${documentTypes.map((type) => `<option value="${escapeAttribute(type)}"${workspace.type === type ? ' selected' : ''}>${escapeHtml(formatAction(type))}</option>`).join('')}
-            </select>
-          </label>
-          <label>
-            <span>Provider</span>
-            <select data-content-provider>
-              <option value="all"${workspace.provider === 'all' ? ' selected' : ''}>All providers</option>
-              <option value="gemini"${workspace.provider === 'gemini' ? ' selected' : ''}>Gemini</option>
-              <option value="aws"${workspace.provider === 'aws' ? ' selected' : ''}>AWS</option>
-            </select>
-          </label>
-          <label>
-            <span>Sort</span>
-            <select data-content-sort>
-              <option value="newest"${workspace.sort === 'newest' ? ' selected' : ''}>Newest first</option>
-              <option value="oldest"${workspace.sort === 'oldest' ? ' selected' : ''}>Oldest first</option>
-            </select>
-          </label>
-          <label class="checkbox inline-checkbox content-filter-toggle">
-            <input type="checkbox" data-content-latest-only ${workspace.latestOnly ? 'checked' : ''}>
-            <span>Latest only</span>
-          </label>
-        </div>
-        <div class="content-asset-list">
-          ${documentSlots.map((slot) => renderContentDocumentSlot(application.id, slot, primaryCvId, recentDocumentId)).join('') || (allDocuments.length || allJobs.length
+        <div class="content-slot-grid">
+          ${documentSlots.map((slot) => renderContentDocumentSlot(application.id, slot, primaryCvId, recentDocumentId, isClosed)).join('') || (allDocuments.length || allJobs.length
             ? renderInlineEmpty('No documents match these filters', 'Clear or relax the active filters to see more generated content.')
-            : renderInlineEmpty('No generated content yet', 'Generate a document from the workspace above to create your first saved asset.'))}
+            : renderInlineEmpty('No generated content yet', isClosed ? 'This application is closed — view-only.' : 'Generate a document from the workspace above to create your first saved asset.'))}
         </div>
       </section>
       <section class="route-card">
@@ -1460,7 +1414,7 @@ function renderContentSummaryTab({ application, primaryCv, queuedJobs, failedJob
           </article>
         ` : renderInlineEmpty('No CV linked', 'Link a CV to unlock tailored generation and consistent job-specific outputs.')}
       </section>
-      <section class="route-card">
+      ${allDocuments.length > 0 ? `<section class="route-card">
         <div class="section-heading">
           <div>
             <div class="panel-kicker">Providers</div>
@@ -1475,7 +1429,7 @@ function renderContentSummaryTab({ application, primaryCv, queuedJobs, failedJob
           <span class="pill info-pill">${queuedJobs.length} queued</span>
           <span class="pill ${failedJobs.length ? 'danger-pill' : 'success-pill'}">${failedJobs.length} failed</span>
         </div>
-      </section>
+      </section>` : ''}
       <section class="route-card">
         <div class="section-heading">
           <div>
@@ -1906,34 +1860,36 @@ function renderOverviewDocumentSlot(applicationId, slot, cvId) {
   `;
 }
 
-function renderContentDocumentSlot(applicationId, slot, cvId, recentDocumentId = null) {
+function renderContentDocumentSlot(applicationId, slot, cvId, recentDocumentId = null, isClosed = false) {
   const isRecent = slot.latestDocument && Number(slot.latestDocument.id) === Number(recentDocumentId);
+  const hasDoc = slot.status === 'ready' || slot.status === 'updating';
+  const meta = slot.latestDocument
+    ? `${formatDateTime(slot.latestDocument.created_at)}${slot.documents.length > 1 ? ` · ${slot.documents.length} versions` : ''}`
+    : slot.activeJob ? `Started ${formatDateTime(slot.activeJob.created_at)}` : '';
+
+  let action = '';
+  if (hasDoc) {
+    action = `<a class="button-link secondary" href="/applications/${applicationId}?tab=content&document=${slot.latestDocument.id}">Open</a>`;
+  } else if (!isClosed) {
+    if (slot.status === 'generating') {
+      action = `<button type="button" disabled>Generating…</button>`;
+    } else if (slot.status === 'failed') {
+      action = `<button type="button" class="secondary" data-ai="${escapeAttribute(slot.action)}" data-doc-type="${escapeAttribute(slot.type)}" data-cv-id="${escapeAttribute(cvId)}">Retry</button>`;
+    } else {
+      action = `<button type="button" class="secondary" data-ai="${escapeAttribute(slot.action)}" data-doc-type="${escapeAttribute(slot.type)}" data-cv-id="${escapeAttribute(cvId)}">Generate</button>`;
+    }
+  }
+
   return `
-    <section class="document-slot-card${isRecent ? ' is-recent' : ''}">
-      <div class="document-slot-head">
-        <div class="document-type-line">
-          <span class="document-type-icon" aria-hidden="true">${renderDocumentTypeIcon(slot.type)}</span>
-          <div class="document-slot-copy">
-            <h4>${escapeHtml(slot.title)}</h4>
-            ${isRecent ? '<span class="pill info-pill">Latest changed</span>' : ''}
-          </div>
-        </div>
+    <article class="content-slot-item content-slot-${slot.status}${isRecent ? ' is-recent' : ''}">
+      <div class="content-slot-head">
+        <span class="document-type-icon" aria-hidden="true">${renderDocumentTypeIcon(slot.type)}</span>
+        <strong class="content-slot-title">${escapeHtml(slot.title)}</strong>
         ${renderSlotStatusBadge(slot)}
       </div>
-      ${renderSlotMetadata(slot)}
-      <div class="document-card-actions document-slot-actions">
-        ${renderSlotPrimaryAction(slot, applicationId, cvId)}
-      </div>
-      ${slot.latestDocument ? `
-        <details class="document-version-list">
-          <summary>${slot.documents.length > 1 ? `Versions (${slot.documents.length})` : 'Current document'}</summary>
-          <div class="document-version-items">
-            ${slot.documents.map((doc, index) => renderDocumentVersionRow(applicationId, doc, index === 0, slot.documents[0]?.id)).join('')}
-          </div>
-        </details>
-      ` : ''}
-      ${slot.failedJob && !slot.latestDocument ? `<p class="form-error inline-error">${escapeHtml(slot.failedJob.error_message || 'Generation failed. Retry to create this document.')}</p>` : ''}
-    </section>
+      ${meta ? `<p class="content-slot-meta muted-text">${escapeHtml(meta)}</p>` : (!hasDoc && !isClosed ? '' : '<p class="content-slot-meta muted-text">—</p>')}
+      ${action ? `<div class="content-slot-actions">${action}</div>` : ''}
+    </article>
   `;
 }
 
@@ -2010,7 +1966,7 @@ function renderSlotMetadata(slot) {
       </div>
     `;
   }
-  return '<p class="artifact-meta-copy">No saved document yet.</p>';
+  return '';
 }
 
 function renderDocumentTypeIcon(type) {
@@ -2299,5 +2255,24 @@ function renderActivityPagination(els, state) {
     <span>${start}-${end} of ${state.activity.total}</span>
     <button class="secondary" type="button" data-activity-page="${page - 1}" ${page <= 1 ? 'disabled' : ''}>Prev</button>
     <button class="secondary" type="button" data-activity-page="${page + 1}" ${page >= totalPages ? 'disabled' : ''}>Next</button>
+  `;
+}
+
+export function renderApplicationPagination(els, state) {
+  if (!els.applicationPagination) return;
+  const pageSize = 50;
+  const total = state.applicationTotal;
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  const page = Math.min(state.filters.page, totalPages);
+  if (totalPages <= 1) {
+    els.applicationPagination.innerHTML = '';
+    return;
+  }
+  const start = (page - 1) * pageSize + 1;
+  const end = Math.min(total, page * pageSize);
+  els.applicationPagination.innerHTML = `
+    <span>${start}–${end} of ${total}</span>
+    <button class="secondary" type="button" data-app-page="${page - 1}" ${page <= 1 ? 'disabled' : ''}>Prev</button>
+    <button class="secondary" type="button" data-app-page="${page + 1}" ${page >= totalPages ? 'disabled' : ''}>Next</button>
   `;
 }

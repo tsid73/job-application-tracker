@@ -1,5 +1,6 @@
-import { createReadStream, statSync } from 'node:fs';
+import { createReadStream, readFileSync, statSync } from 'node:fs';
 import { extname, join, normalize, resolve } from 'node:path';
+import { gzipSync } from 'node:zlib';
 
 const textTypes = new Map([
   ['.html', 'text/html; charset=utf-8'],
@@ -235,19 +236,38 @@ export function serveStatic(req, res, publicDir) {
     return true;
   }
 
+  const compressible = new Set(['.js', '.css', '.html', '.svg', '.json']);
+
   try {
     const fileStat = statSync(absolutePath);
     if (!fileStat.isFile()) return false;
 
-    const contentType = textTypes.get(extname(absolutePath)) || 'application/octet-stream';
-    res.writeHead(200, {
-      ...securityHeaders,
-      'content-type': contentType,
-      'content-length': fileStat.size,
-      'x-robots-tag': 'noindex, nofollow, noarchive',
-      'cache-control': 'no-store'
-    });
-    createReadStream(absolutePath).pipe(res);
+    const ext = extname(absolutePath);
+    const contentType = textTypes.get(ext) || 'application/octet-stream';
+    const useGzip = compressible.has(ext) && (req.headers['accept-encoding'] || '').includes('gzip');
+    const cacheControl = ext === '.html' ? 'no-store' : 'public, max-age=3600';
+
+    if (useGzip) {
+      const compressed = gzipSync(readFileSync(absolutePath));
+      res.writeHead(200, {
+        ...securityHeaders,
+        'content-type': contentType,
+        'content-encoding': 'gzip',
+        'content-length': compressed.length,
+        'x-robots-tag': 'noindex, nofollow, noarchive',
+        'cache-control': cacheControl
+      });
+      res.end(compressed);
+    } else {
+      res.writeHead(200, {
+        ...securityHeaders,
+        'content-type': contentType,
+        'content-length': fileStat.size,
+        'x-robots-tag': 'noindex, nofollow, noarchive',
+        'cache-control': cacheControl
+      });
+      createReadStream(absolutePath).pipe(res);
+    }
     return true;
   } catch {
     return false;
