@@ -639,13 +639,49 @@ export function renderCVs(els, cvs) {
 }
 
 export function renderJobBoards(els, jobBoards) {
-  const activeBoards = jobBoards.filter((board) => board.is_active);
-  const inactiveBoards = jobBoards.filter((board) => !board.is_active);
+  if (!jobBoards.length) {
+    els.jobBoardsList.innerHTML = renderEmptyState('No job boards saved', 'Add sources you check regularly so your search routine stays visible and repeatable.', 'The app now seeds common boards automatically after migrations run.');
+    return;
+  }
 
-  els.jobBoardsList.innerHTML = [
-    renderBoardSection('Active boards', 'Boards you are actively checking.', activeBoards, { fullWidth: true }),
-    inactiveBoards.length ? renderBoardSection('Inactive boards', 'Boards paused for now but kept for reference.', inactiveBoards) : ''
-  ].join('') || renderEmptyState('No job boards saved', 'Add sources you check regularly so your search routine stays visible and repeatable.', 'The app now seeds common boards automatically after migrations run.');
+  const sorted = [...jobBoards].sort((a, b) => (b.is_active ? 1 : 0) - (a.is_active ? 1 : 0));
+
+  els.jobBoardsList.innerHTML = `
+    <div class="table-shell">
+      <table>
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>Description</th>
+            <th>Last Checked</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${sorted.map((board) => `
+            <tr class="${board.is_active ? '' : 'board-inactive-row'}">
+              <td>
+                <strong>${escapeHtml(board.name)}</strong>
+                ${!board.is_active ? '<span class="board-inactive-badge">Inactive</span>' : ''}
+              </td>
+              <td>
+                <span class="board-description" title="${escapeAttribute(board.notes || '')}">${board.notes ? escapeHtml(board.notes.length > 80 ? board.notes.slice(0, 80) + '…' : board.notes) : '<span class="muted-text">—</span>'}</span>
+              </td>
+              <td class="muted-text">${board.last_checked_date ? escapeHtml(jobBoardFreshnessLabel(board)) : 'Never'}</td>
+              <td>
+                <div class="board-actions-row">
+                  ${board.url ? `<button class="icon-button text-primary" type="button" data-job-board-open="${board.id}" title="Visit"><i class="bi bi-box-arrow-up-right"></i></button>` : ''}
+                  <button class="icon-button text-primary" type="button" data-job-board-edit="${board.id}" title="Edit"><i class="bi bi-pencil"></i></button>
+                  <button class="icon-button text-warning" type="button" data-job-board-toggle="${board.id}" data-job-board-active="${board.is_active ? 'true' : 'false'}" title="${board.is_active ? 'Mark inactive' : 'Activate'}"><i class="bi bi-power"></i></button>
+                  <button class="icon-button text-danger" type="button" data-job-board-delete="${board.id}" title="Delete"><i class="bi bi-trash"></i></button>
+                </div>
+              </td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    </div>
+  `;
 }
 
 export function renderTargetCompanyFilters(els, companies, filters) {
@@ -801,38 +837,6 @@ function renderCompanySignal(label, value) {
   `;
 }
 
-function renderBoardSection(title, description, boards, options = {}) {
-  if (!boards.length) return '';
-  return `
-    <section class="board-section${options.fullWidth ? ' board-section-wide' : ''}">
-      <div class="board-section-grid${options.fullWidth ? ' board-section-grid-wide' : ''}">
-        ${boards.map((board) => `
-          <article class="board-card ${board.is_active ? '' : 'is-inactive'} ${jobBoardFreshnessClass(board)}">
-            <div class="board-card-top">
-              <strong>${escapeHtml(board.name)}</strong>
-              <div class="board-actions-grid">
-                ${board.url ? `<button class="icon-button text-primary board-open-link" type="button" data-job-board-open="${board.id}" title="Open board"><i class="bi bi-box-arrow-up-right"></i></button>` : `<div class="placeholder-icon-button"></div>`}
-                <button class="icon-button text-primary" type="button" data-job-board-edit="${board.id}" title="Edit"><i class="bi bi-pencil"></i></button>
-                <button class="icon-button text-warning" type="button" data-job-board-toggle="${board.id}" data-job-board-active="${board.is_active ? 'true' : 'false'}" title="${board.is_active ? 'Mark inactive' : 'Activate'}"><i class="bi bi-power"></i></button>
-                <button class="icon-button text-danger" type="button" data-job-board-delete="${board.id}" title="Delete"><i class="bi bi-trash"></i></button>
-              </div>
-            </div>
-            ${board.last_checked_date ? `
-            <div class="board-status-row">
-              <span class="board-freshness ${jobBoardFreshnessClass(board)}">${jobBoardFreshnessLabel(board)}</span>
-            </div>
-            ` : ''}
-            <p>${escapeHtml(board.notes || 'No notes yet.')}</p>
-            <div class="board-meta" style="margin-top: auto; padding-top: 1rem;">
-              <span>Last checked: ${board.last_checked_date ? formatDate(board.last_checked_date) : 'Never'}</span>
-              <span>Updated: ${formatDateTime(board.updated_at)}</span>
-            </div>
-          </article>
-        `).join('')}
-      </div>
-    </section>
-  `;
-}
 
 function renderSettingsPanel() {
   return `

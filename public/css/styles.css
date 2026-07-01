@@ -74,7 +74,6 @@ html {
   .detail-section,
   .prep-card,
   .toolkit-card,
-  .board-card,
   .target-company-card,
   .notification-card,
   .kanban-card,
@@ -84,7 +83,6 @@ html {
 
   .nav-item,
   button,
-  .board-card,
   .prep-card,
   .toolkit-card,
   .notification-card,
@@ -99,7 +97,6 @@ html {
   }
 
   button:hover,
-  .board-card:hover,
   .prep-card:hover,
   .toolkit-card:hover,
   .notification-card:hover,
@@ -220,7 +217,6 @@ button.secondary {
 
 /* Compact icon-only button sizing */
 .icon-button-compact,
-.board-actions-grid button,
 .company-card-actions button,
 .company-card-links button,
 .row-actions button,
@@ -959,10 +955,41 @@ tr:last-child td {
   font-size: 12px;
 }
 
-.tag-list {
+.tag-list,
+.tag-row {
   display: flex;
   flex-wrap: wrap;
   gap: 5px;
+  align-items: center;
+}
+
+.tag-more-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 500;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.tag-more-chip:hover {
+  color: var(--text);
+}
+
+.tag-hidden {
+  display: none;
+}
+
+.tag-row[data-tags-collapsed="false"] .tag-more-chip {
+  display: none;
+}
+
+.tag-row[data-tags-collapsed="false"] .tag-hidden {
+  display: contents;
 }
 
 .tag {
@@ -1884,6 +1911,18 @@ dialog::backdrop {
   gap: 10px;
 }
 
+.stack-form textarea {
+  max-height: 120px;
+  resize: vertical;
+  overflow-y: auto;
+}
+
+.prep-research-form textarea {
+  max-height: 200px;
+  resize: vertical;
+  overflow-y: auto;
+}
+
 .research-field {
   display: grid;
   gap: 6px;
@@ -1948,14 +1987,38 @@ dialog::backdrop {
   box-shadow: var(--shadow-sm);
 }
 
-.board-card {
+.board-inactive-row {
+  opacity: 0.6;
+}
+
+.board-inactive-badge {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--muted);
+  background: var(--panel);
   border: 1px solid var(--line);
-  border-radius: 20px;
-  padding: 16px;
-  background: var(--card);
-  box-shadow: var(--shadow-sm);
+  border-radius: 4px;
+  padding: 1px 5px;
+  margin-left: 6px;
+  vertical-align: middle;
+}
+
+.board-description {
+  font-size: 13px;
+  color: var(--muted);
+  max-width: 300px;
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.board-actions-row {
   display: flex;
-  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  justify-content: flex-end;
 }
 
 .prep-card-research {
@@ -2020,6 +2083,9 @@ dialog::backdrop {
 .stack-list {
   display: flex;
   flex-direction: column;
+  max-height: 300px;
+  overflow-y: auto;
+  scrollbar-width: thin;
 }
 
 .stack-item {
@@ -2068,103 +2134,12 @@ dialog::backdrop {
   line-height: 1.5;
 }
 
-.board-card p {
-  white-space: pre-wrap;
-  line-height: 1.5;
-  display: -webkit-box;
-  -webkit-line-clamp: 3;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.item-meta,
-.board-meta {
+.item-meta {
   display: flex;
   flex-wrap: wrap;
   gap: 8px 12px;
   color: var(--muted);
   font-size: 12px;
-}
-
-.board-card-top {
-  display: flex;
-  align-items: start;
-  justify-content: space-between;
-  gap: 10px;
-  margin-bottom: 10px;
-}
-
-.board-card-top div {
-  display: grid;
-  gap: 4px;
-}
-
-.board-card-top a {
-  color: var(--accent-dark);
-  font-size: 12px;
-}
-
-.board-card.is-inactive {
-  opacity: 0.72;
-  filter: saturate(0.78);
-  border-style: dashed;
-}
-
-.board-status-row {
-  margin-bottom: 10px;
-}
-
-.board-section + .board-section {
-  margin-top: 18px;
-}
-
-.board-section-head {
-  display: flex;
-  align-items: start;
-  justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 12px;
-}
-
-.board-section-head strong {
-  display: block;
-  font-size: 16px;
-  letter-spacing: -0.02em;
-}
-
-.board-section-head p {
-  margin-top: 4px;
-  color: var(--muted);
-}
-
-.board-section-count {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 34px;
-  height: 34px;
-  border-radius: 999px;
-  background: rgba(22, 78, 103, 0.1);
-  color: var(--accent-dark);
-  font-size: 12px;
-  font-weight: 800;
-}
-
-.board-section-grid {
-  display: grid;
-  gap: 10px;
-}
-
-.board-section-grid-wide {
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-}
-
-.board-actions-grid {
-  display: grid;
-  grid-template-columns: repeat(2, 28px);
-  grid-template-rows: repeat(2, 28px);
-  gap: 4px;
 }
 
 .placeholder-icon-button {
@@ -2540,10 +2515,11 @@ a {
 }
 
 .application-hero-card {
+  position: relative;
   display: grid;
   grid-template-columns: 1fr;
   gap: 18px;
-  padding: 22px 24px;
+  padding: 22px 160px 22px 24px;
   border: 1px solid var(--line);
   border-radius: 20px;
   background: var(--panel);
@@ -2592,11 +2568,13 @@ a {
 }
 
 .application-hero-actions {
+  position: absolute;
+  top: 16px;
+  right: 16px;
   display: grid;
   gap: 10px;
   justify-content: flex-end;
   align-content: start;
-  min-width: min(320px, 100%);
 }
 
 .hero-action-row {
@@ -3765,11 +3743,19 @@ a {
   }
 
   .page-header-strong,
-  .application-hero-card,
   .detail-tab-panel,
   .route-card {
     padding: 14px;
     border-radius: 16px;
+  }
+
+  .application-hero-card {
+    padding: 14px 120px 14px 14px;
+    border-radius: 16px;
+  }
+
+  .application-hero-actions {
+    width: auto;
   }
 
   .detail-tab {
@@ -4180,17 +4166,6 @@ a {
   box-shadow: var(--shadow-md);
 }
 
-/* Job Board Hover Actions */
-.board-card .board-actions-grid {
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 0.15s ease-in-out;
-}
-
-.board-card:hover .board-actions-grid {
-  opacity: 1;
-  pointer-events: auto;
-}
 
 /* Target Companies Table Styles */
 .companies-table {
@@ -4397,7 +4372,7 @@ tr:hover td {
 }
 
 /* Clean cards and boards */
-.surface-panel, .view-panel, .detail-section, .board-card, .kanban-card {
+.surface-panel, .view-panel, .detail-section, .kanban-card {
   border: 1px solid rgba(226, 232, 240, 0.8) !important;
   box-shadow: var(--shadow-md) !important;
   border-radius: 12px !important;
@@ -4426,7 +4401,7 @@ tr:hover td {
 .state {
   display: inline-flex;
   align-items: center;
-  padding: 4px 10px;
+  padding: 2px 8px;
   border-radius: 99px;
   font-size: 11px;
   font-weight: 600;

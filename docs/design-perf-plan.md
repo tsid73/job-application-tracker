@@ -1,6 +1,6 @@
 # Design + Performance Implementation Plan
 
-**Status:** In progress  
+**Status:** In progress — Batch 1 (D1 ✓ D2 ✓ D11 ✓ 0a2d408) · Batch 2 (D3 ✓ D4 ✓ D10 ✓ 8b51b54)  
 **Rule:** Max 3 sub-agents at a time. Write handoff after every 2 batches (4 phases).
 
 ---
@@ -19,7 +19,7 @@
 
 ### D1 — Heights & Responsive Layout
 **Files:** `public/css/styles.css`, `public/js/app.js`  
-**Status:** TODO
+**Status:** DONE ✓
 
 - Add CSS var `--banner-h: 0px` on `:root`, set to `52px` via JS class when banner visible
 - List table container (`#applicationsTable` or parent): replace fixed height with `calc(100vh - 180px - var(--banner-h))`
@@ -31,8 +31,8 @@
 ---
 
 ### D2 — Applications Header Stats Chips
-**Files:** `public/js/render.js` or `public/js/app.js` (wherever stats subtext is rendered), `public/css/styles.css`  
-**Status:** TODO
+**Files:** `public/js/render.js`, `public/js/app.js`, `public/css/styles.css`  
+**Status:** DONE ✓ — `.stat-chip`, `.stat-dot`, `.stat-active/interview/offer/accepted` CSS added; `buildStatChips()` in both render.js and app.js
 
 Current: `<p>124 active, 41 interviews scheduled, 0 archived shown</p>`
 
@@ -225,8 +225,8 @@ Columns: NAME | DESCRIPTION | LAST CHECKED | ACTIONS
 ---
 
 ### D11 — Toolkit Content
-**Files:** `public/js/render.js` or wherever toolkit card data is defined  
-**Status:** TODO
+**Files:** `public/js/render.js`  
+**Status:** DONE ✓ — 7 cards, "Why Toolkit Exists" removed, Offer Evaluation + Interview Day Checklist added
 
 Remove: `01 — Why Toolkit Exists`
 

@@ -1603,6 +1603,13 @@ function bindApplicationPageActions(payload) {
   bindContentWorkspaceActions(application.id, payload);
   root.querySelectorAll('[data-date-input]').forEach(attachDateMask);
   bindPreparationActions(application.id, recruiterQuestions, todos, root);
+
+  root.querySelectorAll('[data-tags-expand]').forEach((chip) => {
+    chip.addEventListener('click', () => {
+      const row = chip.closest('.tag-row');
+      if (row) row.dataset.tagsCollapsed = 'false';
+    });
+  });
 }
 
 function bindPreparationActions(applicationId, recruiterQuestions, todos, root) {
