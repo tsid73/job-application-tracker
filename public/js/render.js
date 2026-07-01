@@ -418,14 +418,25 @@ export function renderActivity(els, state, payload) {
   renderActivityPagination(els, state);
 }
 
+function buildStatChips(counts) {
+  const chips = [
+    counts.active    && `<span class="stat-chip stat-active"><span class="stat-dot"></span>${counts.active} Active</span>`,
+    counts.interview && `<span class="stat-chip stat-interview"><span class="stat-dot"></span>${counts.interview} Interviews</span>`,
+    counts.offer     && `<span class="stat-chip stat-offer"><span class="stat-dot"></span>${counts.offer} Offers</span>`,
+    counts.accepted  && `<span class="stat-chip stat-accepted"><span class="stat-dot"></span>${counts.accepted} Accepted</span>`,
+  ].filter(Boolean);
+  return chips.length ? chips.join('') : '';
+}
+
 export function renderApplications(els, state, statusOptions) {
   els.table.innerHTML = '';
   els.empty.hidden = state.applications.length !== 0;
 
   const interviews = state.applications.filter((item) => item.status === 'interview_scheduled').length;
-  const archived = state.applications.filter((item) => item.archived_at).length;
-  const viewName = { true: 'archived', all: 'total', closed: 'closed', false: 'active' }[state.filters.archived] || 'active';
-  els.summary.textContent = `${state.applications.length} ${viewName}, ${interviews} interviews scheduled, ${archived} archived shown`;
+  const active = state.applications.filter((item) => item.status === 'applied').length;
+  const offers = state.applications.filter((item) => item.status === 'offer').length;
+  const accepted = state.applications.filter((item) => item.status === 'accepted').length;
+  els.summary.innerHTML = buildStatChips({ active, interview: interviews, offer: offers, accepted });
   if (!state.applications.length) {
     els.empty.innerHTML = renderEmptyState(
       state.filters.search || state.filters.status || state.filters.tag || state.filters.archived !== 'false' ? 'No matches found' : 'Start your tracker',
@@ -516,6 +527,7 @@ function isUrgentNotification(item) {
 
 export function renderNotifications(els, notifications, expanded = false) {
   els.notificationsPanel.hidden = notifications.length === 0;
+  document.documentElement.style.setProperty('--banner-h', notifications.length === 0 ? '0px' : '52px');
   if (!notifications.length) {
     els.notificationsPanel.innerHTML = '';
     els.notificationsPanel.classList.remove('has-urgent');
@@ -897,40 +909,46 @@ function renderSettingsPanel() {
 export function renderToolkit(els) {
   els.toolkitContent.innerHTML = [
     {
-      title: 'Why Toolkit Exists',
       marker: '01',
-      description: 'This is the operating manual for your search. Use it when you need a repeatable checklist, a message starter, or a research frame without opening another document.',
-      items: ['Use it before applying to tighten the CV and notes', 'Use it before recruiter calls to prep smart questions', 'Use it after interviews to decide next actions fast']
-    },
-    {
       title: 'Application Readiness',
+      description: 'Run before submitting. Confirm job link is saved, add 2–3 relevant tags, and write one sentence on why this role fits your target.',
+      items: ['Confirm job link or description is saved', 'Record 2–3 tags so the role is searchable later', 'Capture one sentence on why the role is a fit', 'Note salary range if visible']
+    },
+    {
       marker: '02',
-      description: 'Use this before hitting apply or before saving a role into the tracker.',
-      items: ['Confirm job link or description is saved', 'Record 2 to 3 tags so the role is searchable later', 'Capture one sentence on why the role is worth pursuing', 'Choose the exact CV version you want tied to the application']
-    },
-    {
       title: 'Company Research Frame',
-      marker: '03',
-      description: 'Use these prompts to fill the Preparation research block with substance instead of generic notes.',
-      items: ['What does the company sell and who pays for it?', 'What product or market change is most likely driving this hire?', 'What competitors or substitutes exist?', 'What part of your background is genuinely relevant here?']
+      description: 'Use to fill Company Notes before applying or before a call. Focus on what the interviewer already knows you should know.',
+      items: ['What does the company sell and who pays for it?', 'What product or market change is driving this hire?', 'What competitors or substitutes exist?', 'What part of your background is genuinely relevant here?']
     },
     {
+      marker: '03',
       title: 'Recruiter Call Guide',
-      marker: '04',
-      description: 'Use this when adding recruiter questions in the Preparation section.',
+      description: 'Use during a recruiter screen. Ask these to learn what actually matters, not what the JD says.',
       items: ['Ask how success is measured in the first 90 days', 'Ask what stage usually eliminates candidates', 'Ask which team problems need solving now', 'Ask what distinguishes strong candidates from average ones']
     },
     {
-      title: 'Interview Story Checklist',
-      marker: '05',
-      description: 'Use this before interviews so your notes turn into usable examples.',
-      items: ['Prepare one ownership story', 'Prepare one ambiguity or conflict story', 'Prepare one technical tradeoff story', 'Prepare one failure and recovery story']
+      marker: '04',
+      title: 'Interview Story Bank',
+      description: 'Build before interviews. Map your strongest STAR stories to the competencies this role requires so you are not improvising.',
+      items: ['List 5–7 specific situations you can describe in detail', 'Map each story to: impact, challenge, decision, collaboration', 'Identify which stories answer "tell me about a time..." questions', 'Prepare a short version (60s) and a long version (2–3 min) of each']
     },
     {
+      marker: '05',
       title: 'Follow-up Playbook',
+      description: 'Use after every call or interview. Sets the rule for when to follow up, what to say, and when to stop.',
+      items: ['Send a thank-you within 24 hours — specific, not generic', 'If no response after 5 days, one follow-up only', 'After 2 follow-ups with no response, mark as ghosted and move on', 'Keep follow-ups under 4 sentences']
+    },
+    {
       marker: '06',
-      description: 'Use this after calls or interviews to avoid stale applications.',
-      items: ['Send thank-you notes within 24 hours', 'If no reply, create a to-do for 5 to 7 business days later', 'Log every piece of recruiter or interviewer feedback', 'Archive low-signal roles instead of letting them clutter the active list']
+      title: 'Offer Evaluation',
+      description: 'Run when an offer arrives. Evaluate the full package before negotiating or accepting.',
+      items: ['Base salary vs. your target and market rate', 'Equity: amount, vesting schedule, cliff, strike price', 'Role scope: team size, reporting line, what you own', 'Growth path: promotion criteria, budget for learning', 'Team signals: who you would work with daily']
+    },
+    {
+      marker: '07',
+      title: 'Interview Day Checklist',
+      description: 'Run the morning of. Covers logistics, mindset, and the questions you will ask the panel.',
+      items: ['Confirm time zone, link or location, and interviewer names', 'Re-read your STAR stories and the job description once', 'Prepare 3 questions for the panel — at least one specific to their work', 'Know your ask: next steps, timeline, decision criteria']
     }
   ].map((section) => `
     <section class="toolkit-card">

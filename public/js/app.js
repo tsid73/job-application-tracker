@@ -1352,6 +1352,16 @@ function mountWorkspace(markup, viewName) {
   assertSingleWorkspaceView(viewName);
 }
 
+function buildStatChips(counts) {
+  const chips = [
+    counts.active    && `<span class="stat-chip stat-active"><span class="stat-dot"></span>${counts.active} Active</span>`,
+    counts.interview && `<span class="stat-chip stat-interview"><span class="stat-dot"></span>${counts.interview} Interviews</span>`,
+    counts.offer     && `<span class="stat-chip stat-offer"><span class="stat-dot"></span>${counts.offer} Offers</span>`,
+    counts.accepted  && `<span class="stat-chip stat-accepted"><span class="stat-dot"></span>${counts.accepted} Accepted</span>`,
+  ].filter(Boolean);
+  return chips.length ? chips.join('') : '';
+}
+
 function bindHomeWorkspaceElements() {
   bindWorkspaceElements();
   if (els.filterPanel) {
@@ -1360,9 +1370,10 @@ function bindHomeWorkspaceElements() {
   syncContentHeader();
   if (els.summary) {
     const interviews = state.applications.filter((item) => item.status === 'interview_scheduled').length;
-    const archived = state.applications.filter((item) => item.archived_at).length;
-    const viewName = { true: 'archived', all: 'total', closed: 'closed', false: 'active' }[state.filters.archived] || 'active';
-    els.summary.textContent = `${state.applications.length} ${viewName}, ${interviews} interviews scheduled, ${archived} archived shown`;
+    const active = state.applications.filter((item) => item.status === 'applied').length;
+    const offers = state.applications.filter((item) => item.status === 'offer').length;
+    const accepted = state.applications.filter((item) => item.status === 'accepted').length;
+    els.summary.innerHTML = buildStatChips({ active, interview: interviews, offer: offers, accepted });
   }
   if (els.search) els.search.value = state.filters.search;
   if (els.statusFilter) els.statusFilter.value = state.filters.status;
