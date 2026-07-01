@@ -88,6 +88,7 @@ const workspaceKeys = [
   'activitySearch',
   'activityTable',
   'activityEmpty',
+  'applicationPagination',
   'activityPagination',
   'activityDeleteButton',
   'activitySelectAllCheckbox',

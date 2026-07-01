@@ -110,6 +110,7 @@ export function renderHomeWorkspace() {
             <tbody id="applicationsTable"></tbody>
           </table>
           <div id="emptyState" class="empty" hidden>No applications match the current filters.</div>
+          <div id="applicationPagination" class="pagination"></div>
         </section>
         <div id="bulkActionsBar" class="bulk-bar" hidden>
           <strong id="bulkCount">0 selected</strong>
@@ -2263,5 +2264,24 @@ function renderActivityPagination(els, state) {
     <span>${start}-${end} of ${state.activity.total}</span>
     <button class="secondary" type="button" data-activity-page="${page - 1}" ${page <= 1 ? 'disabled' : ''}>Prev</button>
     <button class="secondary" type="button" data-activity-page="${page + 1}" ${page >= totalPages ? 'disabled' : ''}>Next</button>
+  `;
+}
+
+export function renderApplicationPagination(els, state) {
+  if (!els.applicationPagination) return;
+  const pageSize = 50;
+  const total = state.applicationTotal;
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  const page = Math.min(state.filters.page, totalPages);
+  if (totalPages <= 1) {
+    els.applicationPagination.innerHTML = '';
+    return;
+  }
+  const start = (page - 1) * pageSize + 1;
+  const end = Math.min(total, page * pageSize);
+  els.applicationPagination.innerHTML = `
+    <span>${start}–${end} of ${total}</span>
+    <button class="secondary" type="button" data-app-page="${page - 1}" ${page <= 1 ? 'disabled' : ''}>Prev</button>
+    <button class="secondary" type="button" data-app-page="${page + 1}" ${page >= totalPages ? 'disabled' : ''}>Next</button>
   `;
 }

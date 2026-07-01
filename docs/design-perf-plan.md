@@ -1,6 +1,6 @@
 # Design + Performance Implementation Plan
 
-**Status:** In progress — Batch 1 (D1 ✓ D2 ✓ D11 ✓ 0a2d408) · Batch 2 (D3 ✓ D4 ✓ D10 ✓ 8b51b54) · Batch 3 (D5 ✓ D6 ✓ D7 ✓ bbc651a)  
+**Status:** In progress — Batch 1 (D1 ✓ D2 ✓ D11 ✓ 0a2d408) · Batch 2 (D3 ✓ D4 ✓ D10 ✓ 8b51b54) · Batch 3 (D5 ✓ D6 ✓ D7 ✓ bbc651a) · Batch 4 (D8 ✓ D9 ✓ P1 ✓ af2553b)  
 **Rule:** Max 3 sub-agents at a time. Write handoff after every 2 batches (4 phases).
 
 ---

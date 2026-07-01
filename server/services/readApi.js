@@ -51,6 +51,7 @@ export function createReadApi({ pool, audit }) {
             applied_date - CURRENT_DATE AS days_remaining
           FROM applications
           WHERE archived_at IS NULL AND applied_date IS NOT NULL
+            AND applied_date >= CURRENT_DATE - INTERVAL '90 days'
           UNION ALL
           SELECT
             a.id,
@@ -63,6 +64,7 @@ export function createReadApi({ pool, audit }) {
           JOIN applications a ON a.id = sh.application_id
           WHERE a.archived_at IS NULL
             AND sh.to_status NOT IN ('applied', 'interview_scheduled')
+            AND sh.changed_at >= NOW() - INTERVAL '30 days'
         `
       );
       return { reminders: result.rows };
@@ -347,6 +349,9 @@ export function createReadApi({ pool, audit }) {
       const archived = cleanString(url.searchParams.get('archived')) || 'false';
       const dateFrom = cleanString(url.searchParams.get('dateFrom')) || '';
       const dateTo = cleanString(url.searchParams.get('dateTo')) || '';
+      const singleId = Number(url.searchParams.get('id')) || 0;
+      const page = Math.max(1, Number(url.searchParams.get('page')) || 1);
+      const pageSize = 50;
       if (status) validateStatus(status);
       if (!['false', 'true', 'all', 'closed'].includes(archived)) {
         const error = new Error('archived must be false, true, all, or closed');
@@ -365,7 +370,6 @@ export function createReadApi({ pool, audit }) {
             a.location,
             a.recruiter,
             a.contact_person,
-            a.notes,
             to_char(a.applied_date, 'YYYY-MM-DD') AS applied_date,
             to_char(a.interview_date, 'YYYY-MM-DD') AS interview_date,
             a.next_action,
@@ -375,13 +379,15 @@ export function createReadApi({ pool, audit }) {
             a.archived_at,
             CASE WHEN a.interview_date IS NULL THEN NULL ELSE a.interview_date - CURRENT_DATE END AS days_remaining,
             COALESCE(array_agg(DISTINCT t.name) FILTER (WHERE t.name IS NOT NULL), '{}') AS tags,
-            c.original_name AS cv_name
+            c.original_name AS cv_name,
+            COUNT(*) OVER ()::int AS total_count
           FROM applications a
           LEFT JOIN application_tags at ON at.application_id = a.id
           LEFT JOIN tags t ON t.id = at.tag_id
           LEFT JOIN application_cvs ac ON ac.application_id = a.id
           LEFT JOIN cv_versions c ON c.id = ac.cv_id
-          WHERE ($1 = '' OR a.company_name ILIKE '%' || $1 || '%' OR a.role_title ILIKE '%' || $1 || '%')
+          WHERE ($7 = 0 OR a.id = $7)
+            AND ($1 = '' OR a.company_name ILIKE '%' || $1 || '%' OR a.role_title ILIKE '%' || $1 || '%')
             AND ($2 = '' OR a.status = $2::application_status)
             AND ($3 = '' OR EXISTS (
               SELECT 1
@@ -390,7 +396,8 @@ export function createReadApi({ pool, audit }) {
               WHERE at2.application_id = a.id AND t2.name ILIKE '%' || $3 || '%'
             ))
             AND (
-              $4 = 'all'
+              $7 > 0
+              OR $4 = 'all'
               OR ($4 = 'true' AND a.archived_at IS NOT NULL)
               OR ($4 = 'closed' AND a.archived_at IS NULL AND a.status IN ('rejected', 'withdrawn', 'ghosted'))
               OR ($4 = 'false' AND a.archived_at IS NULL AND a.status NOT IN ('rejected', 'withdrawn', 'ghosted'))
@@ -404,11 +411,13 @@ export function createReadApi({ pool, audit }) {
             a.interview_date ASC NULLS LAST,
             a.applied_date DESC,
             a.id DESC
+          ${singleId > 0 ? '' : `LIMIT ${pageSize} OFFSET ${(page - 1) * pageSize}`}
         `,
-        [search, status, tag, archived, dateFrom, dateTo]
+        [search, status, tag, archived, dateFrom, dateTo, singleId]
       );
 
-      return { applications: result.rows };
+      const total = singleId > 0 ? result.rows.length : (result.rows[0]?.total_count ?? 0);
+      return { applications: result.rows.map(({ total_count, ...row }) => row), total, page, pageSize };
     },
 
     async lookupApplications(url) {

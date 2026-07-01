@@ -26,8 +26,10 @@ export const state = {
     tag: '',
     archived: 'false',
     dateFrom: '',
-    dateTo: ''
+    dateTo: '',
+    page: 1
   },
+  applicationTotal: 0,
   selectedIds: new Set(),
   notifications: [],
   notificationsExpanded: false,

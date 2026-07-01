@@ -5,6 +5,7 @@ import {
   buildApplicationRow,
   renderActivity,
   renderApplicationCVSelect,
+  renderApplicationPagination,
   renderDocumentContent,
   renderApplicationPage,
   renderApplications,
@@ -34,7 +35,7 @@ const aiEndpoints = {
 
 bindGlobalEvents();
 
-Promise.all([loadApplications(), loadCVs(), loadSavedFilters(), loadReminders(), loadNotifications(), loadJobBoards(), loadTargetCompanies()])
+Promise.all([loadApplications(), loadSavedFilters(), loadNotifications()])
   .then(async () => {
     await loadAppConfig();
     await renderCurrentRoute();
@@ -181,21 +182,25 @@ function bindHomeWorkspaceEvents() {
   els.targetCompanyOpenButton?.addEventListener('click', () => openTargetCompanyDialog());
   els.search?.addEventListener('input', debounce(() => {
     state.filters.search = els.search.value.trim();
+    state.filters.page = 1;
     els.savedFilterSelect.value = '';
     loadApplications();
   }, 250));
   els.statusFilter?.addEventListener('change', () => {
     state.filters.status = els.statusFilter.value;
+    state.filters.page = 1;
     els.savedFilterSelect.value = '';
     loadApplications();
   });
   els.tagFilter?.addEventListener('input', debounce(() => {
     state.filters.tag = els.tagFilter.value.trim();
+    state.filters.page = 1;
     els.savedFilterSelect.value = '';
     loadApplications();
   }, 250));
   els.archiveFilter?.addEventListener('change', () => {
     state.filters.archived = els.archiveFilter.value;
+    state.filters.page = 1;
     els.savedFilterSelect.value = '';
     loadApplications();
   });
@@ -205,6 +210,7 @@ function bindHomeWorkspaceEvents() {
       showToast('From date cannot be after To date.');
     }
     state.filters.dateFrom = els.dateFromFilter.value;
+    state.filters.page = 1;
     els.savedFilterSelect.value = '';
     loadApplications();
   });
@@ -214,6 +220,7 @@ function bindHomeWorkspaceEvents() {
       showToast('To date cannot be before From date.');
     }
     state.filters.dateTo = els.dateToFilter.value;
+    state.filters.page = 1;
     els.savedFilterSelect.value = '';
     loadApplications();
   });
@@ -224,6 +231,7 @@ function bindHomeWorkspaceEvents() {
     state.filters.archived = 'false';
     state.filters.dateFrom = '';
     state.filters.dateTo = '';
+    state.filters.page = 1;
     if (els.search) els.search.value = '';
     if (els.statusFilter) els.statusFilter.value = '';
     if (els.tagFilter) els.tagFilter.value = '';
@@ -279,6 +287,12 @@ function bindHomeWorkspaceEvents() {
     if (checkbox.checked) state.selectedIds.add(id);
     else state.selectedIds.delete(id);
     updateSelectionUI();
+  });
+  els.applicationPagination?.addEventListener('click', (event) => {
+    const button = event.target.closest('[data-app-page]');
+    if (!button) return;
+    state.filters.page = Number(button.dataset.appPage);
+    loadApplications();
   });
   els.activitySearch?.addEventListener('input', debounce(() => {
     state.activity.search = els.activitySearch.value.trim();
@@ -699,20 +713,28 @@ function applicationQueryParams() {
   if (state.filters.dateFrom) params.set('dateFrom', state.filters.dateFrom);
   if (state.filters.dateTo) params.set('dateTo', state.filters.dateTo);
   params.set('archived', state.filters.archived);
+  if (state.filters.page > 1) params.set('page', state.filters.page);
   return params;
 }
 
 async function loadApplications() {
   const payload = await api(`/api/applications?${applicationQueryParams().toString()}`);
   state.applications = payload.applications;
+  state.applicationTotal = payload.total ?? state.applications.length;
   if (els.table) renderApplications(els, state, statusOptions);
+  if (els.applicationPagination) renderApplicationPagination(els, state);
   updateSelectionUI();
   if (state.view === 'kanban' && els.kanbanBoard) renderKanban(els, state.applications, statusLabels);
 }
 
 async function refreshApplicationRow(id) {
-  const payload = await api(`/api/applications?${applicationQueryParams().toString()}`);
-  state.applications = payload.applications;
+  const payload = await api(`/api/applications?id=${id}`);
+  const updated = payload.applications[0];
+  if (updated) {
+    const idx = state.applications.findIndex((item) => item.id === id);
+    if (idx !== -1) state.applications[idx] = updated;
+    else state.applications.push(updated);
+  }
   const row = els.table?.querySelector(`tr[data-id="${id}"]`);
   const application = state.applications.find((item) => item.id === id);
   if (!row || !application) {
