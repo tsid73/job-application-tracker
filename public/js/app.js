@@ -2731,20 +2731,23 @@ function openDocumentPreview(application, document, relatedDocuments = []) {
       <section class="document-viewer-shell">
         <header class="document-viewer-header">
           <div class="document-viewer-header-copy">
-            <div class="panel-kicker">${escapeHtml(formatDocType(document.document_type))}</div>
-            <h3>${escapeHtml(document.title)}</h3>
             <div class="document-card-meta">
               <span class="pill subtle">${escapeHtml(friendlyProviderLabel(document))}</span>
-              <span class="pill info-pill">Version ${versionNumber}${currentIndex === 0 ? ' • Latest' : ''}</span>
-              <span class="pill subtle">${escapeHtml(formatDateTime(document.created_at))}</span>
               ${document.model_name ? `<span class="pill subtle">${escapeHtml(document.model_name)}</span>` : ''}
+              <span class="pill info-pill">Version ${versionNumber}${currentIndex === 0 ? ' · Latest' : ''}</span>
+              <span class="pill subtle">${escapeHtml(formatDateTime(document.created_at))}</span>
             </div>
           </div>
           <div class="document-card-actions document-viewer-actions">
             <a class="button-link secondary" href="${escapeAttribute(document.download_url)}">Download</a>
-            <button type="button" data-preview-copy="${document.id}">Copy Text</button>
+            <button class="secondary" type="button" data-preview-copy="${document.id}">Copy Text</button>
             <button class="secondary" type="button" data-preview-regenerate="${document.id}">Regenerate</button>
-            <button class="danger" type="button" data-preview-delete="${document.id}">Delete</button>
+            <details class="inline-menu">
+              <summary class="button-link tertiary" aria-label="More actions">More</summary>
+              <div class="inline-menu-list">
+                <button class="danger" type="button" data-preview-delete="${document.id}">Delete</button>
+              </div>
+            </details>
           </div>
         </header>
         <div class="document-viewer-layout">
@@ -2755,35 +2758,15 @@ function openDocumentPreview(application, document, relatedDocuments = []) {
           </article>
           <aside class="document-viewer-sidebar">
             <section class="route-card document-viewer-sidecard">
-              <div class="panel-kicker">Document Details</div>
-              <div class="metadata-list">
-                <div class="metadata-row">
-                  <span>Status</span>
-                  <strong>${escapeHtml(document.generation_status || 'completed')}</strong>
-                </div>
-                <div class="metadata-row">
-                  <span>Saved Versions</span>
-                  <strong>${escapeHtml(String(orderedDocuments.length))}</strong>
-                </div>
-                <div class="metadata-row">
-                  <span>Format</span>
-                  <strong>DOCX + Text</strong>
-                </div>
-              </div>
-            </section>
-            <section class="route-card document-viewer-sidecard">
               <div class="section-heading">
-                <div>
-                  <div class="panel-kicker">Versions</div>
-                  <h4>${orderedDocuments.length} saved</h4>
-                </div>
+                <div class="panel-kicker">Versions</div>
                 ${currentIndex !== 0 ? '<button class="secondary" type="button" data-view-restore>Restore</button>' : ''}
               </div>
               <div class="document-viewer-version-list">
                 ${orderedDocuments.map((item, index) => `
                   <article class="document-viewer-version-item ${Number(item.id) === Number(document.id) ? 'is-current' : ''}">
                     <div>
-                      <strong>Version ${orderedDocuments.length - index}${index === 0 ? ' • Latest' : ''}</strong>
+                      <strong>Version ${orderedDocuments.length - index}${index === 0 ? ' · Latest' : ''}</strong>
                       <p>${escapeHtml(formatDateTime(item.created_at))}</p>
                     </div>
                     <div class="document-card-actions">

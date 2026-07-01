@@ -1372,8 +1372,9 @@ function renderWorkflowTab({ application, preparation, recruiterQuestions, feedb
 
 function renderContentSummaryTab({ application, primaryCv, queuedJobs, failedJobs, allDocuments, allJobs, selectedProvider, capabilities, workspace }) {
   const primaryCvId = primaryCv?.id || '';
-  const documentSlots = filterDocumentSlots(buildDocumentSlots(allDocuments, allJobs), workspace);
-  const documentTypes = [...new Set(buildDocumentSlots(allDocuments, allJobs).map((item) => item.type))];
+  const isClosed = isClosedStatus(application.status) && !application.archived_at;
+  const allSlots = buildDocumentSlots(allDocuments, allJobs);
+  const documentSlots = filterDocumentSlots(allSlots, workspace);
   const recentDocumentId = Number(workspace.recentDocumentId) || null;
   const missingSlots = documentSlots.filter((slot) => slot.status === 'missing' || slot.status === 'failed');
   return `
@@ -1383,55 +1384,22 @@ function renderContentSummaryTab({ application, primaryCv, queuedJobs, failedJob
           <div>
             <div class="panel-kicker">Content Workspace</div>
             <h3>Generated Documents</h3>
-
           </div>
           <div class="content-toolbar-meta">
-            ${renderSegmentedProviderControl({
+            ${!isClosed ? renderSegmentedProviderControl({
               selectedProvider: selectedProvider || 'gemini',
               awsEnabled: capabilities?.awsEnabled,
               attrName: 'data-library-provider-select'
-            })}
-            ${missingSlots.length ? `<button class="secondary" type="button" data-generate-missing data-cv-id="${escapeAttribute(primaryCvId || '')}">Generate Missing (${missingSlots.length})</button>` : ''}
+            }) : ''}
+            ${!isClosed && missingSlots.length ? `<button class="secondary" type="button" data-generate-missing data-cv-id="${escapeAttribute(primaryCvId || '')}">Generate Missing (${missingSlots.length})</button>` : ''}
             ${allDocuments.length ? `<a class="button-link secondary" href="/api/applications/${application.id}/artifacts.zip">Export Artifacts</a>` : ''}
           </div>
         </div>
         ${recentDocumentId ? '<div class="document-card-meta"><span class="pill info-pill">Recent update available in the list below.</span></div>' : ''}
-        <div class="content-filter-bar" hidden style="display: none !important;">
-          <label>
-            <span>Search</span>
-            <input type="search" value="${escapeAttribute(workspace.search || '')}" placeholder="Title or provider" data-content-search>
-          </label>
-          <label>
-            <span>Type</span>
-            <select data-content-type>
-              <option value="all">All types</option>
-              ${documentTypes.map((type) => `<option value="${escapeAttribute(type)}"${workspace.type === type ? ' selected' : ''}>${escapeHtml(formatAction(type))}</option>`).join('')}
-            </select>
-          </label>
-          <label>
-            <span>Provider</span>
-            <select data-content-provider>
-              <option value="all"${workspace.provider === 'all' ? ' selected' : ''}>All providers</option>
-              <option value="gemini"${workspace.provider === 'gemini' ? ' selected' : ''}>Gemini</option>
-              <option value="aws"${workspace.provider === 'aws' ? ' selected' : ''}>AWS</option>
-            </select>
-          </label>
-          <label>
-            <span>Sort</span>
-            <select data-content-sort>
-              <option value="newest"${workspace.sort === 'newest' ? ' selected' : ''}>Newest first</option>
-              <option value="oldest"${workspace.sort === 'oldest' ? ' selected' : ''}>Oldest first</option>
-            </select>
-          </label>
-          <label class="checkbox inline-checkbox content-filter-toggle">
-            <input type="checkbox" data-content-latest-only ${workspace.latestOnly ? 'checked' : ''}>
-            <span>Latest only</span>
-          </label>
-        </div>
-        <div class="content-asset-list">
-          ${documentSlots.map((slot) => renderContentDocumentSlot(application.id, slot, primaryCvId, recentDocumentId)).join('') || (allDocuments.length || allJobs.length
+        <div class="content-slot-grid">
+          ${documentSlots.map((slot) => renderContentDocumentSlot(application.id, slot, primaryCvId, recentDocumentId, isClosed)).join('') || (allDocuments.length || allJobs.length
             ? renderInlineEmpty('No documents match these filters', 'Clear or relax the active filters to see more generated content.')
-            : renderInlineEmpty('No generated content yet', 'Generate a document from the workspace above to create your first saved asset.'))}
+            : renderInlineEmpty('No generated content yet', isClosed ? 'This application is closed — view-only.' : 'Generate a document from the workspace above to create your first saved asset.'))}
         </div>
       </section>
       <section class="route-card">
@@ -1900,34 +1868,36 @@ function renderOverviewDocumentSlot(applicationId, slot, cvId) {
   `;
 }
 
-function renderContentDocumentSlot(applicationId, slot, cvId, recentDocumentId = null) {
+function renderContentDocumentSlot(applicationId, slot, cvId, recentDocumentId = null, isClosed = false) {
   const isRecent = slot.latestDocument && Number(slot.latestDocument.id) === Number(recentDocumentId);
+  const hasDoc = slot.status === 'ready' || slot.status === 'updating';
+  const meta = slot.latestDocument
+    ? `${formatDateTime(slot.latestDocument.created_at)}${slot.documents.length > 1 ? ` · ${slot.documents.length} versions` : ''}`
+    : slot.activeJob ? `Started ${formatDateTime(slot.activeJob.created_at)}` : '';
+
+  let action = '';
+  if (hasDoc) {
+    action = `<a class="button-link secondary" href="/applications/${applicationId}?tab=content&document=${slot.latestDocument.id}">Open</a>`;
+  } else if (!isClosed) {
+    if (slot.status === 'generating') {
+      action = `<button type="button" disabled>Generating…</button>`;
+    } else if (slot.status === 'failed') {
+      action = `<button type="button" class="secondary" data-ai="${escapeAttribute(slot.action)}" data-doc-type="${escapeAttribute(slot.type)}" data-cv-id="${escapeAttribute(cvId)}">Retry</button>`;
+    } else {
+      action = `<button type="button" class="secondary" data-ai="${escapeAttribute(slot.action)}" data-doc-type="${escapeAttribute(slot.type)}" data-cv-id="${escapeAttribute(cvId)}">Generate</button>`;
+    }
+  }
+
   return `
-    <section class="document-slot-card${isRecent ? ' is-recent' : ''}">
-      <div class="document-slot-head">
-        <div class="document-type-line">
-          <span class="document-type-icon" aria-hidden="true">${renderDocumentTypeIcon(slot.type)}</span>
-          <div class="document-slot-copy">
-            <h4>${escapeHtml(slot.title)}</h4>
-            ${isRecent ? '<span class="pill info-pill">Latest changed</span>' : ''}
-          </div>
-        </div>
+    <article class="content-slot-item content-slot-${slot.status}${isRecent ? ' is-recent' : ''}">
+      <div class="content-slot-head">
+        <span class="document-type-icon" aria-hidden="true">${renderDocumentTypeIcon(slot.type)}</span>
+        <strong class="content-slot-title">${escapeHtml(slot.title)}</strong>
         ${renderSlotStatusBadge(slot)}
       </div>
-      ${renderSlotMetadata(slot)}
-      <div class="document-card-actions document-slot-actions">
-        ${renderSlotPrimaryAction(slot, applicationId, cvId)}
-      </div>
-      ${slot.latestDocument ? `
-        <details class="document-version-list">
-          <summary>${slot.documents.length > 1 ? `${slot.documents.length} versions` : '1 version'}</summary>
-          <div class="document-version-items">
-            ${slot.documents.map((doc, index) => renderDocumentVersionRow(applicationId, doc, index === 0, slot.documents[0]?.id)).join('')}
-          </div>
-        </details>
-      ` : ''}
-      ${slot.failedJob && !slot.latestDocument ? `<p class="form-error inline-error">${escapeHtml(slot.failedJob.error_message || 'Generation failed. Retry to create this document.')}</p>` : ''}
-    </section>
+      ${meta ? `<p class="content-slot-meta muted-text">${escapeHtml(meta)}</p>` : (!hasDoc && !isClosed ? '' : '<p class="content-slot-meta muted-text">—</p>')}
+      ${action ? `<div class="content-slot-actions">${action}</div>` : ''}
+    </article>
   `;
 }
 

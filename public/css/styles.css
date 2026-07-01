@@ -2830,9 +2830,58 @@ a {
 }
 
 .artifact-grid,
-.content-asset-list {
+.content-slot-grid {
   display: grid;
-  gap: 14px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 4px;
+}
+
+.content-slot-item {
+  display: grid;
+  gap: 8px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--card);
+}
+
+.content-slot-item.is-recent {
+  border-color: rgba(22, 78, 103, 0.26);
+  box-shadow: 0 0 0 1px rgba(22, 78, 103, 0.08);
+}
+
+.content-slot-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.content-slot-title {
+  flex: 1;
+  font-size: 13px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.content-slot-meta {
+  font-size: 11px;
+  margin: 0;
+}
+
+.content-slot-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.content-slot-actions button,
+.content-slot-actions .button-link {
+  font-size: 12px;
+  padding: 4px 10px;
+  height: auto;
+  min-height: 28px;
 }
 
 .artifact-grid {
@@ -2840,8 +2889,7 @@ a {
   margin-top: 14px;
 }
 
-.artifact-card,
-.document-slot-card {
+.artifact-card {
   display: grid;
   gap: 12px;
   padding: 14px;
@@ -2851,16 +2899,11 @@ a {
 }
 
 .artifact-card:focus-within,
-.document-slot-card:focus-within,
+.content-slot-item:focus-within,
 .document-version-row:focus-within,
 .document-viewer-version-item:focus-within {
   outline: 2px solid rgba(22, 78, 103, 0.4);
   outline-offset: 2px;
-}
-
-.document-slot-card.is-recent {
-  border-color: rgba(22, 78, 103, 0.26);
-  box-shadow: 0 0 0 1px rgba(22, 78, 103, 0.08);
 }
 
 .artifact-card-generating,
@@ -2872,8 +2915,7 @@ a {
   background: #faeff1;
 }
 
-.artifact-card-head,
-.document-slot-head {
+.artifact-card-head {
   display: flex;
   align-items: start;
   justify-content: space-between;
@@ -2888,29 +2930,24 @@ a {
 }
 
 .document-type-icon {
-  width: 36px;
-  height: 36px;
+  width: 28px;
+  height: 28px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  flex: 0 0 36px;
-  border-radius: 12px;
+  flex: 0 0 28px;
+  border-radius: 8px;
+  font-size: 14px;
   color: var(--accent-dark);
   background: rgba(22, 78, 103, 0.08);
 }
 
 .document-type-icon svg {
-  width: 18px;
-  height: 18px;
+  width: 16px;
+  height: 16px;
 }
 
-.document-slot-copy {
-  display: grid;
-  gap: 6px;
-}
-
-.artifact-card h4,
-.document-slot-card h4 {
+.artifact-card h4 {
   margin: 0;
   font-size: 18px;
 }
@@ -3780,6 +3817,7 @@ a {
   }
 
   .artifact-grid,
+  .content-slot-grid,
   .document-viewer-layout {
     grid-template-columns: 1fr;
   }
