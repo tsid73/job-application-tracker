@@ -587,18 +587,11 @@ main {
 }
 
 .notifications-panel {
-  margin-bottom: 16px;
-  padding: 10px 14px;
-  border: 1px solid var(--line);
-  border-left: 3px solid var(--accent);
-  border-radius: 0 8px 8px 0;
-  background: var(--card);
-  box-shadow: var(--shadow-sm);
+  position: relative;
 }
 
 .notifications-shell {
-  display: grid;
-  gap: 10px;
+  display: block;
 }
 
 .notifications-header {
@@ -610,65 +603,88 @@ main {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  padding: 10px 12px;
-  border-radius: 16px;
-  background: var(--card);
+  height: 36px;
+  padding: 0 16px;
+  background: color-mix(in srgb, #f59e0b 10%, var(--card));
+  border: none;
+  border-bottom: 1px solid color-mix(in srgb, #f59e0b 20%, transparent);
+  border-radius: 0;
   color: var(--text);
-  border-color: rgba(217, 170, 56, 0.18);
   box-shadow: none;
+  cursor: pointer;
+  font-size: 13px;
+  gap: 8px;
 }
 
 .notifications-toggle:hover {
-  background: var(--panel);
+  background: color-mix(in srgb, #f59e0b 16%, var(--card));
 }
 
 .notifications-toggle-copy {
-  display: grid;
-  gap: 2px;
-  text-align: left;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
 }
 
 .notifications-toggle-copy strong {
-  font-size: 14px;
+  font-size: 13px;
+  font-weight: 600;
 }
 
 .notifications-toggle-copy span {
   color: var(--muted);
   font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .notifications-count {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 32px;
-  height: 32px;
-  padding: 0 10px;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
   border-radius: 999px;
-  background: var(--accent);
+  background: #f59e0b;
   color: white;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 700;
 }
 
 .notifications-action {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  color: var(--accent-dark);
+  gap: 6px;
+  color: #d97706;
   font-size: 12px;
-  font-weight: 800;
+  font-weight: 600;
   white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.notifications-grid {
+  position: absolute;
+  top: 36px;
+  left: 0;
+  right: 0;
+  z-index: 200;
+  max-height: min(60vh, 400px);
+  overflow-y: auto;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-top: none;
+  border-radius: 0 0 12px 12px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+  display: grid;
+  gap: 8px;
+  padding: 12px;
 }
 
 .notifications-shell.is-closed .notifications-grid {
   display: none;
-}
-
-.notifications-grid {
-  display: grid;
-  gap: 10px;
 }
 
 .notification-card {
@@ -4724,55 +4740,71 @@ input:focus, select:focus, textarea:focus {
 }
 
 /* True Funnel Visualization */
-.true-funnel {
+.funnel-bars {
   display: flex;
   flex-direction: column;
-  padding: 10px 0;
+  gap: 10px;
+  padding-top: 8px;
 }
-.funnel-stage {
+
+.funnel-bar-row {
   display: grid;
-  grid-template-columns: 1fr 160px 1fr;
+  grid-template-columns: 72px 1fr auto;
   align-items: center;
+  gap: 8px;
 }
-.funnel-shape-container {
-  height: 48px;
-  position: relative;
-}
-.funnel-shape {
-  width: 100%;
-  height: 100%;
-  opacity: 0.9;
-  transition: all 0.3s ease;
-}
-.funnel-stage-label {
+
+.funnel-bar-label {
+  font-size: 12px;
+  color: var(--muted);
   text-align: right;
-  padding-right: 16px;
+}
+
+.funnel-bar-track {
+  height: 8px;
+  background: var(--line);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.funnel-bar-fill {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.3s ease;
+}
+
+.funnel-bar-count {
   font-size: 13px;
-  font-weight: 500;
-  color: var(--muted);
-}
-.funnel-stage-count {
-  text-align: left;
-  padding-left: 16px;
-  font-size: 18px;
   font-weight: 600;
+  white-space: nowrap;
+  min-width: 60px;
+}
+
+.funnel-conv-rate {
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--muted);
+  margin-left: 4px;
+}
+
+.response-rate-display {
+  font-size: 28px;
+  font-weight: 700;
   color: var(--text);
+  line-height: 1;
+  margin: 8px 0 12px;
 }
-.funnel-conv {
-  display: flex;
-  justify-content: center;
-  margin: -12px 0;
-  z-index: 2;
-}
-.conv-pill {
-  background: var(--panel);
-  border: 1px solid var(--line);
-  padding: 2px 8px;
-  border-radius: 99px;
-  font-size: 10px;
-  font-weight: 600;
+
+.response-rate-display span {
+  font-size: 13px;
+  font-weight: 400;
   color: var(--muted);
-  box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+}
+
+.tags-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 2px 24px;
 }
 
 /* Smooth Transitions & Dialog Animations */

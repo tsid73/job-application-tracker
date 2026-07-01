@@ -138,7 +138,6 @@ export function renderHomeWorkspace() {
         <section class="toolbar" aria-label="Activity filters">
           <div class="toolbar-main-row">
             <label>
-              <span>Activity Query</span>
               <input id="activitySearchInput" type="search" placeholder="Company, action, detail">
             </label>
             <button id="activityResetButton" class="icon-button" type="button" aria-label="Clear filters" title="Clear filters" style="align-self: flex-end; margin-bottom: 4px;">
@@ -184,7 +183,6 @@ export function renderHomeWorkspace() {
         <section class="detail-section boards-surface">
           <div class="section-heading boards-heading">
             <div>
-              <h3>Company List</h3>
             </div>
             <div style="display: flex; gap: 8px; align-items: center;">
               <button id="targetCompanyFilterToggle" class="icon-button" type="button" aria-label="Toggle filters" title="Filters">
@@ -260,18 +258,6 @@ export function renderInsights(els, report, stats, statusLabels, mode = 'active'
     return reportRow(row.tag, Number(row.applications), tagMax, {}, toIntStr, '--focus');
   }).join('') || '<p>No tag data.</p>';
 
-  const getW = (count) => total > 0 ? Math.max(15, (count / total) * 100) : 100;
-  const w0 = getW(funnelRows[0].count);
-  const w1 = getW(funnelRows[1].count);
-  const w2 = getW(funnelRows[2].count);
-  const w3 = getW(funnelRows[3].count);
-
-  const poly = (topW, botW) => {
-    const tl = (100 - topW) / 2, tr = 100 - tl;
-    const bl = (100 - botW) / 2, br = 100 - bl;
-    return `clip-path: polygon(${tl}% 0%, ${tr}% 0%, ${br}% 100%, ${bl}% 100%);`;
-  };
-
   els.insightsContent.innerHTML = `
     <div class="insights-toolbar" style="grid-column: 1 / -1; display: flex; justify-content: flex-end; gap: 6px; margin-bottom: 4px;">
       <button class="${mode === 'active' ? '' : 'secondary'}" data-insights-mode="active" type="button">Active Pipeline</button>
@@ -282,50 +268,36 @@ export function renderInsights(els, report, stats, statusLabels, mode = 'active'
       <div>
         <div class="panel-kicker">Funnel</div>
         <h3>Application Funnel</h3>
-        <div class="true-funnel">
-          <div class="funnel-stage">
-            <div class="funnel-stage-label">Applied</div>
-            <div class="funnel-shape-container">
-              <div class="funnel-shape" style="${poly(w0, w1)} background: var(--accent); border-radius: 8px 8px 0 0;"></div>
-            </div>
-            <div class="funnel-stage-count">${funnelRows[0].count}</div>
+        <div class="funnel-bars">
+          <div class="funnel-bar-row">
+            <span class="funnel-bar-label">Applied</span>
+            <div class="funnel-bar-track"><div class="funnel-bar-fill" style="width: 100%; background: var(--accent);"></div></div>
+            <span class="funnel-bar-count">${total}</span>
           </div>
-          <div class="funnel-conv"><span class="conv-pill">↓ ${rate(stats.funnel.interviewed, total)} to Interview</span></div>
-          
-          <div class="funnel-stage">
-            <div class="funnel-stage-label">Interview</div>
-            <div class="funnel-shape-container">
-              <div class="funnel-shape" style="${poly(w1, w2)} background: var(--int);"></div>
-            </div>
-            <div class="funnel-stage-count">${funnelRows[1].count}</div>
+          <div class="funnel-bar-row">
+            <span class="funnel-bar-label">Interview</span>
+            <div class="funnel-bar-track"><div class="funnel-bar-fill" style="width: ${total > 0 ? Math.max(2, (funnelRows[1].count / total) * 100) : 0}%; background: var(--int);"></div></div>
+            <span class="funnel-bar-count">${funnelRows[1].count} <span class="funnel-conv-rate">${rate(stats.funnel.interviewed, total)}</span></span>
           </div>
-          <div class="funnel-conv"><span class="conv-pill">↓ ${rate(stats.funnel.offers, stats.funnel.interviewed)} to Offer</span></div>
-          
-          <div class="funnel-stage">
-            <div class="funnel-stage-label">Offer</div>
-            <div class="funnel-shape-container">
-              <div class="funnel-shape" style="${poly(w2, w3)} background: var(--act);"></div>
-            </div>
-            <div class="funnel-stage-count">${funnelRows[2].count}</div>
+          <div class="funnel-bar-row">
+            <span class="funnel-bar-label">Offer</span>
+            <div class="funnel-bar-track"><div class="funnel-bar-fill" style="width: ${total > 0 ? Math.max(2, (funnelRows[2].count / total) * 100) : 0}%; background: var(--act);"></div></div>
+            <span class="funnel-bar-count">${funnelRows[2].count} <span class="funnel-conv-rate">${rate(stats.funnel.offers, stats.funnel.interviewed)}</span></span>
           </div>
-          <div class="funnel-conv"><span class="conv-pill">↓ ${rate(stats.funnel.accepted, stats.funnel.offers)} to Accept</span></div>
-          
-          <div class="funnel-stage">
-            <div class="funnel-stage-label">Accepted</div>
-            <div class="funnel-shape-container">
-              <div class="funnel-shape" style="${poly(w3, w3)} background: var(--act); border-radius: 0 0 8px 8px;"></div>
-            </div>
-            <div class="funnel-stage-count">${funnelRows[3].count}</div>
+          <div class="funnel-bar-row">
+            <span class="funnel-bar-label">Accepted</span>
+            <div class="funnel-bar-track"><div class="funnel-bar-fill" style="width: ${total > 0 ? Math.max(2, (funnelRows[3].count / total) * 100) : 0}%; background: var(--act);"></div></div>
+            <span class="funnel-bar-count">${funnelRows[3].count} <span class="funnel-conv-rate">${rate(stats.funnel.accepted, stats.funnel.offers)}</span></span>
           </div>
         </div>
       </div>
       <div>
         <div class="panel-kicker">Outcomes</div>
         <h3>Responses</h3>
+        <p class="response-rate-display">${rate(stats.funnel.responded, total)} <span>response rate</span></p>
         ${reportRow('Responded', Number(stats.funnel.responded || 0), Math.max(1, total), null, total, '--app')}
         ${reportRow('Rejected', Number(stats.funnel.rejected || 0), Math.max(1, total), null, total, '--cls')}
         ${reportRow('Ghosted', Number(stats.totals.ghosted || 0), Math.max(1, total), null, total, '--muted')}
-        <p class="section-help">Response rate ${rate(stats.funnel.responded, total)}</p>
       </div>
     </section>
 
@@ -385,7 +357,7 @@ export function renderInsights(els, report, stats, statusLabels, mode = 'active'
     <section class="report-panel report-panel-tags wide" style="grid-column: 1 / -1;">
       <div class="panel-kicker">Skills</div>
       <h3>Top Tags</h3>
-      <div style="column-count: 2; column-gap: 24px;">
+      <div class="tags-grid">
         ${tagHtml}
       </div>
     </section>
@@ -1407,7 +1379,7 @@ function renderContentSummaryTab({ application, primaryCv, queuedJobs, failedJob
           <div>
             <div class="panel-kicker">Content Workspace</div>
             <h3>Generated Documents</h3>
-            <p class="section-help">This is the canonical document workspace. Open existing assets directly. Generate only when a document type does not exist yet.</p>
+
           </div>
           <div class="content-toolbar-meta">
             ${renderSegmentedProviderControl({
@@ -1478,7 +1450,7 @@ function renderContentSummaryTab({ application, primaryCv, queuedJobs, failedJob
           </article>
         ` : renderInlineEmpty('No CV linked', 'Link a CV to unlock tailored generation and consistent job-specific outputs.')}
       </section>
-      <section class="route-card">
+      ${allDocuments.length > 0 ? `<section class="route-card">
         <div class="section-heading">
           <div>
             <div class="panel-kicker">Providers</div>
@@ -1493,7 +1465,7 @@ function renderContentSummaryTab({ application, primaryCv, queuedJobs, failedJob
           <span class="pill info-pill">${queuedJobs.length} queued</span>
           <span class="pill ${failedJobs.length ? 'danger-pill' : 'success-pill'}">${failedJobs.length} failed</span>
         </div>
-      </section>
+      </section>` : ''}
       <section class="route-card">
         <div class="section-heading">
           <div>
@@ -1944,7 +1916,7 @@ function renderContentDocumentSlot(applicationId, slot, cvId, recentDocumentId =
       </div>
       ${slot.latestDocument ? `
         <details class="document-version-list">
-          <summary>${slot.documents.length > 1 ? `Versions (${slot.documents.length})` : 'Current document'}</summary>
+          <summary>${slot.documents.length > 1 ? `${slot.documents.length} versions` : '1 version'}</summary>
           <div class="document-version-items">
             ${slot.documents.map((doc, index) => renderDocumentVersionRow(applicationId, doc, index === 0, slot.documents[0]?.id)).join('')}
           </div>
@@ -2028,7 +2000,7 @@ function renderSlotMetadata(slot) {
       </div>
     `;
   }
-  return '<p class="artifact-meta-copy">No saved document yet.</p>';
+  return '';
 }
 
 function renderDocumentTypeIcon(type) {
