@@ -1519,53 +1519,56 @@ function bindApplicationPageActions(payload) {
     });
   });
 
-  root.querySelector('[data-preparation-form]')?.addEventListener('submit', async (event) => {
-    event.preventDefault();
-    const form = new FormData(event.target);
-    const values = ['about_company', 'company_values', 'application_notes'].map((key) => String(form.get(key) || '').trim());
-    if (!values.some(Boolean)) {
-      setFormError(event.target, 'Add at least one note before saving.');
-      showToast('Validation error.', 'warning');
-      return;
-    }
-    await withAsyncForm(event.target, async () => {
-      await api(`/api/applications/${application.id}/preparation`, {
-        method: 'PUT',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
-          about_company: String(form.get('about_company') || '').trim(),
-          company_values: String(form.get('company_values') || '').trim(),
-          application_notes: String(form.get('application_notes') || '').trim()
-        })
-      });
-      showToast('Research notes saved.');
-      await renderCurrentRoute();
+  root.querySelector('[data-research-edit-all]')?.addEventListener('click', (event) => {
+    const btn = event.currentTarget;
+    const appId = btn.dataset.researchEditAll;
+    const dlg = document.createElement('dialog');
+    dlg.className = 'modal-md';
+    dlg.innerHTML = `
+      <form method="dialog">
+        <div class="dialog-header">
+          <h2>Edit Company Notes</h2>
+          <button class="secondary" type="button" data-close-dialog>Close</button>
+        </div>
+        <div class="dialog-body" style="display:flex;flex-direction:column;gap:12px;padding:16px 24px">
+          <label class="wide"><span>About The Company</span><textarea name="about_company" rows="4" placeholder="Products, market, competitors, roadmap, team shape">${escapeHtml(btn.dataset.about || '')}</textarea></label>
+          <label class="wide"><span>Company Values</span><textarea name="company_values" rows="3" placeholder="Culture signals, values, leadership principles">${escapeHtml(btn.dataset.values || '')}</textarea></label>
+          <label class="wide"><span>Application Notes</span><textarea name="application_notes" rows="3" placeholder="Fit summary, risks, strengths, stories to prepare">${escapeHtml(btn.dataset.notes || '')}</textarea></label>
+          <p class="form-error" hidden></p>
+        </div>
+        <div class="dialog-actions">
+          <button class="secondary" type="button" data-close-dialog>Cancel</button>
+          <button type="submit" id="researchSaveBtn">Save</button>
+        </div>
+      </form>`;
+    document.body.appendChild(dlg);
+    dlg.querySelector('[data-close-dialog]')?.addEventListener('click', () => { dlg.close(); dlg.remove(); });
+    dlg.querySelector('[data-close-dialog]:last-of-type')?.addEventListener('click', () => { dlg.close(); dlg.remove(); });
+    dlg.addEventListener('close', () => dlg.remove());
+    dlg.querySelector('form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const fd = new FormData(e.target);
+      const saveBtn = dlg.querySelector('#researchSaveBtn');
+      saveBtn.disabled = true;
+      try {
+        await api(`/api/applications/${appId}/preparation`, {
+          method: 'PUT',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+            about_company: String(fd.get('about_company') || '').trim(),
+            company_values: String(fd.get('company_values') || '').trim(),
+            application_notes: String(fd.get('application_notes') || '').trim()
+          })
+        });
+        showToast('Research notes saved.');
+        dlg.close();
+        await renderCurrentRoute();
+      } catch {
+        showToast('Save failed.', 'warning');
+        saveBtn.disabled = false;
+      }
     });
-  });
-
-  root.querySelectorAll('[data-research-edit]').forEach((button) => {
-    button.addEventListener('click', () => {
-      const field = button.closest('.research-field');
-      const preview = field?.querySelector('[data-research-preview]');
-      const textarea = field?.querySelector('textarea');
-      if (!textarea) return;
-      if (preview) preview.hidden = true;
-      textarea.hidden = false;
-      textarea.focus();
-    });
-  });
-
-  root.querySelectorAll('[data-research-view]').forEach((button) => {
-    button.addEventListener('click', () => {
-      const field = button.closest('.research-field');
-      const textarea = field?.querySelector('textarea');
-      if (!textarea) return;
-      openDetailDialog(button.dataset.researchLabel || 'Notes', `
-        <section class="route-card detail-dialog-card">
-          <p class="description research-view-body">${escapeHtml(textarea.value)}</p>
-        </section>
-      `);
-    });
+    dlg.showModal();
   });
 
   root.querySelector('[data-question-form]')?.addEventListener('submit', async (event) => {

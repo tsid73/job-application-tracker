@@ -500,7 +500,8 @@ function isUrgentNotification(item) {
 
 export function renderNotifications(els, notifications, expanded = false) {
   els.notificationsPanel.hidden = notifications.length === 0;
-  document.documentElement.style.setProperty('--banner-h', notifications.length === 0 ? '0px' : '52px');
+  // document.documentElement.style.setProperty('--banner-h', notifications.length === 0 ? '0px' : '52px');
+  document.documentElement.style.setProperty('--banner-h', notifications.length === 0 ? '0px' : '36px');
   if (!notifications.length) {
     els.notificationsPanel.innerHTML = '';
     els.notificationsPanel.classList.remove('has-urgent');
@@ -668,7 +669,9 @@ export function renderJobBoards(els, jobBoards) {
               <td>
                 <span class="board-description" title="${escapeAttribute(board.notes || '')}">${board.notes ? escapeHtml(board.notes.length > 80 ? board.notes.slice(0, 80) + '…' : board.notes) : '<span class="muted-text">—</span>'}</span>
               </td>
-              <td class="muted-text">${board.last_checked_date ? escapeHtml(jobBoardFreshnessLabel(board)) : 'Never'}</td>
+              <td>${board.last_checked_date
+                  ? `<span class="muted-text">${escapeHtml(formatDate(board.last_checked_date))}</span> <span class="freshness-badge ${jobBoardFreshnessClass(board)}">${escapeHtml(jobBoardFreshnessLabel(board))}</span>`
+                  : '<span class="freshness-badge freshness-stale">Never checked</span>'}</td>
               <td>
                 <div class="board-actions-row">
                   ${board.url ? `<button class="icon-button text-primary" type="button" data-job-board-open="${board.id}" title="Visit"><i class="bi bi-box-arrow-up-right"></i></button>` : ''}
@@ -1228,23 +1231,11 @@ function aiRecommendationReason(application) {
   return 'Generate only the document that helps the current application stage.';
 }
 
-function renderResearchField(name, label, placeholder, value) {
-  const hasContent = Boolean(value);
-  return `
-    <label class="research-field">
-      <span>${escapeHtml(label)}</span>
-      ${hasContent ? `
-        <div class="research-preview" data-research-preview="${name}">
-          <p class="research-preview-text">${escapeHtml(value)}</p>
-          <div class="research-field-actions">
-            <button type="button" class="secondary" data-research-view="${name}" data-research-label="${escapeAttribute(label)}">View</button>
-            <button type="button" class="secondary" data-research-edit="${name}">Edit</button>
-          </div>
-        </div>
-      ` : ''}
-      <textarea name="${name}" rows="4" placeholder="${escapeAttribute(placeholder)}"${hasContent ? ' hidden' : ''}>${escapeHtml(value)}</textarea>
-    </label>
-  `;
+function renderResearchPreviewRow(label, value) {
+  return `<div class="research-row">
+    <span class="research-row-label">${escapeHtml(label)}</span>
+    <span class="research-row-value${value ? '' : ' muted-text'}">${value ? escapeHtml(value.length > 80 ? value.slice(0, 80) + '…' : value) : 'Not set'}</span>
+  </div>`;
 }
 
 function renderWorkflowTab({ application, preparation, recruiterQuestions, feedbackEntries, todos }) {
@@ -1255,17 +1246,18 @@ function renderWorkflowTab({ application, preparation, recruiterQuestions, feedb
           <div>
             <div class="panel-kicker">Research</div>
             <h3>Company Notes</h3>
-            <p class="section-help">Keep research concise and focused on interview preparation and application strategy.</p>
           </div>
+          <button type="button" class="secondary icon-button" data-research-edit-all="${application.id}"
+            data-about="${escapeAttribute(preparation?.about_company || '')}"
+            data-values="${escapeAttribute(preparation?.company_values || '')}"
+            data-notes="${escapeAttribute(preparation?.application_notes || '')}"
+            title="Edit notes"><i class="bi bi-pencil"></i></button>
         </div>
-        <form class="prep-form prep-research-form" data-preparation-form="${application.id}">
-          ${renderResearchField('about_company', 'About The Company', 'Products, market, competitors, roadmap, team shape', preparation?.about_company || '')}
-          ${renderResearchField('company_values', 'Company Values', 'Culture signals, values, leadership principles', preparation?.company_values || '')}
-          ${renderResearchField('application_notes', 'Application Notes', 'Fit summary, risks, strengths, stories to prepare', preparation?.application_notes || '')}
-          <div class="inline-actions">
-            <button type="submit">Save Research</button>
-          </div>
-        </form>
+        <div class="research-rows">
+          ${renderResearchPreviewRow('About', preparation?.about_company || '')}
+          ${renderResearchPreviewRow('Values', preparation?.company_values || '')}
+          ${renderResearchPreviewRow('Notes', preparation?.application_notes || '')}
+        </div>
       </section>
       <section class="route-card route-card-soft ask-surface">
         <div class="section-heading">
