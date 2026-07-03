@@ -2,7 +2,12 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-ENV_FILE="$ROOT_DIR/.env"
+# Target env file: override with ENV_FILE=.env.development for the dev environment.
+# Defaults to .env.production (real data), falling back to legacy .env.
+ENV_FILE="${ENV_FILE:-$ROOT_DIR/.env.production}"
+if [[ ! -f "$ENV_FILE" && -f "$ROOT_DIR/.env" ]]; then
+  ENV_FILE="$ROOT_DIR/.env"
+fi
 
 if [[ $# -lt 1 ]]; then
   echo "Usage: $0 <backup-directory-or-file>" >&2
@@ -28,6 +33,11 @@ BACKUP_PATH="$1"
 
 if [[ ! -e "$BACKUP_PATH" ]]; then
   echo "Backup path not found: $BACKUP_PATH" >&2
+  exit 1
+fi
+
+if [[ "$DB_CLIENT" != "postgres" && -f "$ROOT_DIR/$PGLITE_DATA_DIR/postmaster.pid" ]]; then
+  echo "PGlite restore requires the app to be stopped first: $ROOT_DIR/$PGLITE_DATA_DIR/postmaster.pid is present" >&2
   exit 1
 fi
 

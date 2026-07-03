@@ -33,8 +33,14 @@ Uploaded CVs, generated documents, backups, and `.env` values can contain privat
 npm install
 # Set up development environment
 cp .env.example .env.development
-npm run migrate
-npm run seed
+npm run migrate   # migrates the development database (data/development/pglite)
+npm run seed      # seeds sample data into the development database
+```
+
+For production, create `.env.production` (see `.env.example`) and run:
+
+```bash
+npm run migrate:prod   # migrates the production database (data/pglite)
 ```
 
 Start the application in Development mode (port 3001, isolated data):
@@ -90,12 +96,24 @@ AI_PROVIDER=mock
 ## Common Commands
 
 ```bash
-npm run migrate      # apply database migrations
-npm run seed         # add sample data
-npm run check        # syntax-check server entry files
-npm run test:e2e     # run Playwright tests
-npm run db:backup    # create a database backup
+npm run migrate       # apply migrations to the development database
+npm run migrate:prod  # apply migrations to the production database
+npm run seed          # add sample data (development only)
+npm run check         # syntax-check server entry files
+npm run test:e2e      # run Playwright tests
+npm run db:backup     # back up the production database and uploads
+npm run db:restore    # restore a backup bundle (pass the bundle path)
 ```
+
+`db:backup` and `db:restore` read `.env.production` by default. To target the
+development environment instead, set `ENV_FILE`:
+
+```bash
+ENV_FILE=.env.development npm run db:backup
+```
+
+Stop the app before running `db:backup` or `db:restore` against PGlite; both
+refuse to run while the database is in use.
 
 ## Project Layout
 

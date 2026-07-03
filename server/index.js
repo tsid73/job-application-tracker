@@ -1,6 +1,6 @@
 import http from 'node:http';
 import { mkdir, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises';
-import { join, dirname, isAbsolute, relative, resolve } from 'node:path';
+import { join, dirname, isAbsolute, relative, resolve, sep } from 'node:path';
 import { statSync } from 'node:fs';
 import { config } from './config.js';
 import JSZip from 'jszip';
@@ -747,7 +747,8 @@ async function exportBackup(req, res) {
     config: {
       default_provider: config.defaultAiRequestProvider,
       aws_enabled: config.awsAiEnabled,
-      file_storage_mode: config.fileStorageMode
+      file_storage_mode: config.fileStorageMode,
+      upload_dir: config.uploadDir
     },
     data: await readBackupData(),
     files: await readBackupFiles()
@@ -775,6 +776,7 @@ async function importBackup(req, res) {
   }
 
   validateBackupPayload(backup);
+  remapBackupUploadPaths(backup);
   validateBackupFilePaths(backup.files || []);
   await restoreBackupPayload(backup);
   sendJson(res, 200, { ok: true, restored_at: new Date().toISOString() });
@@ -1829,12 +1831,54 @@ function validateBackupPayload(backup) {
   }
 }
 
+function remapBackupUploadPaths(backup) {
+  const sourceDir = backupSourceUploadDir(backup);
+  const targetDir = normalizeUploadDir(config.uploadDir);
+  if (!sourceDir || sourceDir === targetDir) return;
+
+  const remap = (value) => {
+    if (typeof value !== 'string' || !value) return value;
+    const normalized = value.replace(/\\/g, '/');
+    if (normalized === sourceDir) return targetDir;
+    if (normalized.startsWith(sourceDir + '/')) return targetDir + normalized.slice(sourceDir.length);
+    return value;
+  };
+
+  for (const entry of backup.files || []) {
+    if (entry && typeof entry.path === 'string') entry.path = remap(entry.path);
+  }
+  for (const row of backup.data.cv_versions || []) {
+    if (row) row.file_path = remap(row.file_path);
+  }
+  for (const row of backup.data.ai_documents || []) {
+    if (row) row.file_path = remap(row.file_path);
+  }
+  for (const row of backup.data.ai_generation_jobs || []) {
+    if (row) row.request_manifest_path = remap(row.request_manifest_path);
+  }
+}
+
+function backupSourceUploadDir(backup) {
+  if (typeof backup.config?.upload_dir === 'string' && backup.config.upload_dir) {
+    return normalizeUploadDir(backup.config.upload_dir);
+  }
+  for (const entry of backup.files || []) {
+    const match = String(entry?.path || '').replace(/\\/g, '/').match(/^(.+?)\/(cv|ai|ai-jobs)\//);
+    if (match) return match[1];
+  }
+  return 'uploads';
+}
+
+function normalizeUploadDir(dir) {
+  return String(dir).replace(/\\/g, '/').replace(/\/+$/, '');
+}
+
 function validateBackupFilePaths(files) {
-  const cwd = process.cwd();
+  const baseDir = resolve(process.cwd(), config.uploadDir);
   for (const entry of files) {
     if (!entry?.path || !entry?.content_base64) continue;
-    const absolutePath = resolve(cwd, entry.path);
-    if (!absolutePath.startsWith(cwd + '/') && absolutePath !== cwd) {
+    const relativePath = relative(baseDir, resolve(process.cwd(), entry.path));
+    if (isAbsolute(relativePath) || relativePath === '..' || relativePath.startsWith('..' + sep)) {
       const error = new Error('Backup contains an invalid file path');
       error.statusCode = 400;
       throw error;

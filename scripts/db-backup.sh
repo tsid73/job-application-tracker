@@ -2,7 +2,12 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-ENV_FILE="$ROOT_DIR/.env"
+# Target env file: override with ENV_FILE=.env.development for the dev environment.
+# Defaults to .env.production (real data), falling back to legacy .env.
+ENV_FILE="${ENV_FILE:-$ROOT_DIR/.env.production}"
+if [[ ! -f "$ENV_FILE" && -f "$ROOT_DIR/.env" ]]; then
+  ENV_FILE="$ROOT_DIR/.env"
+fi
 
 if [[ -f "$ENV_FILE" ]]; then
   while IFS= read -r line; do
