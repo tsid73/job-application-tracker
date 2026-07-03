@@ -500,6 +500,7 @@ function isUrgentNotification(item) {
 
 export function renderNotifications(els, notifications, expanded = false) {
   els.notificationsPanel.hidden = notifications.length === 0;
+  // document.documentElement.style.setProperty('--banner-h', notifications.length === 0 ? '0px' : '52px');
   document.documentElement.style.setProperty('--banner-h', notifications.length === 0 ? '0px' : '36px');
   if (!notifications.length) {
     els.notificationsPanel.innerHTML = '';
