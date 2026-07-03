@@ -183,8 +183,6 @@ export function renderHomeWorkspace() {
       <section id="companiesView" class="view-panel" hidden>
         <section class="detail-section boards-surface">
           <div class="section-heading boards-heading">
-            <div>
-            </div>
             <div style="display: flex; gap: 8px; align-items: center;">
               <button id="targetCompanyFilterToggle" class="icon-button" type="button" aria-label="Toggle filters" title="Filters">
                 <i class="bi bi-filter"></i>
@@ -217,7 +215,6 @@ export function renderHomeWorkspace() {
               <i class="bi bi-x-circle"></i>
             </button>
           </section>
-          <p id="targetCompaniesSummary" class="section-help"></p>
           <div id="targetCompaniesList" class="board-list"></div>
           <div class="pagination" id="targetCompanyPagination"></div>
         </section>

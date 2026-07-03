@@ -1211,8 +1211,11 @@ tr:last-child td {
   box-shadow: var(--shadow-sm);
 }
 
-/* ponytail: old max-height calc replaced by flex chain from main → removed */
-
+#insightsView,
+#companiesView {
+  max-height: calc(100vh - 160px - var(--banner-h));
+  overflow-y: auto;
+}
 
 .panel-grid,
 .reports-grid {
@@ -1423,7 +1426,7 @@ tr:last-child td {
   flex: 0 0 260px;
   min-width: 230px;
   max-width: 280px;
-  min-height: 240px;
+  max-height: calc(100vh - 160px - var(--banner-h));
   background: var(--card);
   border: 1px solid var(--line);
   border-radius: 16px;
@@ -1963,6 +1966,19 @@ dialog::backdrop {
   overflow-y: auto;
 }
 
+.research-field {
+  display: grid;
+  gap: 6px;
+=======
+>>>>>>> e5178d7ec439b19b574a43d0bb1637a89e4014ae
+}
+
+.prep-research-form textarea {
+  max-height: 200px;
+  resize: vertical;
+  overflow-y: auto;
+}
+
 .research-rows {
   display: flex;
   flex-direction: column;
@@ -2062,6 +2078,7 @@ dialog::backdrop {
 .freshness-stale  { background: color-mix(in srgb, var(--danger) 12%, transparent); color: var(--danger); }
 .freshness-inactive { background: var(--panel); color: var(--muted); border: 1px solid var(--line); }
 
+>>>>>>> e5178d7ec439b19b574a43d0bb1637a89e4014ae
 .board-description {
   font-size: 13px;
   color: var(--muted);
