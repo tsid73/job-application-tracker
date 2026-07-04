@@ -687,11 +687,29 @@ async function getStats(req, res, url) {
     `
   );
 
+  const categories = await pool.query(
+    `
+      SELECT company_category AS category,
+        count(id)::int AS applications,
+        count(id) FILTER (WHERE EXISTS (
+          SELECT 1 FROM status_history sh
+          WHERE sh.application_id = a.id AND sh.to_status = 'interview_scheduled'
+        ))::int AS interviewed
+      FROM applications a
+      WHERE company_category IS NOT NULL AND company_category != ''
+      ${allTime ? '' : 'AND archived_at IS NULL'}
+      GROUP BY company_category
+      ORDER BY applications DESC, category
+      LIMIT 12
+    `
+  );
+
   sendJson(res, 200, {
     totals: totals.rows[0],
     funnel: funnel.rows[0],
     timing: timing.rows[0],
-    tags: tags.rows
+    tags: tags.rows,
+    categories: categories.rows
   });
 }
 

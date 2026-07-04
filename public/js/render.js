@@ -256,6 +256,14 @@ export function renderInsights(els, report, stats, statusLabels, mode = 'active'
     return reportRow(row.tag, Number(row.applications), tagMax, {}, toIntStr, '--focus');
   }).join('') || '<p>No tag data.</p>';
 
+  const categoryMax = Math.max(1, ...(stats.categories || []).map((row) => Number(row.applications || 0)));
+  const categoryHtml = (stats.categories || []).map((row) => {
+    let toIntStr = '';
+    const rateVal = Math.round((Number(row.interviewed || 0) / Number(row.applications || 1)) * 100);
+    if (rateVal > 0) toIntStr = `${rateVal}% interview rate`;
+    return reportRow(row.category, Number(row.applications), categoryMax, {}, toIntStr, '--app');
+  }).join('') || '<p>No category data.</p>';
+
   els.insightsContent.innerHTML = `
     <div class="insights-toolbar" style="grid-column: 1 / -1; display: flex; justify-content: flex-end; gap: 6px; margin-bottom: 4px;">
       <button class="${mode === 'active' ? '' : 'secondary'}" data-insights-mode="active" type="button">Active Pipeline</button>
@@ -357,6 +365,14 @@ export function renderInsights(els, report, stats, statusLabels, mode = 'active'
       <h3>Top Tags</h3>
       <div class="tags-grid">
         ${tagHtml}
+      </div>
+    </section>
+
+    <section class="report-panel report-panel-tags wide" style="grid-column: 1 / -1;">
+      <div class="panel-kicker">Companies</div>
+      <h3>Top Categories</h3>
+      <div class="tags-grid">
+        ${categoryHtml}
       </div>
     </section>
   `;
