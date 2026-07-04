@@ -986,7 +986,10 @@ export function renderApplicationPage(els, payload, statusLabels, viewState) {
               ${application.interview_date && !closed ? `<span class="days-badge">${escapeHtml(formatDate(application.interview_date))}</span>` : ''}
             </div>
             <h1>${escapeHtml(application.role_title || 'Application Detail')}</h1>
-            <p class="hero-company-line">${escapeHtml(application.company_name)}</p>
+            <p class="hero-company-line">
+              ${escapeHtml(application.company_name)}
+              ${application.company_category ? `<span class="state" style="margin-left: 8px; font-size: 0.85em; opacity: 0.9">${escapeHtml(application.company_category)}</span>` : ''}
+            </p>
             <p class="hero-support-line">${escapeHtml(locationLine)}</p>
             ${renderTags(tags)}
           </div>

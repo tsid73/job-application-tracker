@@ -389,6 +389,7 @@ export function createReadApi({ pool, audit }) {
           SELECT
             a.id,
             a.company_name,
+            a.company_category,
             a.role_title,
             a.status,
             a.salary,
@@ -518,6 +519,7 @@ export function createReadApi({ pool, audit }) {
           SELECT
             id,
             company_name,
+            company_category,
             role_title,
             job_link,
             job_description,

@@ -716,11 +716,11 @@ async function importApplicationsCsv(req, res) {
       await assertNoDuplicateApplication(client, data);
       const created = await client.query(
         `
-          INSERT INTO applications (company_name, role_title, job_link, job_description, status, salary, location, recruiter, contact_person, applied_date, interview_date, notes, next_action, next_action_due_date, archived_at)
-          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, CASE WHEN $15 = 'archived' THEN now() ELSE NULL END)
+          INSERT INTO applications (company_name, company_category, role_title, job_link, job_description, status, salary, location, recruiter, contact_person, applied_date, interview_date, notes, next_action, next_action_due_date, archived_at)
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, CASE WHEN $16 = 'archived' THEN now() ELSE NULL END)
           RETURNING id
         `,
-        [data.company_name, data.role_title, data.job_link, data.job_description, data.status, data.salary, data.location, data.recruiter, data.contact_person, data.applied_date, data.interview_date, data.notes, data.next_action, data.next_action_due_date, cleanString(fields.lifecycle)]
+        [data.company_name, data.company_category, data.role_title, data.job_link, data.job_description, data.status, data.salary, data.location, data.recruiter, data.contact_person, data.applied_date, data.interview_date, data.notes, data.next_action, data.next_action_due_date, cleanString(fields.lifecycle)]
       );
       const applicationId = created.rows[0].id;
       await client.query('INSERT INTO application_cvs (application_id, cv_id) VALUES ($1, $2)', [applicationId, latest.rows[0].id]);
@@ -860,6 +860,7 @@ async function createApplication(req, res) {
       `
         INSERT INTO applications (
           company_name,
+          company_category,
           role_title,
           job_link,
           job_description,
@@ -874,11 +875,12 @@ async function createApplication(req, res) {
           next_action,
           next_action_due_date
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
         RETURNING id
       `,
       [
         data.company_name,
+        data.company_category,
         data.role_title,
         data.job_link,
         data.job_description,
@@ -939,23 +941,25 @@ async function updateApplication(req, res, id) {
       `
         UPDATE applications
         SET company_name = $1,
-            role_title = $2,
-            job_link = $3,
-            job_description = $4,
-            status = $5,
-            salary = $6,
-            location = $7,
-            recruiter = $8,
-            contact_person = $9,
-            applied_date = $10,
-            interview_date = $11,
-            notes = $12,
-            next_action = $13,
-            next_action_due_date = $14
-        WHERE id = $15
+            company_category = $2,
+            role_title = $3,
+            job_link = $4,
+            job_description = $5,
+            status = $6,
+            salary = $7,
+            location = $8,
+            recruiter = $9,
+            contact_person = $10,
+            applied_date = $11,
+            interview_date = $12,
+            notes = $13,
+            next_action = $14,
+            next_action_due_date = $15
+        WHERE id = $16
       `,
       [
         data.company_name,
+        data.company_category,
         data.role_title,
         data.job_link,
         data.job_description,
