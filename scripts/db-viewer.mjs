@@ -4,7 +4,10 @@ import { fileURLToPath } from 'node:url';
 import { PGlite } from '@electric-sql/pglite';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const dataDir = join(__dirname, '..', 'data', 'pglite');
+
+// Read from PGLITE_DATA_DIR if provided, otherwise default to data/pglite
+const envDataDir = process.env.PGLITE_DATA_DIR;
+const dataDir = envDataDir ? join(__dirname, '..', envDataDir) : join(__dirname, '..', 'data', 'pglite');
 
 const db = new PGlite(dataDir);
 const PORT = 3333;
