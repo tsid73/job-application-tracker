@@ -450,14 +450,16 @@ function bindHomeWorkspaceEvents() {
   });
   [els.insightsContent].forEach((container) => {
     container?.addEventListener('click', (event) => {
-      const row = event.target.closest('[data-jump-status], [data-jump-view], [data-jump-month]');
+      const row = event.target.closest('[data-jump-status], [data-jump-view], [data-jump-month], [data-jump-category], [data-jump-tag]');
       if (!row) return;
       jumpToFilteredList({ 
         status: row.dataset.jumpStatus, 
         view: row.dataset.jumpView,
         month: row.dataset.jumpMonth,
         dateFrom: row.dataset.jumpDateFrom,
-        dateTo: row.dataset.jumpDateTo
+        dateTo: row.dataset.jumpDateTo,
+        category: row.dataset.jumpCategory,
+        tag: row.dataset.jumpTag
       });
     });
   });
@@ -682,13 +684,14 @@ async function switchView(view) {
   if (view === 'settings') { bindSettingsActions(); renderToolkit(els); }
 }
 
-async function jumpToFilteredList({ status = '', view = '', dateFrom = '', dateTo = '', month = '' } = {}) {
+async function jumpToFilteredList({ status = '', view = '', dateFrom = '', dateTo = '', month = '', category = '', tag = '' } = {}) {
   // Status counts reflect current status across every lifecycle, so widen the
   // archive view to 'all' to guarantee the filtered list matches the count.
   state.filters.status = status || '';
-  state.filters.archived = view || (status || month || dateFrom ? 'all' : 'false');
+  state.filters.archived = view || (status || month || dateFrom || category || tag ? 'all' : 'false');
   state.filters.search = '';
-  state.filters.tag = '';
+  state.filters.category = category || '';
+  state.filters.tag = tag || '';
   
   if (month) {
     const year = parseInt(month.split('-')[0], 10);
@@ -705,8 +708,8 @@ async function jumpToFilteredList({ status = '', view = '', dateFrom = '', dateT
   if (els.statusFilter) els.statusFilter.value = state.filters.status;
   if (els.archiveFilter) els.archiveFilter.value = state.filters.archived;
   if (els.search) els.search.value = '';
-  if (els.categoryFilter) els.categoryFilter.value = '';
-  if (els.tagFilter) els.tagFilter.value = '';
+  if (els.categoryFilter) els.categoryFilter.value = state.filters.category;
+  if (els.tagFilter) els.tagFilter.value = state.filters.tag;
   if (els.dateFromFilter) els.dateFromFilter.value = state.filters.dateFrom;
   if (els.dateToFilter) els.dateToFilter.value = state.filters.dateTo;
   if (els.savedFilterSelect) els.savedFilterSelect.value = '';

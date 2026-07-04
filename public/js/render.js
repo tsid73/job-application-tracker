@@ -273,7 +273,7 @@ export function renderInsights(els, report, stats, statusLabels, mode = 'active'
     let toIntStr = '';
     const rateVal = Math.round((Number(row.interviewed || 0) / Number(row.applications || 1)) * 100);
     if (rateVal > 0) toIntStr = `${rateVal}% interview rate`;
-    return reportRow(row.tag, Number(row.applications), tagMax, {}, toIntStr, '--focus');
+    return reportRow(row.tag, Number(row.applications), tagMax, { tag: row.tag }, toIntStr, '--focus');
   }).join('') || '<p>No tag data.</p>';
 
   const categoryMax = Math.max(1, ...(stats.categories || []).map((row) => Number(row.applications || 0)));
@@ -281,7 +281,7 @@ export function renderInsights(els, report, stats, statusLabels, mode = 'active'
     let toIntStr = '';
     const rateVal = Math.round((Number(row.interviewed || 0) / Number(row.applications || 1)) * 100);
     if (rateVal > 0) toIntStr = `${rateVal}% interview rate`;
-    return reportRow(row.category, Number(row.applications), categoryMax, {}, toIntStr, '--app');
+    return reportRow(row.category, Number(row.applications), categoryMax, { category: row.category }, toIntStr, '--app');
   }).join('') || '<p>No category data.</p>';
 
   els.insightsContent.innerHTML = `
@@ -390,7 +390,7 @@ export function renderInsights(els, report, stats, statusLabels, mode = 'active'
 
     <section class="report-panel report-panel-tags wide" style="grid-column: 1 / -1;">
       <div class="panel-kicker">Companies</div>
-      <h3>Top Categories</h3>
+      <h3>Company Categories</h3>
       <div class="tags-grid">
         ${categoryHtml}
       </div>

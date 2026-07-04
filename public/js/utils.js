@@ -78,7 +78,7 @@ export function formatDateTime(value) {
 export function reportRow(label, value, max, jump = null, totalOrExtra = null, color = null) {
   const percent = max ? Math.max(3, Math.round((value / max) * 100)) : 0;
   const jumpAttrs = jump
-    ? `${jump.status ? ` data-jump-status="${escapeHtml(jump.status)}"` : ''}${jump.view ? ` data-jump-view="${escapeHtml(jump.view)}"` : ''}${jump.month ? ` data-jump-month="${escapeHtml(jump.month)}"` : ''}`
+    ? `${jump.status ? ` data-jump-status="${escapeHtml(jump.status)}"` : ''}${jump.view ? ` data-jump-view="${escapeHtml(jump.view)}"` : ''}${jump.month ? ` data-jump-month="${escapeHtml(jump.month)}"` : ''}${jump.category ? ` data-jump-category="${escapeHtml(jump.category)}"` : ''}${jump.tag ? ` data-jump-tag="${escapeHtml(jump.tag)}"` : ''}`
     : '';
   const tag = jump ? 'button' : 'div';
   const typeAttr = jump ? ' type="button"' : '';
