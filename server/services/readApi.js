@@ -1,21 +1,25 @@
-import { cleanString, validateStatus, validateUrl } from '../utils/validation.js';
+import {
+  cleanString,
+  validateStatus,
+  validateUrl,
+} from "../utils/validation.js";
 
 const meaningfulActivityActions = [
-  'created',
-  'archived',
-  'restored',
-  'status_changed',
-  'interview_date_changed',
-  'note_added',
-  'preparation_updated',
-  'recruiter_question_added',
-  'feedback_added',
-  'todo_added',
-  'todo_completed',
-  'ai_document_deleted'
+  "created",
+  "archived",
+  "restored",
+  "status_changed",
+  "interview_date_changed",
+  "note_added",
+  "preparation_updated",
+  "recruiter_question_added",
+  "feedback_added",
+  "todo_added",
+  "todo_completed",
+  "ai_document_deleted",
 ];
 
-const meaningfulAiActivityPattern = '^ai_(?!.*_queued$).+';
+const meaningfulAiActivityPattern = "^ai_(?!.*_queued$).+";
 
 export function createReadApi({ pool, audit }) {
   return {
@@ -65,15 +69,16 @@ export function createReadApi({ pool, audit }) {
           WHERE a.archived_at IS NULL
             AND sh.to_status NOT IN ('applied', 'interview_scheduled')
             AND sh.changed_at >= NOW() - INTERVAL '30 days'
-        `
+        `,
       );
       return { reminders: result.rows };
     },
 
     async getNotifications() {
-      const [upcomingInterviews, followUps, upcomingTodos, nextActions] = await Promise.all([
-        pool.query(
-          `
+      const [upcomingInterviews, followUps, upcomingTodos, nextActions] =
+        await Promise.all([
+          pool.query(
+            `
             SELECT
               id,
               company_name,
@@ -89,10 +94,10 @@ export function createReadApi({ pool, audit }) {
               AND interview_date <= CURRENT_DATE + INTERVAL '7 days'
             ORDER BY interview_date ASC
             LIMIT 6
-          `
-        ),
-        pool.query(
-          `
+          `,
+          ),
+          pool.query(
+            `
             SELECT
               id,
               company_name,
@@ -114,10 +119,10 @@ export function createReadApi({ pool, audit }) {
               )
             ORDER BY applied_date ASC
             LIMIT 6
-          `
-        ),
-        pool.query(
-          `
+          `,
+          ),
+          pool.query(
+            `
             SELECT
               a.id,
               a.company_name,
@@ -135,10 +140,10 @@ export function createReadApi({ pool, audit }) {
               AND t.due_date <= CURRENT_DATE + INTERVAL '3 days'
             ORDER BY t.due_date ASC, t.id ASC
             LIMIT 6
-          `
-        ),
-        pool.query(
-          `
+          `,
+          ),
+          pool.query(
+            `
             SELECT
               id,
               company_name,
@@ -154,78 +159,93 @@ export function createReadApi({ pool, audit }) {
               AND next_action_due_date <= CURRENT_DATE + INTERVAL '7 days'
             ORDER BY next_action_due_date ASC, id ASC
             LIMIT 6
-          `
-        )
-      ]);
+          `,
+          ),
+        ]);
 
       return {
-        notifications: [...upcomingInterviews.rows, ...nextActions.rows, ...followUps.rows, ...upcomingTodos.rows]
-          .sort((left, right) => String(left.due_date || '').localeCompare(String(right.due_date || '')))
-          .slice(0, 8)
+        notifications: [
+          ...upcomingInterviews.rows,
+          ...nextActions.rows,
+          ...followUps.rows,
+          ...upcomingTodos.rows,
+        ]
+          .sort((left, right) =>
+            String(left.due_date || "").localeCompare(
+              String(right.due_date || ""),
+            ),
+          )
+          .slice(0, 8),
       };
     },
 
     async getReports(url) {
-      const allTime = url?.searchParams.get('mode') === 'all';
-      const [statusCounts, monthlyCounts, lifecycleCounts, upcoming] = await Promise.all([
-        pool.query(
-          `
+      const allTime = url?.searchParams.get("mode") === "all";
+      const [statusCounts, monthlyCounts, lifecycleCounts, upcoming] =
+        await Promise.all([
+          pool.query(
+            `
             SELECT status, count(*)::int AS count
             FROM applications
-            ${allTime ? '' : 'WHERE archived_at IS NULL'}
+            ${allTime ? "" : "WHERE archived_at IS NULL"}
             GROUP BY status
             ORDER BY status
-          `
-        ),
-        pool.query(
-          `
+          `,
+          ),
+          pool.query(
+            `
             SELECT to_char(date_trunc('month', applied_date), 'YYYY-MM') AS month, count(*)::int AS count
             FROM applications
+            ${allTime ? "" : "WHERE archived_at IS NULL"}
             GROUP BY date_trunc('month', applied_date)
             ORDER BY month
-          `
-        ),
-        pool.query(
-          `
+          `,
+          ),
+          pool.query(
+            `
             SELECT
               count(*) FILTER (WHERE archived_at IS NULL AND status NOT IN ('rejected', 'withdrawn', 'ghosted'))::int AS active,
               count(*) FILTER (WHERE archived_at IS NULL AND status IN ('rejected', 'withdrawn', 'ghosted'))::int AS closed,
               count(*) FILTER (WHERE archived_at IS NOT NULL)::int AS archived,
               count(*)::int AS total
             FROM applications
-          `
-        ),
-        pool.query(
-          `
+            ${allTime ? "" : "WHERE archived_at IS NULL"}
+          `,
+          ),
+          pool.query(
+            `
             SELECT id, company_name, to_char(interview_date, 'YYYY-MM-DD') AS interview_date, interview_date - CURRENT_DATE AS days_remaining
             FROM applications
-            WHERE archived_at IS NULL AND status = 'interview_scheduled' AND interview_date IS NOT NULL
+            WHERE ${allTime ? "" : "archived_at IS NULL AND "} status = 'interview_scheduled' AND interview_date IS NOT NULL
             ORDER BY interview_date ASC
             LIMIT 5
-          `
-        )
-      ]);
+          `,
+          ),
+        ]);
 
       return {
-        status_counts: statusCounts.rows,
-        monthly_counts: monthlyCounts.rows,
-        lifecycle_counts: lifecycleCounts.rows[0],
-        upcoming_interviews: upcoming.rows
+        status_counts: statusCounts?.rows,
+        monthly_counts: monthlyCounts?.rows,
+        lifecycle_counts: lifecycleCounts?.rows[0],
+        upcoming_interviews: upcoming?.rows,
       };
     },
 
     async getActivity(url) {
-      const applicationIdParam = url.searchParams.get('application_id');
+      const applicationIdParam = url.searchParams.get("application_id");
       const applicationId = Number(applicationIdParam);
-      const search = cleanString(url.searchParams.get('search')) || '';
-      const page = Math.max(1, Number(url.searchParams.get('page')) || 1);
-      const limit = Math.min(50, Math.max(5, Number(url.searchParams.get('limit')) || 12));
+      const search = cleanString(url.searchParams.get("search")) || "";
+      const page = Math.max(1, Number(url.searchParams.get("page")) || 1);
+      const limit = Math.min(
+        50,
+        Math.max(5, Number(url.searchParams.get("limit")) || 12),
+      );
       const offset = (page - 1) * limit;
       const params = [];
       const conditions = [
-        'al.application_id IS NOT NULL',
+        "al.application_id IS NOT NULL",
         `al.action NOT LIKE 'job_board_%'`,
-        `(al.action = ANY($1::text[]) OR al.action ~ $2)`
+        `(al.action = ANY($1::text[]) OR al.action ~ $2)`,
       ];
       params.push(meaningfulActivityActions, meaningfulAiActivityPattern);
 
@@ -236,10 +256,12 @@ export function createReadApi({ pool, audit }) {
 
       if (search) {
         params.push(`%${search}%`);
-        conditions.push(`(al.action ILIKE $${params.length} OR al.details ILIKE $${params.length} OR a.company_name ILIKE $${params.length})`);
+        conditions.push(
+          `(al.action ILIKE $${params.length} OR al.details ILIKE $${params.length} OR a.company_name ILIKE $${params.length})`,
+        );
       }
 
-      const where = `WHERE ${conditions.join(' AND ')}`;
+      const where = `WHERE ${conditions.join(" AND ")}`;
       const result = await pool.query(
         `
           SELECT
@@ -257,23 +279,26 @@ export function createReadApi({ pool, audit }) {
           LIMIT $${params.length + 1}
           OFFSET $${params.length + 2}
         `,
-        [...params, limit, offset]
+        [...params, limit, offset],
       );
 
       return {
         activity: result.rows.map(({ total, ...row }) => row),
         page,
         limit,
-        total: result.rows[0]?.total || 0
+        total: result.rows[0]?.total || 0,
       };
     },
 
     async getAudit(url) {
-      const applicationId = Number(url.searchParams.get('application_id'));
-      const limit = Math.min(100, Math.max(5, Number(url.searchParams.get('limit')) || 25));
+      const applicationId = Number(url.searchParams.get("application_id"));
+      const limit = Math.min(
+        100,
+        Math.max(5, Number(url.searchParams.get("limit")) || 25),
+      );
       const events = await audit.list({
         applicationId: Number.isInteger(applicationId) ? applicationId : null,
-        limit
+        limit,
       });
       return { audit: events };
     },
@@ -284,7 +309,7 @@ export function createReadApi({ pool, audit }) {
           SELECT id, name, search, status, tag, archived, created_at, updated_at
           FROM saved_filters
           ORDER BY lower(name) ASC, id ASC
-        `
+        `,
       );
       return { filters: result.rows };
     },
@@ -303,7 +328,7 @@ export function createReadApi({ pool, audit }) {
             updated_at
           FROM job_boards
           ORDER BY is_active DESC, lower(name) ASC, id ASC
-        `
+        `,
       );
       return { job_boards: result.rows };
     },
@@ -337,24 +362,24 @@ export function createReadApi({ pool, audit }) {
             updated_at
           FROM target_companies
           ORDER BY is_active DESC, lower(region) ASC, lower(name) ASC, id ASC
-        `
+        `,
       );
       return { target_companies: result.rows };
     },
 
     async getApplications(url) {
-      const search = cleanString(url.searchParams.get('search')) || '';
-      const status = cleanString(url.searchParams.get('status')) || '';
-      const tag = cleanString(url.searchParams.get('tag')) || '';
-      const archived = cleanString(url.searchParams.get('archived')) || 'false';
-      const dateFrom = cleanString(url.searchParams.get('dateFrom')) || '';
-      const dateTo = cleanString(url.searchParams.get('dateTo')) || '';
-      const singleId = Number(url.searchParams.get('id')) || 0;
-      const page = Math.max(1, Number(url.searchParams.get('page')) || 1);
+      const search = cleanString(url.searchParams.get("search")) || "";
+      const status = cleanString(url.searchParams.get("status")) || "";
+      const tag = cleanString(url.searchParams.get("tag")) || "";
+      const archived = cleanString(url.searchParams.get("archived")) || "false";
+      const dateFrom = cleanString(url.searchParams.get("dateFrom")) || "";
+      const dateTo = cleanString(url.searchParams.get("dateTo")) || "";
+      const singleId = Number(url.searchParams.get("id")) || 0;
+      const page = Math.max(1, Number(url.searchParams.get("page")) || 1);
       const pageSize = 50;
       if (status) validateStatus(status);
-      if (!['false', 'true', 'all', 'closed'].includes(archived)) {
-        const error = new Error('archived must be false, true, all, or closed');
+      if (!["false", "true", "all", "closed"].includes(archived)) {
+        const error = new Error("archived must be false, true, all, or closed");
         error.statusCode = 400;
         throw error;
       }
@@ -411,22 +436,28 @@ export function createReadApi({ pool, audit }) {
             a.interview_date ASC NULLS LAST,
             a.applied_date DESC,
             a.id DESC
-          ${singleId > 0 ? '' : `LIMIT ${pageSize} OFFSET ${(page - 1) * pageSize}`}
+          ${singleId > 0 ? "" : `LIMIT ${pageSize} OFFSET ${(page - 1) * pageSize}`}
         `,
-        [search, status, tag, archived, dateFrom, dateTo, singleId]
+        [search, status, tag, archived, dateFrom, dateTo, singleId],
       );
 
-      const total = singleId > 0 ? result.rows.length : (result.rows[0]?.total_count ?? 0);
-      return { applications: result.rows.map(({ total_count, ...row }) => row), total, page, pageSize };
+      const total =
+        singleId > 0 ? result.rows.length : (result.rows[0]?.total_count ?? 0);
+      return {
+        applications: result.rows.map(({ total_count, ...row }) => row),
+        total,
+        page,
+        pageSize,
+      };
     },
 
     async lookupApplications(url) {
-      const companyName = cleanString(url.searchParams.get('company_name'));
-      const roleTitle = cleanString(url.searchParams.get('role_title'));
-      const jobLink = validateUrl(url.searchParams.get('job_link'));
+      const companyName = cleanString(url.searchParams.get("company_name"));
+      const roleTitle = cleanString(url.searchParams.get("role_title"));
+      const jobLink = validateUrl(url.searchParams.get("job_link"));
 
       if (!companyName && !jobLink) {
-        const error = new Error('company_name or job_link is required');
+        const error = new Error("company_name or job_link is required");
         error.statusCode = 400;
         throw error;
       }
@@ -436,12 +467,16 @@ export function createReadApi({ pool, audit }) {
 
       if (companyName) {
         params.push(companyName);
-        conditions.push(`lower(trim(a.company_name)) = lower(trim($${params.length}))`);
+        conditions.push(
+          `lower(trim(a.company_name)) = lower(trim($${params.length}))`,
+        );
       }
 
       if (roleTitle) {
         params.push(roleTitle);
-        conditions.push(`lower(trim(coalesce(a.role_title, ''))) = lower(trim($${params.length}))`);
+        conditions.push(
+          `lower(trim(coalesce(a.role_title, ''))) = lower(trim($${params.length}))`,
+        );
       }
 
       if (jobLink) {
@@ -466,11 +501,11 @@ export function createReadApi({ pool, audit }) {
           FROM applications a
           LEFT JOIN application_tags at ON at.application_id = a.id
           LEFT JOIN tags t ON t.id = at.tag_id
-          WHERE ${conditions.join(' AND ')}
+          WHERE ${conditions.join(" AND ")}
           GROUP BY a.id
           ORDER BY a.archived_at DESC NULLS LAST, a.applied_date DESC, a.id DESC
         `,
-        params
+        params,
       );
 
       return { applications: result.rows };
@@ -502,16 +537,29 @@ export function createReadApi({ pool, audit }) {
           FROM applications
           WHERE id = $1
         `,
-        [id]
+        [id],
       );
 
       if (!application.rowCount) {
-        const error = new Error('Application not found');
+        const error = new Error("Application not found");
         error.statusCode = 404;
         throw error;
       }
 
-      const [cvs, history, notes, tags, activity, aiDocuments, aiJobs, auditEventsResult, preparation, recruiterQuestions, feedbackEntries, todos] = await Promise.all([
+      const [
+        cvs,
+        history,
+        notes,
+        tags,
+        activity,
+        aiDocuments,
+        aiJobs,
+        auditEventsResult,
+        preparation,
+        recruiterQuestions,
+        feedbackEntries,
+        todos,
+      ] = await Promise.all([
         executor.query(
           `
             SELECT
@@ -530,7 +578,7 @@ export function createReadApi({ pool, audit }) {
             WHERE ac.application_id = $1
             ORDER BY ac.linked_at DESC
           `,
-          [id]
+          [id],
         ),
         executor.query(
           `
@@ -539,7 +587,7 @@ export function createReadApi({ pool, audit }) {
             WHERE application_id = $1
             ORDER BY changed_at DESC
           `,
-          [id]
+          [id],
         ),
         executor.query(
           `
@@ -548,7 +596,7 @@ export function createReadApi({ pool, audit }) {
             WHERE application_id = $1
             ORDER BY created_at DESC
           `,
-          [id]
+          [id],
         ),
         executor.query(
           `
@@ -558,7 +606,7 @@ export function createReadApi({ pool, audit }) {
             WHERE at.application_id = $1
             ORDER BY t.name
           `,
-          [id]
+          [id],
         ),
         executor.query(
           `
@@ -568,7 +616,7 @@ export function createReadApi({ pool, audit }) {
               AND (action = ANY($2::text[]) OR action ~ $3)
             ORDER BY created_at DESC
           `,
-          [id, meaningfulActivityActions, meaningfulAiActivityPattern]
+          [id, meaningfulActivityActions, meaningfulAiActivityPattern],
         ),
         executor.query(
           `
@@ -594,7 +642,7 @@ export function createReadApi({ pool, audit }) {
               AND deleted_at IS NULL
             ORDER BY created_at DESC
           `,
-          [id]
+          [id],
         ),
         executor.query(
           `
@@ -614,7 +662,7 @@ export function createReadApi({ pool, audit }) {
             WHERE application_id = $1
             ORDER BY created_at DESC
           `,
-          [id]
+          [id],
         ),
         executor.query(
           `
@@ -624,7 +672,7 @@ export function createReadApi({ pool, audit }) {
             ORDER BY created_at DESC
             LIMIT 20
           `,
-          [id]
+          [id],
         ),
         executor.query(
           `
@@ -638,7 +686,7 @@ export function createReadApi({ pool, audit }) {
             FROM application_preparation
             WHERE application_id = $1
           `,
-          [id]
+          [id],
         ),
         executor.query(
           `
@@ -647,7 +695,7 @@ export function createReadApi({ pool, audit }) {
             WHERE application_id = $1
             ORDER BY sort_order ASC, id ASC
           `,
-          [id]
+          [id],
         ),
         executor.query(
           `
@@ -656,7 +704,7 @@ export function createReadApi({ pool, audit }) {
             WHERE application_id = $1
             ORDER BY created_at DESC, id DESC
           `,
-          [id]
+          [id],
         ),
         executor.query(
           `
@@ -671,8 +719,8 @@ export function createReadApi({ pool, audit }) {
             WHERE application_id = $1
             ORDER BY completed ASC, due_date ASC NULLS LAST, created_at ASC, id ASC
           `,
-          [id]
-        )
+          [id],
+        ),
       ]);
 
       return {
@@ -683,7 +731,7 @@ export function createReadApi({ pool, audit }) {
         activity: activity.rows,
         ai_documents: aiDocuments.rows.map((row) => ({
           ...row,
-          download_url: `/api/ai/documents/${row.id}/download`
+          download_url: `/api/ai/documents/${row.id}/download`,
         })),
         ai_jobs: aiJobs.rows,
         audit_events: auditEventsResult.rows,
@@ -691,7 +739,7 @@ export function createReadApi({ pool, audit }) {
         preparation: preparation.rows[0] || null,
         recruiter_questions: recruiterQuestions.rows,
         feedback_entries: feedbackEntries.rows,
-        todos: todos.rows
+        todos: todos.rows,
       };
     },
 
@@ -723,7 +771,7 @@ export function createReadApi({ pool, audit }) {
               AND deleted_at IS NULL
             ORDER BY created_at DESC
           `,
-          [applicationId]
+          [applicationId],
         ),
         pool.query(
           `
@@ -745,16 +793,16 @@ export function createReadApi({ pool, audit }) {
             WHERE application_id = $1
             ORDER BY created_at DESC
           `,
-          [applicationId]
-        )
+          [applicationId],
+        ),
       ]);
 
       return {
         documents: documents.rows.map((row) => ({
           ...row,
-          download_url: `/api/ai/documents/${row.id}/download`
+          download_url: `/api/ai/documents/${row.id}/download`,
         })),
-        jobs: jobs.rows
+        jobs: jobs.rows,
       };
     },
 
@@ -784,11 +832,11 @@ export function createReadApi({ pool, audit }) {
           WHERE id = $1
             AND deleted_at IS NULL
         `,
-        [id]
+        [id],
       );
 
       if (!result.rowCount) {
-        const error = new Error('AI document not found');
+        const error = new Error("AI document not found");
         error.statusCode = 404;
         throw error;
       }
@@ -796,8 +844,8 @@ export function createReadApi({ pool, audit }) {
       return {
         document: {
           ...result.rows[0],
-          download_url: `/api/ai/documents/${id}/download`
-        }
+          download_url: `/api/ai/documents/${id}/download`,
+        },
       };
     },
 
@@ -827,11 +875,11 @@ export function createReadApi({ pool, audit }) {
           FROM ai_generation_jobs
           WHERE id = $1
         `,
-        [id]
+        [id],
       );
 
       if (!result.rowCount) {
-        const error = new Error('AI job not found');
+        const error = new Error("AI job not found");
         error.statusCode = 404;
         throw error;
       }
@@ -846,9 +894,9 @@ export function createReadApi({ pool, audit }) {
           FROM cv_versions
           WHERE deleted_at IS NULL
           ORDER BY is_latest DESC, created_at DESC
-        `
+        `,
       );
       return { cvs: result.rows };
-    }
+    },
   };
 }

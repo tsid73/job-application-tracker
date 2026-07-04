@@ -15,7 +15,8 @@
     "db:restore": "bash scripts/db-restore.sh",
     "cleanup:generated": "node --env-file=.env.production scripts/cleanup-generated-files.mjs",
     "verify:backup-restore": "node scripts/verify-backup-restore.mjs",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "db:viewer": "node scripts/db-viewer.mjs"
   },
   "dependencies": {
     "@electric-sql/pglite": "^0.4.5",
