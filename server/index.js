@@ -628,7 +628,7 @@ async function getStats(req, res, url) {
 
   const totals = await pool.query(
     `
-      SELECT count(*)::int AS total,
+      SELECT count(*) FILTER (WHERE ${allTime ? 'TRUE' : 'archived_at IS NULL'})::int AS total,
         count(*) FILTER (WHERE archived_at IS NULL)::int AS active,
         count(*) FILTER (WHERE ${allTime ? 'TRUE' : 'archived_at IS NULL'} AND status = 'ghosted')::int AS ghosted
       FROM applications
