@@ -345,8 +345,8 @@ export function renderInsights(els, report, stats, statusLabels, mode = 'active'
           <span>avg days to interview</span>
         </article>
         <article>
-          <strong>${stats.timing.avg_days_to_rejection ?? '—'}</strong>
-          <span>avg days to rejection</span>
+          <strong>${stats.timing.avg_days_to_close ?? '—'}</strong>
+          <span>avg days to close</span>
         </article>
       </div>
     </section>

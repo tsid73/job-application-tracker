@@ -662,10 +662,10 @@ async function getStats(req, res, url) {
         (SELECT round(avg(days))::int FROM (
           SELECT min(sh.changed_at)::date - a.applied_date AS days
           FROM applications a
-          JOIN status_history sh ON sh.application_id = a.id AND sh.to_status = 'rejected' AND sh.from_status IS NOT NULL
+          JOIN status_history sh ON sh.application_id = a.id AND sh.to_status IN ('rejected', 'ghosted', 'withdrawn') AND sh.from_status IS NOT NULL
           WHERE a.applied_date IS NOT NULL ${allTime ? '' : 'AND a.archived_at IS NULL'}
           GROUP BY a.id, a.applied_date
-        ) rejection_days) AS avg_days_to_rejection
+        ) close_days) AS avg_days_to_close
     `
   );
 
