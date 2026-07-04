@@ -50,6 +50,26 @@ export function renderHomeWorkspace() {
               </select>
             </label>
             <label>
+              <span>Category</span>
+              <select id="categoryFilter">
+                <option value="">All Categories</option>
+                <option value="Early-Stage Startup (Pre-Seed/Seed)">Early-Stage Startup (Pre-Seed/Seed)</option>
+                <option value="Mid-Stage Startup (Series A/B)">Mid-Stage Startup (Series A/B)</option>
+                <option value="Late-Stage Scale-up (Series C+)">Late-Stage Scale-up (Series C+)</option>
+                <option value="Big Tech / FAANG+">Big Tech / FAANG+</option>
+                <option value="Established Public Tech">Established Public Tech</option>
+                <option value="Enterprise / Non-Tech Core">Enterprise / Non-Tech Core</option>
+                <option value="Government / Defense / Aerospace">Government / Defense / Aerospace</option>
+                <option value="Global IT Services / GSIs">Global IT Services / GSIs</option>
+                <option value="Boutique Agencies / Dev Shops">Boutique Agencies / Dev Shops</option>
+                <option value="FinTech / Quant / HFT">FinTech / Quant / HFT</option>
+                <option value="Web3 / Crypto">Web3 / Crypto</option>
+                <option value="Gaming / Entertainment">Gaming / Entertainment</option>
+                <option value="HealthTech / BioTech">HealthTech / BioTech</option>
+                <option value="Other / Uncategorized">Other / Uncategorized</option>
+              </select>
+            </label>
+            <label>
               <span>Tag</span>
               <input id="tagFilter" type="search" placeholder="Remote">
             </label>

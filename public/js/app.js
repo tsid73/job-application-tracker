@@ -192,6 +192,12 @@ function bindHomeWorkspaceEvents() {
     els.savedFilterSelect.value = '';
     loadApplications();
   });
+  els.categoryFilter?.addEventListener('change', () => {
+    state.filters.category = els.categoryFilter.value;
+    state.filters.page = 1;
+    els.savedFilterSelect.value = '';
+    loadApplications();
+  });
   els.tagFilter?.addEventListener('input', debounce(() => {
     state.filters.tag = els.tagFilter.value.trim();
     state.filters.page = 1;
@@ -227,6 +233,7 @@ function bindHomeWorkspaceEvents() {
   els.resetFiltersButton?.addEventListener('click', () => {
     state.filters.search = '';
     state.filters.status = '';
+    state.filters.category = '';
     state.filters.tag = '';
     state.filters.archived = 'false';
     state.filters.dateFrom = '';
@@ -234,6 +241,7 @@ function bindHomeWorkspaceEvents() {
     state.filters.page = 1;
     if (els.search) els.search.value = '';
     if (els.statusFilter) els.statusFilter.value = '';
+    if (els.categoryFilter) els.categoryFilter.value = '';
     if (els.tagFilter) els.tagFilter.value = '';
     if (els.archiveFilter) els.archiveFilter.value = 'false';
     if (els.dateFromFilter) els.dateFromFilter.value = '';
@@ -697,6 +705,7 @@ async function jumpToFilteredList({ status = '', view = '', dateFrom = '', dateT
   if (els.statusFilter) els.statusFilter.value = state.filters.status;
   if (els.archiveFilter) els.archiveFilter.value = state.filters.archived;
   if (els.search) els.search.value = '';
+  if (els.categoryFilter) els.categoryFilter.value = '';
   if (els.tagFilter) els.tagFilter.value = '';
   if (els.dateFromFilter) els.dateFromFilter.value = state.filters.dateFrom;
   if (els.dateToFilter) els.dateToFilter.value = state.filters.dateTo;
@@ -709,6 +718,7 @@ function applicationQueryParams() {
   const params = new URLSearchParams();
   if (state.filters.search) params.set('search', state.filters.search);
   if (state.filters.status) params.set('status', state.filters.status);
+  if (state.filters.category) params.set('category', state.filters.category);
   if (state.filters.tag) params.set('tag', state.filters.tag);
   if (state.filters.dateFrom) params.set('dateFrom', state.filters.dateFrom);
   if (state.filters.dateTo) params.set('dateTo', state.filters.dateTo);
@@ -1399,6 +1409,7 @@ function bindHomeWorkspaceElements() {
   }
   if (els.search) els.search.value = state.filters.search;
   if (els.statusFilter) els.statusFilter.value = state.filters.status;
+  if (els.categoryFilter) els.categoryFilter.value = state.filters.category;
   if (els.tagFilter) els.tagFilter.value = state.filters.tag;
   if (els.archiveFilter) els.archiveFilter.value = state.filters.archived;
   if (els.savedFilterName) els.savedFilterName.value = '';
@@ -2072,10 +2083,12 @@ async function deleteCurrentSavedFilter() {
 function applySavedFilter(savedFilter) {
   state.filters.search = savedFilter.search || '';
   state.filters.status = savedFilter.status || '';
+  state.filters.category = '';
   state.filters.tag = savedFilter.tag || '';
   state.filters.archived = savedFilter.archived || 'false';
   els.search.value = state.filters.search;
   els.statusFilter.value = state.filters.status;
+  if (els.categoryFilter) els.categoryFilter.value = '';
   els.tagFilter.value = state.filters.tag;
   els.archiveFilter.value = state.filters.archived;
   els.savedFilterName.value = savedFilter.name || '';

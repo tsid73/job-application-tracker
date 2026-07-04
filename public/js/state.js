@@ -23,6 +23,7 @@ export const state = {
   filters: {
     search: '',
     status: '',
+    category: '',
     tag: '',
     archived: 'false',
     dateFrom: '',

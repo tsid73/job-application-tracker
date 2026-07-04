@@ -371,6 +371,7 @@ export function createReadApi({ pool, audit }) {
       const search = cleanString(url.searchParams.get("search")) || "";
       const status = cleanString(url.searchParams.get("status")) || "";
       const tag = cleanString(url.searchParams.get("tag")) || "";
+      const category = cleanString(url.searchParams.get("category")) || "";
       const archived = cleanString(url.searchParams.get("archived")) || "false";
       const dateFrom = cleanString(url.searchParams.get("dateFrom")) || "";
       const dateTo = cleanString(url.searchParams.get("dateTo")) || "";
@@ -415,6 +416,7 @@ export function createReadApi({ pool, audit }) {
           WHERE ($7 = 0 OR a.id = $7)
             AND ($1 = '' OR a.company_name ILIKE '%' || $1 || '%' OR a.role_title ILIKE '%' || $1 || '%')
             AND ($2 = '' OR a.status = $2::application_status)
+            AND ($8 = '' OR a.company_category = $8)
             AND ($3 = '' OR EXISTS (
               SELECT 1
               FROM application_tags at2
@@ -439,7 +441,7 @@ export function createReadApi({ pool, audit }) {
             a.id DESC
           ${singleId > 0 ? "" : `LIMIT ${pageSize} OFFSET ${(page - 1) * pageSize}`}
         `,
-        [search, status, tag, archived, dateFrom, dateTo, singleId],
+        [search, status, tag, archived, dateFrom, dateTo, singleId, category],
       );
 
       const total =

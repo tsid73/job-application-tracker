@@ -55,6 +55,7 @@ const workspaceKeys = [
   'notificationsPanel',
   'search',
   'statusFilter',
+  'categoryFilter',
   'tagFilter',
   'archiveFilter',
   'savedFilterSelect',
@@ -131,6 +132,7 @@ export function bindWorkspaceElements(root = els.workspaceRoot) {
   els.notificationsPanel = root.querySelector('#notificationsPanel');
   els.search = root.querySelector('#searchInput');
   els.statusFilter = root.querySelector('#statusFilter');
+  els.categoryFilter = root.querySelector('#categoryFilter');
   els.tagFilter = root.querySelector('#tagFilter');
   els.archiveFilter = root.querySelector('#archiveFilter');
   els.dateFromFilter = root.querySelector('#dateFromFilter');
