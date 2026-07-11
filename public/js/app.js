@@ -35,6 +35,9 @@ const aiEndpoints = {
 
 bindGlobalEvents();
 
+state.route = parseRoute(location.pathname, location.search);
+applyHomeRouteState(state.route);
+
 Promise.all([loadApplications(), loadSavedFilters(), loadNotifications()])
   .then(async () => {
     await loadAppConfig();
@@ -120,10 +123,15 @@ function bindGlobalEvents() {
     });
   });
 
-  document.querySelectorAll('.sidebar [data-view]').forEach((button) => {
-    button.addEventListener('click', () => {
-      if (location.pathname !== '/') navigateTo('/');
-      switchView(button.dataset.view);
+  document.querySelectorAll('.sidebar [data-view]').forEach((item) => {
+    item.addEventListener('click', (event) => {
+      if (isModifiedClick(event)) return;
+      event.preventDefault();
+      if (state.route.page !== 'home') {
+        navigateTo(item.getAttribute('href'));
+        return;
+      }
+      switchView(item.dataset.view);
     });
   });
 
@@ -140,11 +148,15 @@ function bindGlobalEvents() {
   els.targetCompanyForm.querySelectorAll('[data-date-input]').forEach(attachDateMask);
 
   document.addEventListener('click', (event) => {
-    const link = event.target.closest('a[href^="/applications/"], a[href="/"]');
+    const link = event.target.closest('a[href^="/applications/"], a[href="/"], a[href^="/?"]');
     if (!link || link.target === '_blank' || event.defaultPrevented) return;
+    if (isModifiedClick(event)) return;
     event.preventDefault();
     navigateTo(link.getAttribute('href'));
   });
+
+  bindApplicationListKeyboardNav();
+  bindDuplicateApplicationHint();
 
   document.addEventListener('click', (event) => {
     if (!event.target.closest('.dropdown-container')) {
@@ -168,6 +180,68 @@ function bindGlobalEvents() {
     renderCurrentRoute().catch((error) => {
       showToast(error.message, 'error');
     });
+  });
+}
+
+function isModifiedClick(event) {
+  return event.ctrlKey || event.metaKey || event.shiftKey || event.altKey || event.button !== 0;
+}
+
+function applyHomeRouteState(route) {
+  if (route.page !== 'home') return;
+  if (route.view) state.view = route.view;
+  if (route.hasFilters) Object.assign(state.filters, route.filters);
+}
+
+function bindApplicationListKeyboardNav() {
+  document.addEventListener('keydown', (event) => {
+    if (event.defaultPrevented || event.ctrlKey || event.metaKey || event.altKey) return;
+    if (document.querySelector('dialog[open]')) return;
+    const inField = event.target instanceof Element && event.target.closest('input, textarea, select, [contenteditable]');
+    if (event.key === '/' && !inField && els.search) {
+      event.preventDefault();
+      els.search.focus();
+      return;
+    }
+    if (state.route.page !== 'home' || state.view !== 'list' || !els.table) return;
+    if (!['ArrowDown', 'ArrowUp', 'Enter'].includes(event.key)) return;
+    const focusedRow = event.target instanceof Element ? event.target.closest('tr[data-id]') : null;
+    if (event.key === 'Enter') {
+      if (focusedRow && !inField) {
+        event.preventDefault();
+        navigateTo(`/applications/${focusedRow.dataset.id}`);
+      }
+      return;
+    }
+    if (inField) return;
+    const rows = [...els.table.querySelectorAll('tr[data-id]')];
+    if (!rows.length) return;
+    event.preventDefault();
+    const index = rows.indexOf(focusedRow);
+    const next = event.key === 'ArrowDown' ? Math.min(index + 1, rows.length - 1) : Math.max(index - 1, 0);
+    rows[next]?.focus();
+  });
+}
+
+function bindDuplicateApplicationHint() {
+  const companyInput = els.applicationForm?.querySelector('[name="company_name"]');
+  const hint = document.querySelector('#applicationDuplicateHint');
+  if (!companyInput || !hint) return;
+  companyInput.addEventListener('blur', async () => {
+    const name = companyInput.value.trim();
+    hint.hidden = true;
+    if (!name) return;
+    try {
+      const payload = await api(`/api/applications/lookup?company_name=${encodeURIComponent(name)}`);
+      const matches = payload.applications || [];
+      if (!matches.length) return;
+      const latest = matches[0];
+      const latestLine = [latest.role_title, latest.applied_date ? formatIsoDateForDisplay(latest.applied_date) : ''].filter(Boolean).join(', ');
+      hint.textContent = `You already have ${matches.length} application${matches.length === 1 ? '' : 's'} for ${name}${latestLine ? ` (latest: ${latestLine})` : ''}.`;
+      hint.hidden = false;
+    } catch (error) {
+      // ponytail: hint only — lookup failures stay silent
+    }
   });
 }
 
@@ -263,12 +337,14 @@ function bindHomeWorkspaceEvents() {
   });
   els.saveFilterButton?.addEventListener('click', saveCurrentFilter);
   els.deleteFilterButton?.addEventListener('click', deleteCurrentSavedFilter);
-  els.quickExportCsvButton?.addEventListener('click', () => {
-    if (state.selectedIds.size === 0) {
-      showToast('No applications selected.', 'warning');
-      return;
-    }
-    downloadApplicationsCsv();
+  els.quickExportCsvButton?.addEventListener('click', () => downloadApplicationsCsv());
+  els.bulkStatusSelect?.addEventListener('change', () => {
+    const status = els.bulkStatusSelect.value;
+    els.bulkStatusSelect.value = '';
+    if (status) runBulkStatusUpdate(status);
+  });
+  els.empty?.addEventListener('click', (event) => {
+    if (event.target.closest('#emptyStateNewApp')) openApplicationDialog();
   });
   els.quickExportIcsButton?.addEventListener('click', downloadCalendarIcs);
   els.selectAllRows?.addEventListener('change', () => {
@@ -408,13 +484,18 @@ function bindHomeWorkspaceEvents() {
   });
   els.table?.addEventListener('change', updateInlineStatus);
   els.table?.addEventListener('click', async (event) => {
-    const openButton = event.target.closest('[data-detail-id]');
+    const companyFilter = event.target.closest('[data-filter-company]');
     const archiveButton = event.target.closest('[data-archive-row-id]');
     const restoreButton = event.target.closest('[data-restore-row-id]');
     const inlineMenu = event.target.closest('details.inline-menu');
-    if (openButton) {
-      inlineMenu?.removeAttribute('open');
-      navigateTo(`/applications/${openButton.dataset.detailId}`);
+    if (companyFilter) {
+      state.filters.search = companyFilter.dataset.filterCompany;
+      state.filters.archived = 'all';
+      state.filters.page = 1;
+      if (els.search) els.search.value = state.filters.search;
+      if (els.archiveFilter) els.archiveFilter.value = 'all';
+      await loadApplications();
+      return;
     }
     if (archiveButton) {
       inlineMenu?.removeAttribute('open');
@@ -524,13 +605,13 @@ function downloadApplicationsCsv(exportAll = false) {
   const link = document.createElement('a');
   if (exportAll) {
     link.href = '/api/export/applications.csv';
-  } else {
-    if (state.selectedIds.size === 0) {
-      showToast('No applications selected. Select applications to export.', 'warning');
-      return;
-    }
+  } else if (state.selectedIds.size > 0) {
     const ids = Array.from(state.selectedIds).join(',');
     link.href = `/api/export/applications.csv?ids=${ids}`;
+  } else {
+    const params = applicationQueryParams();
+    params.delete('page');
+    link.href = `/api/export/applications.csv?${params.toString()}`;
   }
   link.download = 'job-applications.csv';
   document.body.appendChild(link);
@@ -590,6 +671,32 @@ function updateActivitySelectionUI() {
   }
 }
 
+async function runBulkStatusUpdate(status) {
+  const ids = [...state.selectedIds];
+  if (!ids.length) return;
+  if (status === 'interview_scheduled') {
+    showToast('Set Interview Scheduled per application so each one gets an interview date.', 'warning');
+    return;
+  }
+  await runConfirmedAction({
+    title: 'Update status',
+    body: `Set ${ids.length} application${ids.length === 1 ? '' : 's'} to ${statusLabels[status]}?`,
+    acceptLabel: 'Update',
+    successMessage: 'Status updated.',
+    onConfirm: async () => {
+      for (const id of ids) {
+        await api(`/api/applications/${id}`, {
+          method: 'PUT',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ status })
+        });
+      }
+      state.selectedIds.clear();
+      await Promise.all([loadApplications(), loadReminders(), loadNotifications()]);
+    }
+  });
+}
+
 async function runBulkAction(action) {
   const ids = [...state.selectedIds];
   if (!ids.length) return;
@@ -641,10 +748,12 @@ async function runBulkAction(action) {
 async function switchView(view) {
   state.view = view;
   syncContentHeader();
-  document.querySelectorAll('.sidebar [data-view]').forEach((button) => {
-    const isActive = button.dataset.view === view;
-    button.classList.toggle('is-active', isActive);
-    button.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+  syncHomeUrl();
+  document.querySelectorAll('.sidebar [data-view]').forEach((item) => {
+    const isActive = item.dataset.view === view;
+    item.classList.toggle('is-active', isActive);
+    if (isActive) item.setAttribute('aria-current', 'page');
+    else item.removeAttribute('aria-current');
   });
   closeMobileSidebar();
 
@@ -717,6 +826,15 @@ async function jumpToFilteredList({ status = '', view = '', dateFrom = '', dateT
   await loadApplications();
 }
 
+function syncHomeUrl() {
+  if (state.route.page !== 'home') return;
+  const params = state.view === 'list' ? applicationQueryParams() : new URLSearchParams();
+  if (params.get('archived') === 'false') params.delete('archived');
+  if (state.view !== 'list') params.set('view', state.view);
+  const query = params.toString();
+  window.history.replaceState({}, '', query ? `/?${query}` : '/');
+}
+
 function applicationQueryParams() {
   const params = new URLSearchParams();
   if (state.filters.search) params.set('search', state.filters.search);
@@ -738,6 +856,7 @@ async function loadApplications() {
   if (els.applicationPagination) renderApplicationPagination(els, state);
   updateSelectionUI();
   if (state.view === 'kanban' && els.kanbanBoard) renderKanban(els, state.applications, statusLabels);
+  syncHomeUrl();
 }
 
 async function refreshApplicationRow(id) {
@@ -883,9 +1002,15 @@ async function submitApplicationForm(event) {
     const payload = await api('/api/applications', { method: 'POST', body: formData });
     els.applicationDialog.close();
     els.applicationForm.reset();
-    showToast('Application saved.');
+    const hint = document.querySelector('#applicationDuplicateHint');
+    if (hint) hint.hidden = true;
     await Promise.all([loadApplications(), loadCVs(), loadReminders(), loadNotifications()]);
-    navigateTo(`/applications/${payload.application.id}`);
+    showToast(
+      `${payload.application.company_name} saved.`,
+      'success',
+      () => navigateTo(`/applications/${payload.application.id}`),
+      'Open'
+    );
   }, (error) => {
     setError(els.applicationError, error.message);
   });
@@ -1332,6 +1457,8 @@ async function renderCurrentRoute() {
   syncContentHeader();
 
   if (state.route.page === 'home') {
+    applyHomeRouteState(state.route);
+    if (state.route.hasFilters) await loadApplications().catch(() => {});
     mountWorkspace(renderHomeWorkspace(), 'home');
     bindHomeWorkspaceElements();
     await switchView(state.view);
@@ -1415,6 +1542,8 @@ function bindHomeWorkspaceElements() {
   if (els.categoryFilter) els.categoryFilter.value = state.filters.category;
   if (els.tagFilter) els.tagFilter.value = state.filters.tag;
   if (els.archiveFilter) els.archiveFilter.value = state.filters.archived;
+  if (els.dateFromFilter) els.dateFromFilter.value = state.filters.dateFrom;
+  if (els.dateToFilter) els.dateToFilter.value = state.filters.dateTo;
   if (els.savedFilterName) els.savedFilterName.value = '';
   renderApplications(els, state, statusOptions);
   renderSavedFilters(els, state.savedFilters);
@@ -2150,12 +2279,30 @@ function parseRoute(pathname, search) {
     };
   }
 
+  const homeViews = ['list', 'reminders', 'kanban', 'insights', 'activity', 'boards', 'companies', 'settings'];
+  const filterKeys = ['search', 'status', 'category', 'tag', 'archived', 'dateFrom', 'dateTo', 'page'];
+  const requestedView = searchParams.get('view');
+  const hasFilters = filterKeys.some((key) => searchParams.has(key));
+  const statusParam = searchParams.get('status') || '';
+  const archivedParam = searchParams.get('archived');
   return {
     path: '/',
     page: 'home',
     applicationId: null,
     documentId: null,
-    tab: 'overview'
+    tab: 'overview',
+    view: homeViews.includes(requestedView) ? requestedView : null,
+    hasFilters,
+    filters: hasFilters ? {
+      search: searchParams.get('search') || '',
+      status: statusLabels[statusParam] ? statusParam : '',
+      category: searchParams.get('category') || '',
+      tag: searchParams.get('tag') || '',
+      archived: ['false', 'true', 'all', 'closed'].includes(archivedParam) ? archivedParam : 'false',
+      dateFrom: searchParams.get('dateFrom') || '',
+      dateTo: searchParams.get('dateTo') || '',
+      page: Math.max(1, Number(searchParams.get('page')) || 1)
+    } : null
   };
 }
 
@@ -2277,10 +2424,10 @@ function setButtonBusy(button, isBusy) {
 
 const toastCallbacks = new Map();
 
-function showToast(message, type = 'success', undoCallback = null) {
+function showToast(message, type = 'success', undoCallback = null, actionLabel = 'Undo') {
   if (!els.appToast) return;
   const id = `${Date.now()}-${Math.random().toString(16).slice(2, 8)}`;
-  state.toasts = [...state.toasts, { id, message, type, hasUndo: !!undoCallback }];
+  state.toasts = [...state.toasts, { id, message, type, hasUndo: !!undoCallback, actionLabel }];
   if (undoCallback) toastCallbacks.set(id, undoCallback);
   renderToasts();
   window.setTimeout(() => dismissToast(id), type === 'error' || undoCallback ? 5000 : 2600);
@@ -2301,7 +2448,7 @@ function renderToasts() {
         <p>${escapeHtml(toast.message)}</p>
       </div>
       <div style="display: flex; gap: 8px; align-items: center;">
-        ${toast.hasUndo ? `<button class="primary-btn" style="padding: 4px 12px; font-size: 12px;" type="button" data-toast-undo="${toast.id}">Undo</button>` : ''}
+        ${toast.hasUndo ? `<button class="primary-btn" style="padding: 4px 12px; font-size: 12px;" type="button" data-toast-undo="${toast.id}">${escapeHtml(toast.actionLabel || 'Undo')}</button>` : ''}
         <button class="icon-button" type="button" data-toast-dismiss="${toast.id}" aria-label="Dismiss notification">Close</button>
       </div>
     </article>

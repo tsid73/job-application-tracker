@@ -23,16 +23,16 @@
 
         <nav class="sidebar-nav" aria-label="Sections">
           <div class="nav-group-label">Pipeline</div>
-          <button class="nav-item is-active" type="button" data-view="list" aria-pressed="true"><span class="nav-ic" aria-hidden="true"><i class="bi bi-list-ul"></i></span><span class="nav-text">List</span></button>
-          <button class="nav-item" type="button" data-view="kanban" aria-pressed="false"><span class="nav-ic" aria-hidden="true"><i class="bi bi-kanban"></i></span><span class="nav-text">Kanban</span></button>
-          <button class="nav-item" type="button" data-view="insights" aria-pressed="false"><span class="nav-ic" aria-hidden="true"><i class="bi bi-bar-chart"></i></span><span class="nav-text">Insights</span></button>
+          <a class="nav-item is-active" href="/" data-view="list" aria-current="page"><span class="nav-ic" aria-hidden="true"><i class="bi bi-list-ul"></i></span><span class="nav-text">List</span></a>
+          <a class="nav-item" href="/?view=kanban" data-view="kanban"><span class="nav-ic" aria-hidden="true"><i class="bi bi-kanban"></i></span><span class="nav-text">Kanban</span></a>
+          <a class="nav-item" href="/?view=insights" data-view="insights"><span class="nav-ic" aria-hidden="true"><i class="bi bi-bar-chart"></i></span><span class="nav-text">Insights</span></a>
 
           <div class="nav-group-label">Workspace</div>
-          <button class="nav-item" type="button" data-view="reminders" aria-pressed="false"><span class="nav-ic" aria-hidden="true"><i class="bi bi-calendar3"></i></span><span class="nav-text">Timeline</span></button>
-          <button class="nav-item" type="button" data-view="activity" aria-pressed="false"><span class="nav-ic" aria-hidden="true"><i class="bi bi-activity"></i></span><span class="nav-text">Activity</span></button>
-          <button class="nav-item" type="button" data-view="boards" aria-pressed="false"><span class="nav-ic" aria-hidden="true"><i class="bi bi-grid-3x3-gap"></i></span><span class="nav-text">Job Boards</span></button>
-          <button class="nav-item" type="button" data-view="companies" aria-pressed="false"><span class="nav-ic" aria-hidden="true"><i class="bi bi-buildings"></i></span><span class="nav-text">Company List</span></button>
-          <button class="nav-item" type="button" data-view="settings" aria-pressed="false"><span class="nav-ic" aria-hidden="true"><i class="bi bi-gear"></i></span><span class="nav-text">Settings</span></button>
+          <a class="nav-item" href="/?view=reminders" data-view="reminders"><span class="nav-ic" aria-hidden="true"><i class="bi bi-calendar3"></i></span><span class="nav-text">Timeline</span></a>
+          <a class="nav-item" href="/?view=activity" data-view="activity"><span class="nav-ic" aria-hidden="true"><i class="bi bi-activity"></i></span><span class="nav-text">Activity</span></a>
+          <a class="nav-item" href="/?view=boards" data-view="boards"><span class="nav-ic" aria-hidden="true"><i class="bi bi-grid-3x3-gap"></i></span><span class="nav-text">Job Boards</span></a>
+          <a class="nav-item" href="/?view=companies" data-view="companies"><span class="nav-ic" aria-hidden="true"><i class="bi bi-buildings"></i></span><span class="nav-text">Company List</span></a>
+          <a class="nav-item" href="/?view=settings" data-view="settings"><span class="nav-ic" aria-hidden="true"><i class="bi bi-gear"></i></span><span class="nav-text">Settings</span></a>
         </nav>
 
         <div class="sidebar-footer">
@@ -71,6 +71,7 @@
               <span>Company Name</span>
               <input name="company_name" required>
             </label>
+            <p id="applicationDuplicateHint" class="duplicate-hint" hidden></p>
             <label>
               <span>Company Category</span>
               <select name="company_category">

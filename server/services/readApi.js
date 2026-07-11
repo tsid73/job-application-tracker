@@ -407,6 +407,8 @@ export function createReadApi({ pool, audit }) {
             CASE WHEN a.interview_date IS NULL THEN NULL ELSE a.interview_date - CURRENT_DATE END AS days_remaining,
             COALESCE(array_agg(DISTINCT t.name) FILTER (WHERE t.name IS NOT NULL), '{}') AS tags,
             c.original_name AS cv_name,
+            (SELECT COUNT(*) FROM applications dup
+              WHERE lower(trim(dup.company_name)) = lower(trim(a.company_name)))::int AS company_count,
             COUNT(*) OVER ()::int AS total_count
           FROM applications a
           LEFT JOIN application_tags at ON at.application_id = a.id

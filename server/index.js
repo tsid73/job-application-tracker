@@ -493,6 +493,37 @@ async function exportApplicationsCsv(req, res) {
   const hasIds = !!idsParam;
   const ids = hasIds ? idsParam.split(',').map(Number).filter(n => !isNaN(n)) : [];
 
+  // Same filter semantics as GET /api/applications, so "export current view" matches the list.
+  const knownStatuses = ['applied', 'interview_scheduled', 'offer', 'accepted', 'rejected', 'withdrawn', 'ghosted'];
+  const search = (urlParams.searchParams.get('search') || '').trim();
+  const statusParam = urlParams.searchParams.get('status') || '';
+  const status = knownStatuses.includes(statusParam) ? statusParam : '';
+  const tag = (urlParams.searchParams.get('tag') || '').trim();
+  const category = (urlParams.searchParams.get('category') || '').trim();
+  const archivedParam = urlParams.searchParams.get('archived') || 'all';
+  const archived = ['false', 'true', 'all', 'closed'].includes(archivedParam) ? archivedParam : 'all';
+  const dateFrom = /^\d{4}-\d{2}-\d{2}$/.test(urlParams.searchParams.get('dateFrom') || '') ? urlParams.searchParams.get('dateFrom') : '';
+  const dateTo = /^\d{4}-\d{2}-\d{2}$/.test(urlParams.searchParams.get('dateTo') || '') ? urlParams.searchParams.get('dateTo') : '';
+
+  const filterWhere = `
+      WHERE ($1 = '' OR a.company_name ILIKE '%' || $1 || '%' OR a.role_title ILIKE '%' || $1 || '%')
+        AND ($2 = '' OR a.status = $2::application_status)
+        AND ($3 = '' OR a.company_category = $3)
+        AND ($4 = '' OR EXISTS (
+          SELECT 1 FROM application_tags at2
+          JOIN tags t2 ON t2.id = at2.tag_id
+          WHERE at2.application_id = a.id AND t2.name ILIKE '%' || $4 || '%'
+        ))
+        AND (
+          $5 = 'all'
+          OR ($5 = 'true' AND a.archived_at IS NOT NULL)
+          OR ($5 = 'closed' AND a.archived_at IS NULL AND a.status IN ('rejected', 'withdrawn', 'ghosted'))
+          OR ($5 = 'false' AND a.archived_at IS NULL AND a.status NOT IN ('rejected', 'withdrawn', 'ghosted'))
+        )
+        AND ($6 = '' OR a.applied_date >= $6::date)
+        AND ($7 = '' OR a.applied_date < ($7::date + interval '1 day'))
+    `;
+
   const query = `
       SELECT
         a.company_name,
@@ -514,12 +545,15 @@ async function exportApplicationsCsv(req, res) {
       FROM applications a
       LEFT JOIN application_tags at ON at.application_id = a.id
       LEFT JOIN tags t ON t.id = at.tag_id
-      ${hasIds && ids.length > 0 ? 'WHERE a.id = ANY($1::int[])' : ''}
+      ${hasIds && ids.length > 0 ? 'WHERE a.id = ANY($1::int[])' : filterWhere}
       GROUP BY a.id
       ORDER BY a.applied_date DESC, a.id DESC
     `;
-  
-  const result = await pool.query(query, hasIds && ids.length > 0 ? [ids] : []);
+
+  const result = await pool.query(
+    query,
+    hasIds && ids.length > 0 ? [ids] : [search, status, category, tag, archived, dateFrom, dateTo]
+  );
 
   const headers = ['company_name', 'role_title', 'job_link', 'job_description', 'status', 'salary', 'location', 'recruiter', 'contact_person', 'applied_date', 'interview_date', 'next_action', 'next_action_due_date', 'notes', 'lifecycle', 'tags'];
   const csv = [

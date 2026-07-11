@@ -2838,7 +2838,7 @@ a {
   display: inline-flex;
   align-items: center;
   min-height: 28px;
-  padding: 4px 10px;
+  padding: 4px 8px;
   border-radius: 999px;
   border: 1px solid var(--line);
   font-size: 12px;
@@ -4909,4 +4909,171 @@ dialog::backdrop {
 
 dialog[open]::backdrop {
   opacity: 1;
+}
+
+/* ===== Navigation links & row links ===== */
+a.nav-item {
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.company-link {
+  color: inherit;
+  text-decoration: none;
+}
+
+.company-link:hover,
+.company-link:focus-visible {
+  color: var(--accent);
+  text-decoration: underline;
+}
+
+.company-cell strong {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.company-count-badge {
+  border: 1px solid var(--line);
+  background: var(--bg);
+  color: var(--muted);
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.4;
+  padding: 0 8px;
+  min-height: 0;
+  box-shadow: none;
+  cursor: pointer;
+  flex: 0 0 auto;
+}
+
+.company-count-badge:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+.table-shell tbody tr[data-id]:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: -2px;
+}
+
+.back-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+  text-decoration: none;
+  font-size: 13px;
+  font-weight: 600;
+  margin-bottom: 10px;
+}
+
+.back-link:hover {
+  color: var(--accent);
+}
+
+.duplicate-hint {
+  margin: -4px 0 0;
+  font-size: 12px;
+  color: var(--warn-line);
+  background: var(--warn-bg);
+  border: 1px solid var(--warn-line);
+  border-radius: 8px;
+  padding: 6px 10px;
+}
+
+.empty-state-action {
+  text-align: center;
+  padding: 0 0 22px;
+}
+
+.bulk-status-select {
+  min-height: 0;
+  font-size: 12px;
+  padding: 4px 8px;
+  border-radius: 8px;
+}
+
+/* ===== Sticky select + company columns in the applications list ===== */
+#listView th.select-col,
+#listView td.select-col {
+  width: 44px;
+  min-width: 44px;
+  max-width: 44px;
+  box-sizing: border-box;
+  padding-left: 8px;
+  padding-right: 8px;
+}
+
+#listView table th:nth-child(1),
+#listView table td:nth-child(1) {
+  position: sticky;
+  left: 0;
+  z-index: 2;
+  background: var(--card);
+}
+
+#listView table th:nth-child(2),
+#listView table td:nth-child(2) {
+  position: sticky;
+  left: 44px;
+  z-index: 2;
+  background: var(--card);
+  box-shadow: inset -1px 0 0 var(--line);
+}
+
+#listView table th:nth-child(1),
+#listView table th:nth-child(2) {
+  background: #f7f9fb;
+  z-index: 3;
+}
+
+#listView tr.archived td:nth-child(1),
+#listView tr.archived td:nth-child(2) {
+  background: #eceef1;
+}
+
+#listView tr.closed td:nth-child(1),
+#listView tr.closed td:nth-child(2) {
+  background: #fbeaea;
+}
+
+#listView .table-shell tbody tr:hover td:nth-child(1),
+#listView .table-shell tbody tr:hover td:nth-child(2) {
+  background: var(--bg);
+}
+
+/* ===== Column priority on narrow screens (Last Touched, then Next) ===== */
+@media (max-width: 1200px) {
+  #listView table th:nth-child(6),
+  #listView table td:nth-child(6) {
+    display: none;
+  }
+}
+
+@media (max-width: 1000px) {
+  #listView table th:nth-child(5),
+  #listView table td:nth-child(5) {
+    display: none;
+  }
+}
+
+/* ===== Status select as compact pill (radius comes from the global select pill rule) ===== */
+#listView .status-cell select {
+  min-width: 0;
+  width: auto;
+  max-width: 170px;
+  min-height: 0;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 4px 12px !important;
+  border: 1px solid var(--line);
+  background-color: var(--bg);
+  color: var(--text);
+}
+
+#listView .status-cell select:hover {
+  border-color: var(--accent);
 }

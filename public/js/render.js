@@ -17,7 +17,7 @@ import {
   renderTags,
   reportRow
 } from './utils.js';
-import { isClosedStatus, statusLabels } from './state.js';
+import { isClosedStatus, state, statusLabels, statusOptions } from './state.js';
 
 export function renderHomeWorkspace() {
   return `
@@ -135,6 +135,10 @@ export function renderHomeWorkspace() {
         <div id="bulkActionsBar" class="bulk-bar" hidden>
           <strong id="bulkCount">0 selected</strong>
           <div class="row-actions">
+            <select id="bulkStatusSelect" class="bulk-status-select" aria-label="Set status for selected applications">
+              <option value="">Set status…</option>
+              ${statusOptions}
+            </select>
             <button id="bulkArchiveButton" class="icon-button" type="button" title="Archive Selected"><i class="bi bi-archive" style="color: var(--warn-line)"></i></button>
             <button id="bulkRestoreButton" class="icon-button" type="button" title="Restore Selected"><i class="bi bi-arrow-clockwise" style="color: var(--focus)"></i></button>
             <button id="bulkDeleteButton" class="icon-button" type="button" title="Delete Selected"><i class="bi bi-trash" style="color: var(--danger)"></i></button>
@@ -444,15 +448,16 @@ export function renderApplications(els, state, statusOptions) {
   const accepted = state.applications.filter((item) => item.status === 'accepted').length;
   els.summary.innerHTML = buildStatChips({ active, interview: interviews, offer: offers, accepted });
   if (!state.applications.length) {
+    const isFiltered = state.filters.search || state.filters.status || state.filters.tag || state.filters.archived !== 'false';
     els.empty.innerHTML = renderEmptyState(
-      state.filters.search || state.filters.status || state.filters.tag || state.filters.archived !== 'false' ? 'No matches found' : 'Start your tracker',
-      state.filters.search || state.filters.status || state.filters.tag || state.filters.archived !== 'false'
+      isFiltered ? 'No matches found' : 'Start your tracker',
+      isFiltered
         ? 'No applications match the current filters.'
         : 'Create your first application to unlock reminders, preparation tracking, AI outputs, and reporting.',
-      state.filters.search || state.filters.status || state.filters.tag || state.filters.archived !== 'false'
+      isFiltered
         ? 'Adjust the filters or switch the view to include archived records.'
         : 'Use New Application in the top bar to add your first role.'
-    );
+    ) + (isFiltered ? '' : '<div class="empty-state-action"><button id="emptyStateNewApp" class="primary-btn" type="button"><i class="bi bi-plus-lg"></i> New Application</button></div>');
   }
 
   for (const application of state.applications) {
@@ -468,11 +473,12 @@ export function buildApplicationRow(application, statusOptions, selected = false
   
   const subtitle = [application.role_title, application.location].filter(Boolean).join(' · ') || application.cv_name || 'No CV';
   
+  row.tabIndex = 0;
   row.innerHTML = `
     <td class="select-col"><input type="checkbox" data-select-id="${application.id}" aria-label="Select ${escapeHtml(application.company_name)}"${selected ? ' checked' : ''}></td>
     <td>
       <div class="company-cell">
-        <strong title="${escapeAttribute(application.company_name)}">${escapeHtml(application.company_name)}</strong>
+        <strong title="${escapeAttribute(application.company_name)}"><a class="company-link" href="/applications/${application.id}">${escapeHtml(application.company_name)}</a>${Number(application.company_count) > 1 ? `<button class="company-count-badge" type="button" data-filter-company="${escapeAttribute(application.company_name)}" title="Show all ${application.company_count} applications for ${escapeAttribute(application.company_name)}">×${application.company_count}</button>` : ''}</strong>
         <span title="${escapeAttribute(subtitle)}">${escapeHtml(subtitle)}</span>
       </div>
     </td>
@@ -490,9 +496,9 @@ export function buildApplicationRow(application, statusOptions, selected = false
     <td data-interview-cell>${closed ? '' : renderInterviewControl(application)}</td>
     <td class="action-col">
       <div class="row-actions">
-        <button class="icon-button row-open-btn" type="button" data-detail-id="${application.id}" aria-label="Open ${escapeHtml(application.company_name)}" title="Open">
+        <a class="icon-button row-open-btn" href="/applications/${application.id}" target="_blank" rel="noopener" aria-label="Open ${escapeHtml(application.company_name)} in new tab" title="Open in new tab">
           <i class="bi bi-box-arrow-up-right"></i>
-        </button>
+        </a>
       </div>
     </td>
   `;
@@ -624,7 +630,7 @@ export function renderKanban(els, applications, statusLabels) {
           const daysSinceTouched = typeof item.days_since_touched === 'number' ? item.days_since_touched : 0;
           return `
             <article class="kanban-card">
-              <strong>${escapeHtml(item.company_name)}</strong>
+              <strong><a class="company-link" href="/applications/${item.id}">${escapeHtml(item.company_name)}</a></strong>
               <span class="role-title">${escapeHtml(item.role_title || 'N/A')}</span>
               <div class="kanban-card-meta">
                 <span>${formatDate(item.applied_date)}</span>
@@ -1013,6 +1019,7 @@ export function renderApplicationPage(els, payload, statusLabels, viewState) {
   els.workspaceRoot.innerHTML = `
     <section class="workspace-view workspace-view-application${closed ? ' is-closed' : ''}" data-workspace-view="application">
     <div id="applicationPageContent" class="route-page-shell">
+      <a class="back-link" href="${state.view === 'list' ? '/' : `/?view=${state.view}`}"><i class="bi bi-arrow-left"></i> Back</a>
       <section class="application-hero-card application-hero-compact">
         <div class="hero-main-row">
           <div class="hero-copy-group">

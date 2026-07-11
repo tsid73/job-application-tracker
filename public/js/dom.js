@@ -66,6 +66,7 @@ const workspaceKeys = [
   'quickExportIcsButton',
   'bulkActionsBar',
   'bulkCount',
+  'bulkStatusSelect',
   'bulkArchiveButton',
   'bulkRestoreButton',
   'bulkDeleteButton',
@@ -146,6 +147,7 @@ export function bindWorkspaceElements(root = els.workspaceRoot) {
   els.quickExportIcsButton = root.querySelector('#quickExportIcsButton');
   els.bulkActionsBar = root.querySelector('#bulkActionsBar');
   els.bulkCount = root.querySelector('#bulkCount');
+  els.bulkStatusSelect = root.querySelector('#bulkStatusSelect');
   els.bulkArchiveButton = root.querySelector('#bulkArchiveButton');
   els.bulkRestoreButton = root.querySelector('#bulkRestoreButton');
   els.bulkDeleteButton = root.querySelector('#bulkDeleteButton');
