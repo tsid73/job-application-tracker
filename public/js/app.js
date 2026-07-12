@@ -523,6 +523,14 @@ function bindHomeWorkspaceEvents() {
   els.remindersList?.addEventListener('click', async (event) => {
     const action = event.target.closest('[data-calendar-action]');
     const detail = event.target.closest('[data-calendar-detail]');
+    const expand = event.target.closest('[data-calendar-expand]');
+    
+    if (expand) {
+      const list = expand.nextElementSibling;
+      if (list) list.toggleAttribute('hidden');
+      return;
+    }
+    
     if (action) {
       shiftCalendar(action.dataset.calendarAction);
       await loadReminders();

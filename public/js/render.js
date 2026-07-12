@@ -2257,14 +2257,38 @@ export function renderCalendar(els, calendarDate, reminders) {
               <div class="calendar-day${cell.today ? ' is-today' : ''}">
                 <span class="calendar-date">${cell.day}</span>
                 <div class="calendar-events">
-                  ${cell.events.map((event) => {
-                    const badge = getBadgeDetails(event.type);
-                    return `
-                    <article class="calendar-event ${badge.css}" title="${escapeAttribute(getTimelineLabel(event))}" data-calendar-detail="${event.id}">
-                      ${escapeHtml(getTimelineLabel(event))}
-                    </article>
-                    `;
-                  }).join('')}
+                  ${(() => {
+                    if (cell.events.length > 1) {
+                      const grouped = {};
+                      cell.events.forEach((event) => {
+                        const badge = getBadgeDetails(event.type);
+                        if (!grouped[badge.css]) grouped[badge.css] = { badge, events: [] };
+                        grouped[badge.css].events.push(event);
+                      });
+                      return Object.values(grouped).map((group) => `
+                        <div class="calendar-event-group">
+                          <article class="calendar-event ${group.badge.css} summary-pill" data-calendar-expand="true" style="cursor: pointer; justify-content: center; font-weight: 600;">
+                            ${group.badge.label} - ${group.events.length}
+                          </article>
+                          <div class="calendar-event-list" hidden>
+                            ${group.events.map((event) => `
+                              <article class="calendar-event ${group.badge.css}" title="${escapeAttribute(getTimelineLabel(event))}" data-calendar-detail="${event.id}" style="margin-top: 4px;">
+                                ${escapeHtml(getTimelineLabel(event))}
+                              </article>
+                            `).join('')}
+                          </div>
+                        </div>
+                      `).join('');
+                    }
+                    return cell.events.map((event) => {
+                      const badge = getBadgeDetails(event.type);
+                      return `
+                      <article class="calendar-event ${badge.css}" title="${escapeAttribute(getTimelineLabel(event))}" data-calendar-detail="${event.id}">
+                        ${escapeHtml(getTimelineLabel(event))}
+                      </article>
+                      `;
+                    }).join('');
+                  })()}
                 </div>
               </div>
             `;
