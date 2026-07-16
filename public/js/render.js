@@ -288,13 +288,46 @@ export function renderInsights(els, report, stats, statusLabels, mode = 'active'
     return reportRow(row.category, Number(row.applications), categoryMax, { category: row.category }, toIntStr, '--app');
   }).join('') || '<p>No category data.</p>';
 
+  const dropoffs = [
+    { stage: 'App -> Interview', drop: total > 0 ? 100 - Math.round((funnelRows[1].count / total) * 100) : 0 },
+    { stage: 'Interview -> Offer', drop: funnelRows[1].count > 0 ? 100 - Math.round((funnelRows[2].count / funnelRows[1].count) * 100) : 0 },
+    { stage: 'Offer -> Accepted', drop: funnelRows[2].count > 0 ? 100 - Math.round((funnelRows[3].count / funnelRows[2].count) * 100) : 0 }
+  ];
+  let biggestDrop = dropoffs[0];
+  for (const d of dropoffs) { if (d.drop > biggestDrop.drop) biggestDrop = d; }
+
   els.insightsContent.innerHTML = `
-    <div class="insights-toolbar" style="grid-column: 1 / -1; display: flex; justify-content: flex-end; gap: 6px; margin-bottom: 4px;">
+    <div class="insights-toolbar" style="grid-column: 1 / -1;">
       <button class="${mode === 'active' ? '' : 'secondary'}" data-insights-mode="active" type="button">Active Pipeline</button>
       <button class="${mode === 'all' ? '' : 'secondary'}" data-insights-mode="all" type="button">All Time</button>
     </div>
+    
+    <!-- Top KPIs -->
+    <div class="kpi-cards" style="grid-column: 1 / -1;">
+      <div class="kpi-card">
+        <div class="kpi-card-val total">${total}</div>
+        <div class="kpi-card-label">Total Apps</div>
+        <div style="font-size: 11px; color: var(--muted); margin-top: 8px; font-weight: 600;">
+          <span style="color: var(--app)">${Number(report.lifecycle_counts?.active || 0)} Active</span> | 
+          <span style="color: var(--cls)">${Number(report.lifecycle_counts?.closed || 0)} Closed</span>
+        </div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-card-val int">${funnelRows[1].count}</div>
+        <div class="kpi-card-label">Interviews</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-card-val act">${funnelRows[2].count}</div>
+        <div class="kpi-card-label">Offers</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-card-val rate">${rate(stats.funnel.responded, total)}</div>
+        <div class="kpi-card-label">Response Rate</div>
+      </div>
+    </div>
+
     <!-- Top Row -->
-    <section class="report-panel wide" style="grid-column: 1 / -1; display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px;">
+    <section class="report-panel wide" style="grid-column: 1 / -1; display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 32px; padding: 32px; margin-bottom: 24px;">
       <div>
         <div class="panel-kicker">Funnel</div>
         <h3>Application Funnel</h3>
@@ -320,68 +353,72 @@ export function renderInsights(els, report, stats, statusLabels, mode = 'active'
             <span class="funnel-bar-count">${funnelRows[3].count} <span class="funnel-conv-rate">${rate(stats.funnel.accepted, stats.funnel.offers)}</span></span>
           </div>
         </div>
+        <div class="drop-off-alert">
+          <i class="bi bi-exclamation-triangle-fill" style="color: var(--cls); font-size: 16px;"></i>
+          <div>
+            <strong>Biggest Drop-off:</strong> ${biggestDrop.stage} (${biggestDrop.drop}%)
+          </div>
+        </div>
       </div>
       <div>
+        <div class="panel-kicker">Velocity</div>
+        <h3>Time in Stage</h3>
+        <div class="stat-figures" style="margin-top: 24px; display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+          <article style="background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 24px; text-align: center; box-shadow: 0 4px 12px rgba(0,0,0,0.02);">
+            <strong style="font-size: 32px; color: var(--int); display: block; margin-bottom: 8px;">${stats.timing.avg_days_to_interview ?? '—'}</strong>
+            <span style="font-size: 12px; font-weight: 600; text-transform: uppercase; color: var(--muted);">avg days to interview</span>
+          </article>
+          <article style="background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 24px; text-align: center; box-shadow: 0 4px 12px rgba(0,0,0,0.02);">
+            <strong style="font-size: 32px; color: var(--act); display: block; margin-bottom: 8px;">${stats.timing.avg_days_to_close ?? '—'}</strong>
+            <span style="font-size: 12px; font-weight: 600; text-transform: uppercase; color: var(--muted);">avg days to close</span>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <!-- Outcomes & Lifecycle Row -->
+    <section class="report-panel wide" style="grid-column: 1 / -1; display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 32px; padding: 32px; margin-bottom: 24px;">
+      <div>
         <div class="panel-kicker">Outcomes</div>
-        <h3>Responses</h3>
-        <p class="response-rate-display">${rate(stats.funnel.responded, total)} <span>response rate</span></p>
-        ${reportRow('Responded', Number(stats.funnel.responded || 0), Math.max(1, total), null, total, '--app')}
-        ${reportRow('Rejected', Number(stats.funnel.rejected || 0), Math.max(1, total), null, total, '--cls')}
-        ${reportRow('Ghosted', Number(stats.totals.ghosted || 0), Math.max(1, total), null, total, '--muted')}
+        <h3 style="margin-bottom: 16px;">Responses</h3>
+        <p class="response-rate-display" style="font-size: 24px; font-weight: 800; color: var(--accent-dark); margin-bottom: 24px;">
+          ${rate(stats.funnel.responded, total)} <span style="font-size: 12px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px;">response rate</span>
+        </p>
+        <div style="display: flex; flex-direction: column; gap: 8px;">
+          ${reportRow('Responded', Number(stats.funnel.responded || 0), Math.max(1, total), null, total, '--app')}
+          ${reportRow('Rejected', Number(stats.funnel.rejected || 0), Math.max(1, total), null, total, '--cls')}
+          ${reportRow('Ghosted', Number(stats.totals.ghosted || 0), Math.max(1, total), null, total, '--muted')}
+        </div>
+      </div>
+      <div style="display: flex; flex-direction: column;">
+        <div class="panel-kicker">Portfolio</div>
+        <h3 style="margin-bottom: 24px;">Lifecycle</h3>
+        <div style="display: flex; flex-direction: column; gap: 8px;">
+          ${[
+            { label: 'Active', count: Number(report.lifecycle_counts?.active || 0), jump: { view: 'false' }, color: '--app' },
+            { label: 'Closed', count: Number(report.lifecycle_counts?.closed || 0), jump: { view: 'closed' }, color: '--cls' },
+            { label: 'Archived', count: Number(report.lifecycle_counts?.archived || 0), jump: { view: 'true' }, color: '--muted' }
+          ].map((row) => reportRow(row.label, row.count, Number(report.lifecycle_counts?.total || 1), row.jump, Number(report.lifecycle_counts?.total || 0), row.color)).join('')}
+        </div>
       </div>
     </section>
 
-    <!-- Middle Row -->
-    <section class="report-panel report-panel-lifecycle">
-      <div class="panel-kicker">Portfolio</div>
-      <h3>Lifecycle</h3>
-      ${[
-        { label: 'Active', count: Number(report.lifecycle_counts.active || 0), jump: { view: 'false' }, color: '--app' },
-        { label: 'Closed', count: Number(report.lifecycle_counts.closed || 0), jump: { view: 'closed' }, color: '--cls' },
-        { label: 'Archived', count: Number(report.lifecycle_counts.archived || 0), jump: { view: 'true' }, color: '--muted' }
-      ].map((row) => reportRow(row.label, row.count, Number(report.lifecycle_counts.total || 1), row.jump, Number(report.lifecycle_counts.total || 0), row.color)).join('')}
-    </section>
-    
-    <section class="report-panel report-panel-status">
-      <div class="panel-kicker">Snapshot</div>
-      <h3>Status Distribution</h3>
-      ${(() => {
-        const statusTotal = report.status_counts.reduce((sum, row) => sum + Number(row.count), 0);
-        const getStatusColor = (status) => {
-          if (['applied'].includes(status)) return '--app';
-          if (['interview_scheduled', 'interviewing'].includes(status)) return '--int';
-          if (['offer_received', 'accepted'].includes(status)) return '--act';
-          if (['rejected', 'withdrawn'].includes(status)) return '--cls';
-          if (['ghosted'].includes(status)) return '--muted';
-          return '--accent';
-        };
-        return report.status_counts.map((row) => reportRow(statusLabels[row.status] || row.status, Number(row.count), maxCount(report.status_counts), { status: row.status }, statusTotal, getStatusColor(row.status))).join('') || '<p>No status data.</p>';
-      })()}
-    </section>
-
-    <!-- Bottom Row -->
-    <section class="report-panel">
-      <div class="panel-kicker">Velocity</div>
-      <h3>Time in Stage</h3>
-      <div class="stat-figures">
-        <article>
-          <strong>${stats.timing.avg_days_to_interview ?? '—'}</strong>
-          <span>avg days to interview</span>
-        </article>
-        <article>
-          <strong>${stats.timing.avg_days_to_close ?? '—'}</strong>
-          <span>avg days to close</span>
-        </article>
+    <!-- Charts Row -->
+    <section class="report-panel wide" style="grid-column: 1 / -1; display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 32px; padding: 32px;">
+      <div style="min-height: 280px; display: flex; flex-direction: column;">
+        <div class="panel-kicker">Trends</div>
+        <h3 style="margin-bottom: 0;">Monthly Applications</h3>
+        <div class="chart-container" style="flex: 1;">
+          <canvas id="monthlyChart"></canvas>
+        </div>
       </div>
-    </section>
-    
-    <section class="report-panel report-panel-monthly">
-      <div class="panel-kicker">Velocity</div>
-      <h3>Monthly Applications</h3>
-      ${(() => {
-        const monthlyTotal = report.monthly_counts.reduce((sum, row) => sum + Number(row.count), 0);
-        return report.monthly_counts.map((row) => reportRow(formatMonthLabel(row.month), Number(row.count), maxCount(report.monthly_counts), { month: row.month }, monthlyTotal, '--focus')).join('') || '<p>No monthly data.</p>';
-      })()}
+      <div style="min-height: 280px; display: flex; flex-direction: column;">
+        <div class="panel-kicker">Snapshot</div>
+        <h3 style="margin-bottom: 0;">Pipeline Status</h3>
+        <div class="chart-container" style="flex: 1;">
+          <canvas id="statusChart"></canvas>
+        </div>
+      </div>
     </section>
 
     <section class="report-panel report-panel-tags wide" style="grid-column: 1 / -1;">
@@ -400,6 +437,79 @@ export function renderInsights(els, report, stats, statusLabels, mode = 'active'
       </div>
     </section>
   `;
+
+  // Render Charts
+  setTimeout(() => {
+    if (typeof Chart === 'undefined') return;
+
+    // Destroy existing charts if they exist
+    if (window.monthlyChartInst) window.monthlyChartInst.destroy();
+    if (window.statusChartInst) window.statusChartInst.destroy();
+
+    const monthlyCtx = document.getElementById('monthlyChart');
+    if (monthlyCtx && report.monthly_counts.length > 0) {
+      const reversedMonthly = [...report.monthly_counts].reverse();
+      const labels = reversedMonthly.map(r => formatMonthLabel(r.month));
+      const data = reversedMonthly.map(r => Number(r.count));
+      
+      const primaryColor = getComputedStyle(document.body).getPropertyValue('--accent').trim() || '#3b82f6';
+      
+      window.monthlyChartInst = new Chart(monthlyCtx, {
+        type: 'line',
+        data: {
+          labels,
+          datasets: [{
+            label: 'Applications',
+            data,
+            borderColor: primaryColor,
+            backgroundColor: primaryColor + '20',
+            tension: 0.3,
+            fill: true
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: { legend: { display: false } },
+          scales: {
+            y: { beginAtZero: true, ticks: { precision: 0 } }
+          }
+        }
+      });
+    }
+
+    const statusCtx = document.getElementById('statusChart');
+    if (statusCtx && report.status_counts.length > 0) {
+      const getStatusColorHex = (status) => {
+        if (['applied'].includes(status)) return '#3b82f6';
+        if (['interview_scheduled', 'interviewing'].includes(status)) return '#f59e0b';
+        if (['offer_received', 'accepted'].includes(status)) return '#10b981';
+        if (['rejected', 'withdrawn'].includes(status)) return '#ef4444';
+        if (['ghosted'].includes(status)) return '#9ca3af';
+        return '#8b5cf6';
+      };
+
+      const labels = report.status_counts.map(r => statusLabels[r.status] || r.status);
+      const data = report.status_counts.map(r => Number(r.count));
+      const backgroundColor = report.status_counts.map(r => getStatusColorHex(r.status));
+
+      window.statusChartInst = new Chart(statusCtx, {
+        type: 'doughnut',
+        data: {
+          labels,
+          datasets: [{ data, backgroundColor, borderWidth: 0 }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          cutout: '65%',
+          plugins: {
+            legend: { position: 'right', labels: { color: '#6b7280' } }
+          }
+        }
+      });
+    }
+  }, 0);
 }
 
 export function renderActivity(els, state, payload) {
