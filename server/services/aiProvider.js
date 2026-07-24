@@ -227,14 +227,15 @@ function buildGenerationPrompt(type, input) {
   const contextBlock = buildContextBlock(input);
   return {
     systemPrompt: [
-      'You are a job-application writing assistant.',
+      'You are a senior job-application writing assistant.',
       'Write concise, professional, editable plain text.',
       'Use only evidence supported by the provided CV context.',
       'Do not invent employers, projects, dates, metrics, or tools.',
       'If evidence is weak, write carefully and avoid unsupported claims.',
       'Avoid generic filler such as "I am excited to apply" unless directly justified.',
       'Follow the requested section order exactly.',
-      'Return plain text only with clean headings and bullets.'
+      'Return plain text only with clean headings and bullets.',
+      'Do NOT use Markdown formatting (no asterisks **, no hashes #). Output exact plain text section titles only.'
     ].join(' '),
     contextBlock,
     userPrompt: [
@@ -254,19 +255,22 @@ const documentSpecifications = {
     sections: ['Headline', 'Summary', 'Core Skills', 'Experience Highlights', 'Suggested Keyword Additions'],
     rules: [
       '- Keep every section concise and editable.',
-      '- Emphasize role-matching strengths first.',
+      '- Emphasize role-matching strengths first. Explicitly map candidate skills to job requirements.',
+      '- Use modern resume standards: Action Verb + Task + Quantifiable Result.',
       '- Use bullets where useful.',
       '- Do not fabricate achievements.'
     ]
   },
   cover_letter: {
-    goal: 'Write a concise, role-specific cover letter using only supported experience.',
+    goal: 'Write a highly compelling, role-specific cover letter using only supported experience.',
     sections: ['Opening', 'Why I Fit', 'Evidence', 'Closing'],
     rules: [
-      '- Stay under 320 words.',
-      '- Avoid generic openings and empty enthusiasm.',
+      '- Stay under 350 words.',
+      '- Use a compelling narrative structure: Hook, Value Proposition, Call to Action.',
+      '- Focus on measurable impact and how the candidate can solve the company\'s problems.',
+      '- Avoid generic openings, empty enthusiasm, and cliches.',
       '- Make claims only when supported by candidate evidence.',
-      '- Use natural plain text, not markdown.'
+      '- Use natural plain text, absolutely no markdown formatting.'
     ]
   },
   role_fit: {
@@ -305,25 +309,25 @@ function buildContextBlock(input) {
     `CV file: ${input.cv.original_name}`,
     '',
     'Job summary:',
-    input.jobSignals?.summary || summarize(input.jobDescription, 700),
+    input.jobSignals?.summary || summarize(input.jobDescription, 8000),
     '',
     'Top responsibilities:',
-    ...toBullets(input.jobSignals?.responsibilities?.slice(0, 6) || []),
+    ...toBullets(input.jobSignals?.responsibilities?.slice(0, 15) || []),
     '',
     'Key requirements:',
-    ...toBullets(input.jobSignals?.requirements?.slice(0, 6) || []),
+    ...toBullets(input.jobSignals?.requirements?.slice(0, 15) || []),
     '',
     'Important job keywords:',
-    ...toBullets(input.jobSignals?.keywords?.slice(0, 10) || []),
+    ...toBullets(input.jobSignals?.keywords?.slice(0, 20) || []),
     '',
     'Candidate summary:',
-    input.candidateSignals?.summary || summarize(input.cv.extracted_text || '', 700),
+    input.candidateSignals?.summary || summarize(input.cv.extracted_text || '', 8000),
     '',
     'Strong candidate evidence:',
-    ...toBullets(input.candidateSignals?.evidence?.slice(0, 6) || []),
+    ...toBullets(input.candidateSignals?.evidence?.slice(0, 15) || []),
     '',
     'Candidate technologies:',
-    ...toBullets(input.candidateSignals?.technologies?.slice(0, 10) || [])
+    ...toBullets(input.candidateSignals?.technologies?.slice(0, 20) || [])
   ].join('\n');
 }
 

@@ -548,15 +548,31 @@ function buildStatChips(counts) {
   return chips.length ? chips.join('') : '';
 }
 
+function getListSummaryCounts(state) {
+  const statusCounts = state.applicationStatusCounts || null;
+  if (statusCounts) {
+    return {
+      active: Number(statusCounts.active || 0),
+      interview: Number(statusCounts.interview_scheduled || 0),
+      offer: Number(statusCounts.offer || 0),
+      accepted: Number(statusCounts.accepted || 0),
+    };
+  }
+  const applications = state.applications || [];
+  return {
+    active: applications.filter((item) => !['rejected', 'withdrawn', 'ghosted'].includes(item.status)).length,
+    interview: applications.filter((item) => item.status === 'interview_scheduled').length,
+    offer: applications.filter((item) => item.status === 'offer').length,
+    accepted: applications.filter((item) => item.status === 'accepted').length,
+  };
+}
+
 export function renderApplications(els, state, statusOptions) {
   els.table.innerHTML = '';
   els.empty.hidden = state.applications.length !== 0;
-
-  const interviews = state.applications.filter((item) => item.status === 'interview_scheduled').length;
-  const active = state.applications.filter((item) => item.status === 'applied').length;
-  const offers = state.applications.filter((item) => item.status === 'offer').length;
-  const accepted = state.applications.filter((item) => item.status === 'accepted').length;
-  els.summary.innerHTML = buildStatChips({ active, interview: interviews, offer: offers, accepted });
+  const summaryCounts = getListSummaryCounts(state);
+  els.summary.innerHTML = buildStatChips(summaryCounts);
+  if (els.applicationPagination) renderApplicationPagination(els, state);
   if (!state.applications.length) {
     const isFiltered = state.filters.search || state.filters.status || state.filters.tag || state.filters.archived !== 'false';
     els.empty.innerHTML = renderEmptyState(
@@ -2438,10 +2454,13 @@ function renderActivityPagination(els, state) {
 
 export function renderApplicationPagination(els, state) {
   if (!els.applicationPagination) return;
-  const pageSize = 50;
-  const total = state.applicationTotal;
+  const totalFromState = Number(state.applicationTotal);
+  const total = Number.isFinite(totalFromState) ? totalFromState : 0;
+  const pageSize = Number.isInteger(state.applicationPageSize) && state.applicationPageSize > 0
+    ? state.applicationPageSize
+    : 50;
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
-  const page = Math.min(state.filters.page, totalPages);
+  const page = Math.min(Math.max(1, state.filters.page || 1), totalPages);
   if (totalPages <= 1) {
     els.applicationPagination.innerHTML = '';
     return;

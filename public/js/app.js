@@ -859,7 +859,11 @@ function applicationQueryParams() {
 async function loadApplications() {
   const payload = await api(`/api/applications?${applicationQueryParams().toString()}`);
   state.applications = payload.applications;
-  state.applicationTotal = payload.total ?? state.applications.length;
+  const totalFromPayload = Number(payload.total);
+  state.applicationTotal = Number.isFinite(totalFromPayload) ? totalFromPayload : state.applications.length;
+  const pageSizeFromPayload = Number(payload.pageSize);
+  state.applicationPageSize = Number.isInteger(pageSizeFromPayload) && pageSizeFromPayload > 0 ? pageSizeFromPayload : 50;
+  state.applicationStatusCounts = payload.status_counts || null;
   if (els.table) renderApplications(els, state, statusOptions);
   if (els.applicationPagination) renderApplicationPagination(els, state);
   updateSelectionUI();
@@ -1532,6 +1536,25 @@ function buildStatChips(counts) {
   return chips.length ? chips.join('') : '';
 }
 
+function getListSummaryCounts(state) {
+  const statusCounts = state.applicationStatusCounts || null;
+  if (statusCounts) {
+    return {
+      active: Number(statusCounts.active || 0),
+      interview: Number(statusCounts.interview_scheduled || 0),
+      offer: Number(statusCounts.offer || 0),
+      accepted: Number(statusCounts.accepted || 0),
+    };
+  }
+  const applications = state.applications || [];
+  return {
+    active: applications.filter((item) => !['rejected', 'withdrawn', 'ghosted'].includes(item.status)).length,
+    interview: applications.filter((item) => item.status === 'interview_scheduled').length,
+    offer: applications.filter((item) => item.status === 'offer').length,
+    accepted: applications.filter((item) => item.status === 'accepted').length,
+  };
+}
+
 function bindHomeWorkspaceElements() {
   bindWorkspaceElements();
   if (els.filterPanel) {
@@ -1539,11 +1562,8 @@ function bindHomeWorkspaceElements() {
   }
   syncContentHeader();
   if (els.summary) {
-    const interviews = state.applications.filter((item) => item.status === 'interview_scheduled').length;
-    const active = state.applications.filter((item) => item.status === 'applied').length;
-    const offers = state.applications.filter((item) => item.status === 'offer').length;
-    const accepted = state.applications.filter((item) => item.status === 'accepted').length;
-    els.summary.innerHTML = buildStatChips({ active, interview: interviews, offer: offers, accepted });
+    const summaryCounts = getListSummaryCounts(state);
+    els.summary.innerHTML = buildStatChips(summaryCounts);
   }
   if (els.search) els.search.value = state.filters.search;
   if (els.statusFilter) els.statusFilter.value = state.filters.status;

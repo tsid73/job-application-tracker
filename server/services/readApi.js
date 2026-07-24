@@ -384,37 +384,7 @@ export function createReadApi({ pool, audit }) {
         error.statusCode = 400;
         throw error;
       }
-
-      const result = await pool.query(
-        `
-          SELECT
-            a.id,
-            a.company_name,
-            a.company_category,
-            a.role_title,
-            a.status,
-            a.salary,
-            a.location,
-            a.recruiter,
-            a.contact_person,
-            to_char(a.applied_date, 'YYYY-MM-DD') AS applied_date,
-            to_char(a.interview_date, 'YYYY-MM-DD') AS interview_date,
-            a.next_action,
-            to_char(a.next_action_due_date, 'YYYY-MM-DD') AS next_action_due_date,
-            to_char(a.updated_at, 'YYYY-MM-DD') AS last_touched_date,
-            CURRENT_DATE - a.updated_at::date AS days_since_touched,
-            a.archived_at,
-            CASE WHEN a.interview_date IS NULL THEN NULL ELSE a.interview_date - CURRENT_DATE END AS days_remaining,
-            COALESCE(array_agg(DISTINCT t.name) FILTER (WHERE t.name IS NOT NULL), '{}') AS tags,
-            c.original_name AS cv_name,
-            (SELECT COUNT(*) FROM applications dup
-              WHERE lower(trim(dup.company_name)) = lower(trim(a.company_name)))::int AS company_count,
-            COUNT(*) OVER ()::int AS total_count
-          FROM applications a
-          LEFT JOIN application_tags at ON at.application_id = a.id
-          LEFT JOIN tags t ON t.id = at.tag_id
-          LEFT JOIN application_cvs ac ON ac.application_id = a.id
-          LEFT JOIN cv_versions c ON c.id = ac.cv_id
+      const filterWhere = `
           WHERE ($7 = 0 OR a.id = $7)
             AND ($1 = '' OR a.company_name ILIKE '%' || $1 || '%' OR a.role_title ILIKE '%' || $1 || '%')
             AND ($2 = '' OR a.status = $2::application_status)
@@ -434,25 +404,76 @@ export function createReadApi({ pool, audit }) {
             )
             AND ($5 = '' OR a.applied_date >= $5::date)
             AND ($6 = '' OR a.applied_date < ($6::date + interval '1 day'))
-          GROUP BY a.id, c.original_name
-          ORDER BY
-            a.archived_at DESC NULLS LAST,
-            CASE WHEN a.status = 'interview_scheduled' THEN 0 ELSE 1 END,
-            a.interview_date ASC NULLS LAST,
-            a.applied_date DESC,
-            a.id DESC
-          ${singleId > 0 ? "" : `LIMIT ${pageSize} OFFSET ${(page - 1) * pageSize}`}
-        `,
-        [search, status, tag, archived, dateFrom, dateTo, singleId, category],
-      );
+      `;
+
+      const [summaryResult, result] = await Promise.all([
+        pool.query(
+          `
+            SELECT
+              COUNT(*)::int AS total,
+              COUNT(*) FILTER (WHERE a.status = 'applied')::int AS applied,
+              COUNT(*) FILTER (WHERE a.status = 'interview_scheduled')::int AS interview_scheduled,
+              COUNT(*) FILTER (WHERE a.status = 'offer')::int AS offer,
+              COUNT(*) FILTER (WHERE a.status = 'accepted')::int AS accepted,
+              COUNT(*) FILTER (WHERE a.archived_at IS NOT NULL)::int AS archived,
+              COUNT(*) FILTER (WHERE a.archived_at IS NULL AND a.status NOT IN ('rejected', 'withdrawn', 'ghosted'))::int AS active,
+              COUNT(*) FILTER (WHERE a.archived_at IS NULL AND a.status IN ('rejected', 'withdrawn', 'ghosted'))::int AS closed
+            FROM applications a
+            ${filterWhere}
+          `,
+          [search, status, tag, archived, dateFrom, dateTo, singleId, category],
+        ),
+        pool.query(
+          `
+            SELECT
+              a.id,
+              a.company_name,
+              a.company_category,
+              a.role_title,
+              a.status,
+              a.salary,
+              a.location,
+              a.recruiter,
+              a.contact_person,
+              to_char(a.applied_date, 'YYYY-MM-DD') AS applied_date,
+              to_char(a.interview_date, 'YYYY-MM-DD') AS interview_date,
+              a.next_action,
+              to_char(a.next_action_due_date, 'YYYY-MM-DD') AS next_action_due_date,
+              to_char(a.updated_at, 'YYYY-MM-DD') AS last_touched_date,
+              CURRENT_DATE - a.updated_at::date AS days_since_touched,
+              a.archived_at,
+              CASE WHEN a.interview_date IS NULL THEN NULL ELSE a.interview_date - CURRENT_DATE END AS days_remaining,
+              COALESCE(array_agg(DISTINCT t.name) FILTER (WHERE t.name IS NOT NULL), '{}') AS tags,
+              c.original_name AS cv_name,
+              (SELECT COUNT(*) FROM applications dup
+                WHERE lower(trim(dup.company_name)) = lower(trim(a.company_name)))::int AS company_count
+            FROM applications a
+            LEFT JOIN application_tags at ON at.application_id = a.id
+            LEFT JOIN tags t ON t.id = at.tag_id
+            LEFT JOIN application_cvs ac ON ac.application_id = a.id
+            LEFT JOIN cv_versions c ON c.id = ac.cv_id
+            ${filterWhere}
+            GROUP BY a.id, c.original_name
+            ORDER BY
+              a.archived_at DESC NULLS LAST,
+              CASE WHEN a.status = 'interview_scheduled' THEN 0 ELSE 1 END,
+              a.interview_date ASC NULLS LAST,
+              a.applied_date DESC,
+              a.id DESC
+            ${singleId > 0 ? "" : `LIMIT ${pageSize} OFFSET ${(page - 1) * pageSize}`}
+          `,
+          [search, status, tag, archived, dateFrom, dateTo, singleId, category],
+        ),
+      ]);
 
       const total =
-        singleId > 0 ? result.rows.length : (result.rows[0]?.total_count ?? 0);
+        singleId > 0 ? (result.rows.length ? 1 : 0) : (summaryResult.rows[0]?.total || 0);
       return {
-        applications: result.rows.map(({ total_count, ...row }) => row),
+        applications: result.rows,
         total,
         page,
         pageSize,
+        status_counts: summaryResult.rows[0],
       };
     },
 

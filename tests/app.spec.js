@@ -98,6 +98,81 @@ test('home header tracks the active view and hides on detail pages', async ({ pa
   await expect(page.locator('.application-hero-card')).toBeVisible();
 });
 
+test('application pagination appears for more than 50 results and keeps filters', async ({ page }) => {
+  await page.route('**/api/applications?**', async (route) => {
+    const requestUrl = new URL(route.request().url());
+    const requestedPage = Number(requestUrl.searchParams.get('page') || 1);
+    const pageCount = requestedPage === 1 ? 50 : 1;
+    const applications = Array.from({ length: pageCount }, (_, index) => ({
+      id: (requestedPage - 1) * 50 + index + 1,
+      company_name: `Pagination Company ${(requestedPage - 1) * 50 + index + 1}`,
+      company_category: '',
+      role_title: 'Backend Engineer',
+      status: 'applied',
+      salary: '',
+      location: '',
+      recruiter: '',
+      contact_person: '',
+      applied_date: '2026-07-24',
+      interview_date: null,
+      next_action: '',
+      next_action_due_date: null,
+      last_touched_date: '2026-07-24',
+      days_since_touched: 0,
+      archived_at: null,
+      days_remaining: null,
+      tags: [],
+      cv_name: null,
+      company_count: 1
+    }));
+
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        applications,
+        total: 51,
+        page: requestedPage,
+        pageSize: 50,
+        status_counts: {
+          total: 51,
+          applied: 51,
+          interview_scheduled: 0,
+          offer: 0,
+          accepted: 0,
+          archived: 0,
+          active: 51,
+          closed: 0
+        }
+      })
+    });
+  });
+
+  await page.goto('/');
+  await expect(page.locator('#applicationPagination')).toContainText('1\u201350 of 51');
+
+  const filteredResponse = page.waitForResponse((response) => {
+    const url = new URL(response.url());
+    return url.pathname === '/api/applications'
+      && url.searchParams.get('search') === 'Pagination'
+      && (url.searchParams.get('page') || '1') === '1';
+  });
+  await page.getByRole('searchbox', { name: 'Search' }).fill('Pagination');
+  await filteredResponse;
+
+  const nextResponse = page.waitForResponse((response) => {
+    const url = new URL(response.url());
+    return url.pathname === '/api/applications'
+      && url.searchParams.get('search') === 'Pagination'
+      && url.searchParams.get('page') === '2';
+  });
+  await page.getByRole('button', { name: 'Next' }).click();
+  await nextResponse;
+
+  await expect(page.locator('#applicationPagination')).toContainText('51\u201351 of 51');
+  await expect(page.getByText('Pagination Company 51')).toBeVisible();
+});
+
 test('manage preparation workspace and job boards', async ({ page }) => {
   await page.goto('/');
 

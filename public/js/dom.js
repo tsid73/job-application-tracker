@@ -172,6 +172,7 @@ export function bindWorkspaceElements(root = els.workspaceRoot) {
   els.activityResetButton = root.querySelector('#activityResetButton');
   els.activityTable = root.querySelector('#activityTable');
   els.activityEmpty = root.querySelector('#activityEmptyState');
+  els.applicationPagination = root.querySelector('#applicationPagination');
   els.activityPagination = root.querySelector('#activityPagination');
   els.activityDeleteButton = root.querySelector('#activityDeleteButton');
   els.activitySelectAllCheckbox = root.querySelector('#activitySelectAllCheckbox');

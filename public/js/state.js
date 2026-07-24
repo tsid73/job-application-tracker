@@ -31,6 +31,8 @@ export const state = {
     page: 1
   },
   applicationTotal: 0,
+  applicationPageSize: 50,
+  applicationStatusCounts: null,
   selectedIds: new Set(),
   notifications: [],
   notificationsExpanded: false,
