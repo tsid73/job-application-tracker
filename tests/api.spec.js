@@ -149,3 +149,76 @@ test('backup restore accepts next action fields in application rows', async ({ r
     next_action_due_date: '2026-06-30'
   });
 });
+
+test('insights counts use distinct applications and consistent lifecycle conditions', async ({ request }) => {
+  const application = (id, status, archivedAt = null) => ({
+    id,
+    company_name: `Insights Company ${id}`,
+    company_category: 'Insights Test',
+    role_title: 'Backend Engineer',
+    job_link: `https://example.com/jobs/insights-${id}`,
+    job_description: 'Role used to verify Insights lifecycle counts.',
+    status,
+    applied_date: '2026-07-01',
+    interview_date: status === 'interview_scheduled' ? '2026-07-30' : null,
+    notes: null,
+    created_at: '2026-07-01T00:00:00.000Z',
+    updated_at: '2026-07-01T00:00:00.000Z',
+    archived_at: archivedAt,
+    salary: null,
+    location: 'Remote',
+    recruiter: null,
+    contact_person: null,
+    next_action: null,
+    next_action_due_date: null
+  });
+  const backup = {
+    version: 1,
+    data: {
+      applications: [
+        application(910, 'applied'),
+        application(911, 'interview_scheduled'),
+        application(912, 'rejected'),
+        application(913, 'ghosted'),
+        application(914, 'applied', '2026-07-10T00:00:00.000Z')
+      ],
+      status_history: [
+        { id: 910, application_id: 910, from_status: null, to_status: 'applied', changed_at: '2026-07-01T00:00:00.000Z' },
+        { id: 911, application_id: 911, from_status: 'applied', to_status: 'interview_scheduled', changed_at: '2026-07-02T00:00:00.000Z' },
+        { id: 912, application_id: 912, from_status: 'applied', to_status: 'rejected', changed_at: '2026-07-03T00:00:00.000Z' },
+        { id: 913, application_id: 913, from_status: 'applied', to_status: 'ghosted', changed_at: '2026-07-04T00:00:00.000Z' },
+        { id: 914, application_id: 914, from_status: null, to_status: 'applied', changed_at: '2026-07-01T00:00:00.000Z' }
+      ]
+    },
+    files: []
+  };
+
+  const restoreResponse = await request.post('/api/import/backup', {
+    multipart: {
+      backup: {
+        name: 'insights-backup.json',
+        mimeType: 'application/json',
+        buffer: Buffer.from(JSON.stringify(backup), 'utf8')
+      }
+    }
+  });
+  expect(restoreResponse.status()).toBe(200);
+
+  const [statsResponse, reportsResponse, allStatsResponse, allReportsResponse] = await Promise.all([
+    request.get('/api/stats'),
+    request.get('/api/reports'),
+    request.get('/api/stats?mode=all'),
+    request.get('/api/reports?mode=all')
+  ]);
+  const stats = await statsResponse.json();
+  const reports = await reportsResponse.json();
+  const allStats = await allStatsResponse.json();
+  const allReports = await allReportsResponse.json();
+
+  expect(stats.totals).toMatchObject({ total: 4, active: 2, closed: 2, archived: 1, ghosted: 1 });
+  expect(reports.lifecycle_counts).toEqual({ active: 2, closed: 2, archived: 0, total: 4 });
+  expect(stats.categories).toEqual([{ category: 'Insights Test', applications: 4, interviewed: 1 }]);
+  expect(allStats.totals).toMatchObject({ total: 5, active: 2, closed: 2, archived: 1, ghosted: 1 });
+  expect(allReports.lifecycle_counts).toEqual({ active: 2, closed: 2, archived: 1, total: 5 });
+  expect(allStats.categories).toEqual([{ category: 'Insights Test', applications: 5, interviewed: 1 }]);
+});

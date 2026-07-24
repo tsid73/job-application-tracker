@@ -185,7 +185,7 @@ export function createReadApi({ pool, audit }) {
         await Promise.all([
           pool.query(
             `
-            SELECT status, count(*)::int AS count
+            SELECT status, count(DISTINCT id)::int AS count
             FROM applications
             ${allTime ? "" : "WHERE archived_at IS NULL"}
             GROUP BY status
@@ -194,7 +194,7 @@ export function createReadApi({ pool, audit }) {
           ),
           pool.query(
             `
-            SELECT to_char(date_trunc('month', applied_date), 'YYYY-MM') AS month, count(*)::int AS count
+            SELECT to_char(date_trunc('month', applied_date), 'YYYY-MM') AS month, count(DISTINCT id)::int AS count
             FROM applications
             ${allTime ? "" : "WHERE archived_at IS NULL"}
             GROUP BY date_trunc('month', applied_date)
@@ -204,20 +204,28 @@ export function createReadApi({ pool, audit }) {
           pool.query(
             `
             SELECT
-              count(*) FILTER (WHERE archived_at IS NULL AND status NOT IN ('rejected', 'withdrawn', 'ghosted'))::int AS active,
-              count(*) FILTER (WHERE archived_at IS NULL AND status IN ('rejected', 'withdrawn', 'ghosted'))::int AS closed,
-              count(*) FILTER (WHERE archived_at IS NOT NULL)::int AS archived,
-              count(*)::int AS total
+              count(DISTINCT id) FILTER (WHERE archived_at IS NULL AND status NOT IN ('rejected', 'withdrawn', 'ghosted'))::int AS active,
+              count(DISTINCT id) FILTER (WHERE archived_at IS NULL AND status IN ('rejected', 'withdrawn', 'ghosted'))::int AS closed,
+              count(DISTINCT id) FILTER (WHERE archived_at IS NOT NULL)::int AS archived,
+              count(DISTINCT id)::int AS total
             FROM applications
             ${allTime ? "" : "WHERE archived_at IS NULL"}
           `,
           ),
           pool.query(
             `
-            SELECT id, company_name, to_char(interview_date, 'YYYY-MM-DD') AS interview_date, interview_date - CURRENT_DATE AS days_remaining
-            FROM applications
-            WHERE ${allTime ? "" : "archived_at IS NULL AND "} status = 'interview_scheduled' AND interview_date IS NOT NULL
-            ORDER BY interview_date ASC
+            SELECT id, company_name, interview_date, days_remaining
+            FROM (
+              SELECT DISTINCT ON (id)
+                id,
+                company_name,
+                to_char(interview_date, 'YYYY-MM-DD') AS interview_date,
+                interview_date - CURRENT_DATE AS days_remaining
+              FROM applications
+              WHERE ${allTime ? "" : "archived_at IS NULL AND "} status = 'interview_scheduled' AND interview_date IS NOT NULL
+              ORDER BY id, interview_date ASC
+            ) distinct_interviews
+            ORDER BY interview_date ASC, id ASC
             LIMIT 5
           `,
           ),

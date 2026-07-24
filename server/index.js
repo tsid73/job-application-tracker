@@ -662,9 +662,12 @@ async function getStats(req, res, url) {
 
   const totals = await pool.query(
     `
-      SELECT count(*) FILTER (WHERE ${allTime ? 'TRUE' : 'archived_at IS NULL'})::int AS total,
-        count(*) FILTER (WHERE archived_at IS NULL)::int AS active,
-        count(*) FILTER (WHERE ${allTime ? 'TRUE' : 'archived_at IS NULL'} AND status = 'ghosted')::int AS ghosted
+      SELECT
+        count(DISTINCT id) FILTER (WHERE ${allTime ? 'TRUE' : 'archived_at IS NULL'})::int AS total,
+        count(DISTINCT id) FILTER (WHERE archived_at IS NULL AND status NOT IN ('rejected', 'withdrawn', 'ghosted'))::int AS active,
+        count(DISTINCT id) FILTER (WHERE archived_at IS NULL AND status IN ('rejected', 'withdrawn', 'ghosted'))::int AS closed,
+        count(DISTINCT id) FILTER (WHERE archived_at IS NOT NULL)::int AS archived,
+        count(DISTINCT id) FILTER (WHERE ${allTime ? 'TRUE' : 'archived_at IS NULL'} AND status = 'ghosted')::int AS ghosted
       FROM applications
     `
   );
@@ -724,8 +727,8 @@ async function getStats(req, res, url) {
   const categories = await pool.query(
     `
       SELECT company_category AS category,
-        count(id)::int AS applications,
-        count(id) FILTER (WHERE EXISTS (
+        count(DISTINCT id)::int AS applications,
+        count(DISTINCT id) FILTER (WHERE EXISTS (
           SELECT 1 FROM status_history sh
           WHERE sh.application_id = a.id AND sh.to_status = 'interview_scheduled'
         ))::int AS interviewed
