@@ -76,6 +76,12 @@ const routeApi = createApiRouter({
   deleteActivityLogs,
   getAudit: async (req, res, url) => sendJson(res, 200, await readApi.getAudit(url)),
   getSavedFilters: async (req, res) => sendJson(res, 200, await readApi.getSavedFilters()),
+  getSelectedTags,
+  updateSelectedTags,
+  getSelectedTagStats,
+  getSelectedChartTags,
+  updateSelectedChartTags,
+  getSelectedChartTagStats,
   getJobBoards: async (req, res) => sendJson(res, 200, await readApi.getJobBoards()),
   getTargetCompanies: async (req, res) => sendJson(res, 200, await readApi.getTargetCompanies()),
   createSavedFilter,
@@ -169,6 +175,90 @@ async function deleteSavedFilter(req, res, id) {
   const result = await pool.query('DELETE FROM saved_filters WHERE id = $1 RETURNING id', [id]);
   if (!result.rowCount) return sendError(res, 404, 'Saved filter not found');
   sendJson(res, 200, { ok: true });
+}
+
+async function getSelectedTags(req, res) {
+  const [available, selected] = await Promise.all([
+    pool.query(`
+      SELECT DISTINCT t.name
+      FROM tags t
+      JOIN application_tags at ON at.tag_id = t.id
+      JOIN applications a ON a.id = at.application_id
+      ORDER BY t.name
+    `),
+    pool.query('SELECT tag_name AS name FROM selected_tag_reports ORDER BY sort_order, tag_name')
+  ]);
+  sendJson(res, 200, {
+    available_tags: available.rows.map((row) => row.name),
+    selected_tags: selected.rows.map((row) => row.name)
+  });
+}
+
+async function updateSelectedTags(req, res) {
+  const body = await readJson(req, 64 * 1024);
+  const tags = Array.isArray(body.tags)
+    ? [...new Set(body.tags.map((tag) => cleanString(tag)).filter(Boolean))]
+    : [];
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    await client.query('DELETE FROM selected_tag_reports');
+    for (let index = 0; index < tags.length; index += 1) {
+      await client.query(
+        'INSERT INTO selected_tag_reports (tag_name, sort_order) VALUES ($1, $2)',
+        [tags[index], index]
+      );
+    }
+    await client.query('COMMIT');
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
+  sendJson(res, 200, { selected_tags: tags });
+}
+
+async function getSelectedChartTags(req, res) {
+  const [available, selected] = await Promise.all([
+    pool.query(`
+      SELECT DISTINCT t.name
+      FROM tags t
+      JOIN application_tags at ON at.tag_id = t.id
+      JOIN applications a ON a.id = at.application_id
+      ORDER BY t.name
+    `),
+    pool.query('SELECT tag_name AS name FROM selected_chart_tags ORDER BY sort_order, tag_name')
+  ]);
+  sendJson(res, 200, {
+    available_tags: available.rows.map((row) => row.name),
+    selected_tags: selected.rows.map((row) => row.name)
+  });
+}
+
+async function updateSelectedChartTags(req, res) {
+  const body = await readJson(req, 64 * 1024);
+  const tags = Array.isArray(body.tags)
+    ? [...new Set(body.tags.map((tag) => cleanString(tag)).filter(Boolean))]
+    : [];
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    await client.query('DELETE FROM selected_chart_tags');
+    for (let index = 0; index < tags.length; index += 1) {
+      await client.query(
+        'INSERT INTO selected_chart_tags (tag_name, sort_order) VALUES ($1, $2)',
+        [tags[index], index]
+      );
+    }
+    await client.query('COMMIT');
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
+  sendJson(res, 200, { selected_tags: tags });
 }
 
 async function createJobBoard(req, res) {
@@ -756,6 +846,68 @@ async function getStats(req, res, url) {
     tags: tags.rows,
     categories: categories.rows
   });
+}
+
+async function getSelectedTagStats(req, res, url) {
+  const { scopeCondition, scopedAliasCondition } = buildInsightsScope(url);
+  const totals = await pool.query(`
+    SELECT count(DISTINCT id) FILTER (WHERE ${scopeCondition})::int AS total
+    FROM applications
+  `);
+  const tags = await pool.query(`
+    SELECT selected.tag_name AS tag,
+      count(DISTINCT a.id)::int AS applications,
+      count(DISTINCT a.id) FILTER (WHERE EXISTS (
+        SELECT 1 FROM status_history sh
+        WHERE sh.application_id = a.id AND sh.to_status = 'interview_scheduled'
+      ))::int AS interviewed,
+      count(DISTINCT a.id) FILTER (WHERE a.status = 'rejected')::int AS rejected,
+      count(DISTINCT a.id) FILTER (WHERE a.status = 'ghosted')::int AS ghosted,
+      count(DISTINCT a.id) FILTER (WHERE a.status = 'withdrawn')::int AS withdrawn,
+      count(DISTINCT a.id) FILTER (WHERE a.status IN ('rejected', 'ghosted', 'withdrawn'))::int AS closed
+    FROM selected_tag_reports selected
+    LEFT JOIN tags t ON t.name = selected.tag_name
+    LEFT JOIN application_tags at ON at.tag_id = t.id
+    LEFT JOIN applications a ON a.id = at.application_id AND ${scopedAliasCondition}
+    GROUP BY selected.tag_name, selected.sort_order
+    ORDER BY selected.sort_order, selected.tag_name
+  `);
+  sendJson(res, 200, {
+    totals: totals.rows[0],
+    tags: tags.rows
+  });
+}
+
+async function getSelectedChartTagStats(req, res, url) {
+  const { scopedAliasCondition } = buildInsightsScope(url);
+  const tags = await pool.query(`
+    SELECT selected.tag_name AS tag,
+      count(DISTINCT a.id)::int AS applications,
+      count(DISTINCT a.id) FILTER (WHERE EXISTS (
+        SELECT 1 FROM status_history sh
+        WHERE sh.application_id = a.id AND sh.to_status = 'interview_scheduled'
+      ))::int AS interviewed,
+      count(DISTINCT a.id) FILTER (WHERE a.status IN ('rejected', 'ghosted', 'withdrawn'))::int AS closed
+    FROM selected_chart_tags selected
+    LEFT JOIN tags t ON t.name = selected.tag_name
+    LEFT JOIN application_tags at ON at.tag_id = t.id
+    LEFT JOIN applications a ON a.id = at.application_id AND ${scopedAliasCondition}
+    GROUP BY selected.tag_name, selected.sort_order
+    ORDER BY selected.sort_order, selected.tag_name
+  `);
+  sendJson(res, 200, { tags: tags.rows });
+}
+
+function buildInsightsScope(url) {
+  const period = url?.searchParams.get('period') || '';
+  const periodDays = { 30: 30, 60: 60, 90: 90 }[period];
+  const periodScoped = period === 'all' || Boolean(periodDays);
+  const allTime = periodScoped || url?.searchParams.get('mode') === 'all';
+  return {
+    allTime,
+    scopeCondition: periodDays ? `applied_date >= CURRENT_DATE - INTERVAL '${periodDays} days'` : (allTime ? 'TRUE' : 'archived_at IS NULL'),
+    scopedAliasCondition: periodDays ? `a.applied_date >= CURRENT_DATE - INTERVAL '${periodDays} days'` : (allTime ? 'TRUE' : 'a.archived_at IS NULL')
+  };
 }
 
 async function importApplicationsCsv(req, res) {
@@ -1688,6 +1840,8 @@ async function readBackupData() {
     ai_generation_jobs: 'SELECT * FROM ai_generation_jobs ORDER BY id',
     activity_logs: 'SELECT * FROM activity_logs ORDER BY id',
     saved_filters: 'SELECT * FROM saved_filters ORDER BY id',
+    selected_tag_reports: 'SELECT * FROM selected_tag_reports ORDER BY sort_order, tag_name',
+    selected_chart_tags: 'SELECT * FROM selected_chart_tags ORDER BY sort_order, tag_name',
     audit_events: 'SELECT * FROM audit_events ORDER BY id',
     application_preparation: 'SELECT * FROM application_preparation ORDER BY application_id',
     recruiter_questions: 'SELECT * FROM recruiter_questions ORDER BY id',
@@ -1735,6 +1889,8 @@ async function restoreBackupPayload(backup) {
         activity_logs,
         job_boards,
         target_companies,
+        selected_tag_reports,
+        selected_chart_tags,
         saved_filters,
         applications,
         cv_versions
@@ -1753,6 +1909,8 @@ async function restoreBackupPayload(backup) {
       'ai_generation_jobs',
       'activity_logs',
       'saved_filters',
+      'selected_tag_reports',
+      'selected_chart_tags',
       'audit_events',
       'application_preparation',
       'recruiter_questions',
@@ -1841,6 +1999,8 @@ const backupTableColumns = {
   ai_generation_jobs: new Set(['id', 'application_id', 'cv_id', 'document_type', 'provider_requested', 'provider_used', 'status', 'title', 'request_manifest_path', 'request_manifest_s3_key', 'result_s3_key', 'error_message', 'retry_count', 'prompt_excerpt', 'source_context', 'document_id', 'created_at', 'started_at', 'completed_at']),
   activity_logs: new Set(['id', 'application_id', 'action', 'details', 'created_at']),
   saved_filters: new Set(['id', 'name', 'search', 'status', 'tag', 'archived', 'created_at', 'updated_at']),
+  selected_tag_reports: new Set(['tag_name', 'sort_order', 'created_at']),
+  selected_chart_tags: new Set(['tag_name', 'sort_order', 'created_at']),
   audit_events: new Set(['id', 'application_id', 'target_type', 'target_id', 'action', 'details', 'actor_ip', 'actor_user_agent', 'created_at']),
   application_preparation: new Set(['application_id', 'about_company', 'company_values', 'application_notes', 'created_at', 'updated_at']),
   recruiter_questions: new Set(['id', 'application_id', 'question', 'sort_order', 'created_at', 'updated_at']),

@@ -65,7 +65,17 @@ export const state = {
   toasts: [],
   insightsMode: 'active',
   categoryPerformancePeriod: 'all',
-  categoryPerformanceCategory: ''
+  categoryPerformanceCategory: '',
+  tagPerformancePeriod: 'all',
+  chartTagPerformancePeriod: 'all',
+  selectedTagSettings: {
+    availableTags: [],
+    selectedTags: []
+  },
+  selectedChartTagSettings: {
+    availableTags: [],
+    selectedTags: []
+  }
 };
 
 export const statusLabels = {

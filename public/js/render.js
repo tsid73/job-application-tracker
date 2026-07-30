@@ -258,7 +258,7 @@ export function renderHomeWorkspace() {
   `;
 }
 
-export function renderInsights(els, report, stats, statusLabels, mode = 'active', categoryStats = stats, categoryPeriod = 'all', selectedCategory = '') {
+export function renderInsights(els, report, stats, statusLabels, mode = 'active', categoryStats = stats, categoryPeriod = 'all', selectedCategory = '', selectedTagStats = { totals: { total: 0 }, tags: [] }, tagPeriod = 'all', selectedChartTagStats = { tags: [] }, chartTagPeriod = 'all') {
   const total = Number(stats.totals.total || 0);
   const categoryTotal = Number(categoryStats.totals?.total || 0);
   const funnelRows = [
@@ -289,6 +289,8 @@ export function renderInsights(els, report, stats, statusLabels, mode = 'active'
     return reportRow(row.category, Number(row.applications), categoryMax, { category: row.category }, toIntStr, '--app');
   }).join('') || '<p>No category data.</p>';
   const categoryPerformanceHtml = renderCategoryPerformanceSection(categoryStats.categories || [], categoryTotal, categoryPeriod, selectedCategory);
+  const selectedTagPerformanceHtml = renderSelectedTagPerformanceSection(selectedTagStats.tags || [], Number(selectedTagStats.totals?.total || 0), tagPeriod);
+  const selectedTagComparisonHtml = renderSelectedTagComparisonSection(selectedChartTagStats.tags || [], chartTagPeriod);
 
   const dropoffs = [
     { stage: 'App -> Interview', drop: total > 0 ? 100 - Math.round((funnelRows[1].count / total) * 100) : 0 },
@@ -439,12 +441,26 @@ export function renderInsights(els, report, stats, statusLabels, mode = 'active'
       ${categoryPerformanceHtml}
     </section>
 
+    ${/*
     <section class="report-panel report-panel-tags wide" style="grid-column: 1 / -1;">
       <div class="panel-kicker">Skills</div>
       <h3>Top Tags</h3>
       <div class="tags-grid">
         ${tagHtml}
       </div>
+    </section>
+    */ ''}
+
+    <section class="report-panel report-panel-tags wide" style="grid-column: 1 / -1;">
+      <div class="panel-kicker">Skills</div>
+      <h3>Selected Tag Performance</h3>
+      ${selectedTagPerformanceHtml}
+    </section>
+
+    <section class="report-panel report-panel-tags wide" style="grid-column: 1 / -1;">
+      <div class="panel-kicker">Skills</div>
+      <h3>Selected Tag Comparison</h3>
+      ${selectedTagComparisonHtml}
     </section>
   `;
 
@@ -608,6 +624,125 @@ export function renderCategoryPerformanceSection(categories, totalApplications, 
   `;
 }
 
+export function renderSelectedTagPerformanceSection(tags, totalApplications, period = 'all') {
+  const rows = tags.map(normalizeTagPerformanceRow);
+  const tableHtml = rows.length ? `
+    <div class="table-container">
+      <table class="companies-table" data-selected-tag-performance>
+        <thead>
+          <tr>
+            <th>Tag</th>
+            <th>Applied</th>
+            <th>Applied %</th>
+            <th>Interviewed</th>
+            <th>Interview %</th>
+            <th>Rejected</th>
+            <th>Ghosted</th>
+            <th>Closed</th>
+            <th>Closed %</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${rows.map((row) => `
+            <tr data-selected-tag-performance-row="${escapeAttribute(row.tag)}">
+              <td><span class="selected-tag-table-pill">${escapeHtml(row.tag)}</span></td>
+              <td>${row.applications}</td>
+              <td>${formatCategoryPercent(row.applications, totalApplications)}</td>
+              <td>${row.interviewed}</td>
+              <td>${renderCategoryPercentBadge(row.interviewed, row.applications, row.applications, 'interview')}</td>
+              <td>${row.rejected}</td>
+              <td>${row.ghosted}</td>
+              <td>${row.closed}</td>
+              <td>${renderCategoryPercentBadge(row.closed, row.applications, row.applications, 'closed')}</td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    </div>
+  ` : '<p>No selected tags. Add tags in Settings to populate this report.</p>';
+
+  return `
+    <div data-selected-tag-performance-section data-selected-tag-performance-total="${countCategoryMetric(totalApplications)}">
+      <div class="toolbar" aria-label="Selected tag performance controls" style="margin-bottom: 16px;">
+        <div class="filter-panel" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; align-items: end;">
+          <label>
+            <span>Period</span>
+            <select data-selected-tag-performance-period aria-label="Selected tag period">
+              <option value="all"${period === 'all' ? ' selected' : ''}>All time</option>
+              <option value="30"${period === '30' ? ' selected' : ''}>Last 30 days</option>
+              <option value="60"${period === '60' ? ' selected' : ''}>Last 60 days</option>
+              <option value="90"${period === '90' ? ' selected' : ''}>Last 90 days</option>
+            </select>
+          </label>
+        </div>
+      </div>
+      <p class="section-help" style="margin-top: 0;">Rows are tag-attributed. The same application can appear under multiple selected tags.</p>
+      ${tableHtml}
+    </div>
+  `;
+}
+
+export function renderSelectedTagComparisonSection(tags, period = 'all') {
+  const rows = tags.map(normalizeTagPerformanceRow);
+  const chartHtml = rows.length ? `
+    <div class="selected-tag-comparison-list">
+      ${rows.map((row) => {
+        const active = Math.max(0, row.applications - row.closed);
+        const barWidth = (part) => row.applications ? Math.max(2, Math.round((part / row.applications) * 100)) : 0;
+        const activePercent = formatCategoryPercent(active, row.applications);
+        const interviewPercent = formatCategoryPercent(row.interviewed, row.applications);
+        const closedPercent = formatCategoryPercent(row.closed, row.applications);
+        return `
+          <article class="selected-tag-comparison-group">
+            <div class="selected-tag-comparison-heading">
+              <strong class="selected-tag-comparison-title">${escapeHtml(row.tag)}</strong>
+              <span class="selected-tag-comparison-applied">${row.applications} applied</span>
+            </div>
+            <div class="selected-tag-comparison-bars">
+              ${renderSelectedTagComparisonBar('Active', active, activePercent, barWidth(active), 'neutral')}
+              ${renderSelectedTagComparisonBar('Interviewed', row.interviewed, interviewPercent, barWidth(row.interviewed), 'green')}
+              ${renderSelectedTagComparisonBar('Closed', row.closed, closedPercent, barWidth(row.closed), 'red')}
+            </div>
+          </article>
+        `;
+      }).join('')}
+    </div>
+  ` : '<p>No chart tags. Add chart tags in Settings to populate this comparison.</p>';
+
+  return `
+    <div data-selected-chart-tag-comparison-section>
+      <div class="toolbar" aria-label="Selected tag comparison controls" style="margin-bottom: 16px;">
+        <div class="filter-panel" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; align-items: end;">
+          <label>
+            <span>Period</span>
+            <select data-selected-chart-tag-comparison-period aria-label="Selected tag comparison period">
+              <option value="all"${period === 'all' ? ' selected' : ''}>All time</option>
+              <option value="30"${period === '30' ? ' selected' : ''}>Last 30 days</option>
+              <option value="60"${period === '60' ? ' selected' : ''}>Last 60 days</option>
+              <option value="90"${period === '90' ? ' selected' : ''}>Last 90 days</option>
+            </select>
+          </label>
+        </div>
+      </div>
+      ${chartHtml}
+    </div>
+  `;
+}
+
+function renderSelectedTagComparisonBar(label, count, percentText, width, tone) {
+  const numericWidth = Number(width);
+  const safeWidth = Math.max(0, Math.min(100, Number.isFinite(numericWidth) ? numericWidth : 0));
+  return `
+    <div class="selected-tag-comparison-row">
+      <span class="selected-tag-comparison-label">${escapeHtml(label)}</span>
+      <div class="selected-tag-comparison-track">
+        <div class="selected-tag-comparison-fill selected-tag-comparison-fill-${tone}" style="width: ${safeWidth}%;"></div>
+      </div>
+      <span class="selected-tag-comparison-count">${count}${percentText ? ` <span>${escapeHtml(percentText)}</span>` : ''}</span>
+    </div>
+  `;
+}
+
 function renderCategoryPerformanceSummary(summary, selectedCategory = '') {
   return `
     <div class="kpi-cards" data-category-performance-summary="${escapeAttribute(selectedCategory)}" style="grid-column: 1 / -1; margin-bottom: 16px;">
@@ -651,6 +786,21 @@ function normalizeCategoryPerformanceRow(row) {
   return {
     ...row,
     category: row.category || '',
+    applications: countCategoryMetric(row.applications),
+    interviewed: countCategoryMetric(row.interviewed),
+    rejected,
+    ghosted,
+    withdrawn,
+    closed: row.closed === undefined || row.closed === null ? rejected + ghosted + withdrawn : countCategoryMetric(row.closed)
+  };
+}
+
+function normalizeTagPerformanceRow(row) {
+  const rejected = countCategoryMetric(row.rejected);
+  const ghosted = countCategoryMetric(row.ghosted);
+  const withdrawn = countCategoryMetric(row.withdrawn);
+  return {
+    tag: row.tag || '',
     applications: countCategoryMetric(row.applications),
     interviewed: countCategoryMetric(row.interviewed),
     rejected,
@@ -1237,8 +1387,104 @@ function renderSettingsPanel() {
           </div>
         </article>
       </div>
+      <section class="detail-section" style="margin-top: 24px;">
+        <div class="section-heading">
+          <div>
+            <h3>Selected Tag Performance</h3>
+            <p class="section-help">Choose the application tags that should appear in the Insights selected-tag report. <span id="selectedTagSettingsStatus">Loading selected tags...</span></p>
+          </div>
+        </div>
+        <div class="toolbar" aria-label="Selected tag report settings">
+          <div class="toolbar-main-row">
+            <label style="min-width: 260px;">
+              <span>Search tags</span>
+              <input id="selectedTagInput" type="search" list="selectedTagOptions" placeholder="Type an existing tag">
+              <datalist id="selectedTagOptions"></datalist>
+            </label>
+            <button id="selectedTagAddSaveButton" type="button">Add and save</button>
+          </div>
+        </div>
+        <div id="selectedTagList" class="tag-row" style="margin-top: 12px;"></div>
+      </section>
+      <section class="detail-section" style="margin-top: 24px;">
+        <div class="section-heading">
+          <div>
+            <h3>Chart Tag Selection</h3>
+            <p class="section-help">Choose the application tags that should appear in the Insights selected-tag comparison chart. <span id="selectedChartTagSettingsStatus">Loading chart tags...</span></p>
+          </div>
+        </div>
+        <div class="toolbar" aria-label="Selected chart tag settings">
+          <div class="toolbar-main-row">
+            <label style="min-width: 260px;">
+              <span>Search tags</span>
+              <input id="selectedChartTagInput" type="search" list="selectedChartTagOptions" placeholder="Type an existing tag">
+              <datalist id="selectedChartTagOptions"></datalist>
+            </label>
+            <button id="selectedChartTagAddSaveButton" type="button">Add and save</button>
+          </div>
+        </div>
+        <div id="selectedChartTagList" class="tag-row" style="margin-top: 12px;"></div>
+      </section>
     </section>
   `;
+}
+
+export function renderSelectedTagsSettings(els, availableTags = [], selectedTags = []) {
+  const options = availableTags
+    .map((tag) => `<option value="${escapeAttribute(tag)}"></option>`)
+    .join('');
+  const tray = selectedTags.map((tag) => `
+    <span class="selected-tag-chip selected-tag-chip-removable">
+      ${escapeHtml(tag)}
+      <button class="selected-tag-chip-remove" type="button" data-selected-tag-remove="${escapeAttribute(tag)}" aria-label="Remove ${escapeAttribute(tag)}">x</button>
+    </span>
+  `).join('');
+  const list = selectedTags.length
+    ? `
+      <div class="selected-tag-settings-summary">
+        <details class="selected-tag-manage">
+          <summary>Manage selected tags</summary>
+          <div class="selected-tag-tray">${tray}</div>
+        </details>
+      </div>
+    `
+    : '<span class="muted-text">No tags selected for the report.</span>';
+
+  const optionsEl = els.settingsContent?.querySelector('#selectedTagOptions');
+  const listEl = els.settingsContent?.querySelector('#selectedTagList');
+  const statusEl = els.settingsContent?.querySelector('#selectedTagSettingsStatus');
+  if (optionsEl) optionsEl.innerHTML = options;
+  if (listEl) listEl.innerHTML = list;
+  if (statusEl) statusEl.textContent = `${selectedTags.length} selected. Available current tags: ${availableTags.length}.`;
+}
+
+export function renderSelectedChartTagsSettings(els, availableTags = [], selectedTags = []) {
+  const options = availableTags
+    .map((tag) => `<option value="${escapeAttribute(tag)}"></option>`)
+    .join('');
+  const tray = selectedTags.map((tag) => `
+    <span class="selected-tag-chip selected-tag-chip-removable">
+      ${escapeHtml(tag)}
+      <button class="selected-tag-chip-remove" type="button" data-selected-chart-tag-remove="${escapeAttribute(tag)}" aria-label="Remove ${escapeAttribute(tag)}">x</button>
+    </span>
+  `).join('');
+  const list = selectedTags.length
+    ? `
+      <div class="selected-tag-settings-summary">
+        <details class="selected-tag-manage">
+          <summary>Manage chart tags</summary>
+          <div class="selected-tag-tray">${tray}</div>
+        </details>
+      </div>
+    `
+    : '<span class="muted-text">No chart tags selected.</span>';
+
+  const optionsEl = els.settingsContent?.querySelector('#selectedChartTagOptions');
+  const listEl = els.settingsContent?.querySelector('#selectedChartTagList');
+  const statusEl = els.settingsContent?.querySelector('#selectedChartTagSettingsStatus');
+  if (optionsEl) optionsEl.innerHTML = options;
+  if (listEl) listEl.innerHTML = list;
+  if (statusEl) statusEl.textContent = `${selectedTags.length} selected. Available current tags: ${availableTags.length}.`;
 }
 
 export function renderToolkit(els) {

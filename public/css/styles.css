@@ -5475,3 +5475,163 @@ a.nav-item {
   border-color: #fecaca;
   color: #b91c1c;
 }
+
+.selected-tag-table-pill {
+  display: inline-flex;
+  align-items: center;
+  max-width: 220px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  color: var(--text);
+  font-weight: 700;
+  font-size: 12px;
+}
+
+.selected-tag-settings-summary {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.selected-tag-chip-preview,
+.selected-tag-tray {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.selected-tag-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  max-width: 220px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: #f8fafc;
+  border: 1px solid var(--line);
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.selected-tag-chip-remove {
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  padding: 0 2px;
+  font: inherit;
+  line-height: 1;
+}
+
+.selected-tag-chip-remove:hover {
+  color: var(--danger);
+}
+
+.selected-tag-manage summary {
+  cursor: pointer;
+  color: var(--accent-dark);
+  font-weight: 700;
+  font-size: 13px;
+}
+
+.selected-tag-tray {
+  align-items: flex-start;
+  max-height: 150px;
+  overflow: auto;
+  margin-top: 10px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #fff;
+}
+
+.selected-tag-comparison-list {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.selected-tag-comparison-group {
+  padding: 2px 0 4px;
+}
+
+.selected-tag-comparison-heading {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.selected-tag-comparison-title {
+  color: var(--text);
+  font-size: 15px;
+  font-weight: 800;
+}
+
+.selected-tag-comparison-applied {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.selected-tag-comparison-bars {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.selected-tag-comparison-row {
+  display: grid;
+  grid-template-columns: 108px minmax(220px, 1fr) minmax(86px, auto);
+  align-items: center;
+  gap: 14px;
+}
+
+.selected-tag-comparison-label {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 750;
+  text-align: right;
+}
+
+.selected-tag-comparison-track {
+  height: 14px;
+  overflow: hidden;
+  border-radius: 6px;
+  background: #e2e8f0;
+}
+
+.selected-tag-comparison-fill {
+  height: 100%;
+  min-width: 0;
+  border-radius: 6px;
+}
+
+.selected-tag-comparison-fill-neutral {
+  background: #cbd5e1;
+}
+
+.selected-tag-comparison-fill-green {
+  background: #22c55e;
+}
+
+.selected-tag-comparison-fill-red {
+  background: #ef4444;
+}
+
+.selected-tag-comparison-count {
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.selected-tag-comparison-count span {
+  color: var(--muted);
+  font-weight: 600;
+}
