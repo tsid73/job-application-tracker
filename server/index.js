@@ -199,6 +199,7 @@ async function updateSelectedTags(req, res) {
   const tags = Array.isArray(body.tags)
     ? [...new Set(body.tags.map((tag) => cleanString(tag)).filter(Boolean))]
     : [];
+  await validateSelectedTagNames(tags);
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
@@ -241,6 +242,7 @@ async function updateSelectedChartTags(req, res) {
   const tags = Array.isArray(body.tags)
     ? [...new Set(body.tags.map((tag) => cleanString(tag)).filter(Boolean))]
     : [];
+  await validateSelectedTagNames(tags);
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
@@ -259,6 +261,24 @@ async function updateSelectedChartTags(req, res) {
     client.release();
   }
   sendJson(res, 200, { selected_tags: tags });
+}
+
+async function validateSelectedTagNames(tags) {
+  if (!tags.length) return;
+  const available = await pool.query(`
+    SELECT DISTINCT t.name
+    FROM tags t
+    JOIN application_tags at ON at.tag_id = t.id
+    JOIN applications a ON a.id = at.application_id
+    WHERE t.name = ANY($1::text[])
+  `, [tags]);
+  const availableNames = new Set(available.rows.map((row) => row.name));
+  const invalid = tags.filter((tag) => !availableNames.has(tag));
+  if (invalid.length) {
+    const error = new Error(`Unknown application tag: ${invalid[0]}`);
+    error.statusCode = 400;
+    throw error;
+  }
 }
 
 async function createJobBoard(req, res) {

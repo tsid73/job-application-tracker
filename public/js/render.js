@@ -1430,7 +1430,9 @@ function renderSettingsPanel() {
 }
 
 export function renderSelectedTagsSettings(els, availableTags = [], selectedTags = []) {
+  const selectedSet = new Set(selectedTags);
   const options = availableTags
+    .filter((tag) => !selectedSet.has(tag))
     .map((tag) => `<option value="${escapeAttribute(tag)}"></option>`)
     .join('');
   const tray = selectedTags.map((tag) => `
@@ -1459,7 +1461,9 @@ export function renderSelectedTagsSettings(els, availableTags = [], selectedTags
 }
 
 export function renderSelectedChartTagsSettings(els, availableTags = [], selectedTags = []) {
+  const selectedSet = new Set(selectedTags);
   const options = availableTags
+    .filter((tag) => !selectedSet.has(tag))
     .map((tag) => `<option value="${escapeAttribute(tag)}"></option>`)
     .join('');
   const tray = selectedTags.map((tag) => `

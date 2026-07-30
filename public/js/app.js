@@ -1129,20 +1129,27 @@ async function loadSelectedChartTagSettings() {
 function addSelectedTagForReport() {
   const input = els.settingsContent?.querySelector('#selectedTagInput');
   const value = input?.value.trim();
-  if (!value) return;
+  if (!value) {
+    showToast('Choose a tag before saving.', 'warning');
+    return false;
+  }
   if (!state.selectedTagSettings.availableTags.includes(value)) {
     showToast('Select an existing application tag.', 'warning');
-    return;
+    return false;
   }
-  if (!state.selectedTagSettings.selectedTags.includes(value)) {
-    state.selectedTagSettings.selectedTags.push(value);
-    renderSelectedTagsSettings(els, state.selectedTagSettings.availableTags, state.selectedTagSettings.selectedTags);
+  if (state.selectedTagSettings.selectedTags.includes(value)) {
+    showToast('Tag is already selected.', 'warning');
+    if (input) input.value = '';
+    return false;
   }
+  state.selectedTagSettings.selectedTags.push(value);
+  renderSelectedTagsSettings(els, state.selectedTagSettings.availableTags, state.selectedTagSettings.selectedTags);
   if (input) input.value = '';
+  return true;
 }
 
 async function addAndSaveSelectedTagForReport() {
-  addSelectedTagForReport();
+  if (!addSelectedTagForReport()) return;
   await saveSelectedTagsForReport();
 }
 
@@ -1165,20 +1172,27 @@ async function saveSelectedTagsForReport() {
 function addSelectedChartTag() {
   const input = els.settingsContent?.querySelector('#selectedChartTagInput');
   const value = input?.value.trim();
-  if (!value) return;
+  if (!value) {
+    showToast('Choose a tag before saving.', 'warning');
+    return false;
+  }
   if (!state.selectedChartTagSettings.availableTags.includes(value)) {
     showToast('Select an existing application tag.', 'warning');
-    return;
+    return false;
   }
-  if (!state.selectedChartTagSettings.selectedTags.includes(value)) {
-    state.selectedChartTagSettings.selectedTags.push(value);
-    renderSelectedChartTagsSettings(els, state.selectedChartTagSettings.availableTags, state.selectedChartTagSettings.selectedTags);
+  if (state.selectedChartTagSettings.selectedTags.includes(value)) {
+    showToast('Tag is already selected.', 'warning');
+    if (input) input.value = '';
+    return false;
   }
+  state.selectedChartTagSettings.selectedTags.push(value);
+  renderSelectedChartTagsSettings(els, state.selectedChartTagSettings.availableTags, state.selectedChartTagSettings.selectedTags);
   if (input) input.value = '';
+  return true;
 }
 
 async function addAndSaveSelectedChartTag() {
-  addSelectedChartTag();
+  if (!addSelectedChartTag()) return;
   await saveSelectedChartTags();
 }
 
