@@ -17,6 +17,7 @@ import {
   renderNotifications,
   renderRouteLoadingState,
   renderInsights,
+  renderCategoryPerformanceSection,
   renderSavedFilters,
   renderTargetCompanies,
   renderTargetCompanyFilters,
@@ -174,6 +175,23 @@ function bindGlobalEvents() {
     state.insightsMode = mode;
     renderSectionLoading(els.insightsContent, 'Loading insights');
     loadInsights().catch((err) => showToast(err.message, 'error'));
+  });
+
+  document.addEventListener('change', (event) => {
+    const periodControl = event.target.closest('[data-category-performance-period]');
+    if (periodControl) {
+      const period = periodControl.value || 'all';
+      if (state.categoryPerformancePeriod === period) return;
+      state.categoryPerformancePeriod = period;
+      loadCategoryPerformanceSection().catch((err) => showToast(err.message, 'error'));
+      return;
+    }
+
+    const categoryControl = event.target.closest('[data-category-performance-filter]');
+    if (categoryControl) {
+      state.categoryPerformanceCategory = categoryControl.value || '';
+      filterCategoryPerformanceSection(categoryControl);
+    }
   });
 
   window.addEventListener('popstate', () => {
@@ -825,7 +843,12 @@ async function jumpToFilteredList({ status = '', view = '', dateFrom = '', dateT
   if (els.statusFilter) els.statusFilter.value = state.filters.status;
   if (els.archiveFilter) els.archiveFilter.value = state.filters.archived;
   if (els.search) els.search.value = '';
-  if (els.categoryFilter) els.categoryFilter.value = state.filters.category;
+  if (els.categoryFilter) {
+    if (state.filters.category && ![...els.categoryFilter.options].some((option) => option.value === state.filters.category)) {
+      els.categoryFilter.add(new Option(state.filters.category, state.filters.category));
+    }
+    els.categoryFilter.value = state.filters.category;
+  }
   if (els.tagFilter) els.tagFilter.value = state.filters.tag;
   if (els.dateFromFilter) els.dateFromFilter.value = state.filters.dateFrom;
   if (els.dateToFilter) els.dateToFilter.value = state.filters.dateTo;
@@ -965,11 +988,76 @@ async function loadNotifications() {
 async function loadInsights() {
   const mode = state.insightsMode;
   const qs = mode === 'all' ? '?mode=all' : '';
-  const [reportsPayload, statsPayload] = await Promise.all([
+  const categoryPeriod = state.categoryPerformancePeriod || 'all';
+  const categoryQs = `?period=${encodeURIComponent(categoryPeriod)}`;
+  const [reportsPayload, statsPayload, categoryStatsPayload] = await Promise.all([
     api(`/api/reports${qs}`),
-    api(`/api/stats${qs}`)
+    api(`/api/stats${qs}`),
+    api(`/api/stats${categoryQs}`)
   ]);
-  if (els.insightsContent) renderInsights(els, reportsPayload, statsPayload, statusLabels, mode);
+  if (els.insightsContent) {
+    renderInsights(els, reportsPayload, statsPayload, statusLabels, mode, categoryStatsPayload, categoryPeriod, state.categoryPerformanceCategory);
+  }
+}
+
+async function loadCategoryPerformanceSection() {
+  const section = els.insightsContent?.querySelector('[data-category-performance-section]');
+  if (!section) return;
+  const period = state.categoryPerformancePeriod || 'all';
+  const payload = await api(`/api/stats?period=${encodeURIComponent(period)}`);
+  const categories = payload.categories || [];
+  if (state.categoryPerformanceCategory && !categories.some((row) => row.category === state.categoryPerformanceCategory)) {
+    state.categoryPerformanceCategory = '';
+  }
+  section.outerHTML = renderCategoryPerformanceSection(
+    categories,
+    Number(payload.totals?.total || 0),
+    period,
+    state.categoryPerformanceCategory
+  );
+}
+
+function filterCategoryPerformanceSection(control) {
+  const section = control.closest('[data-category-performance-section]');
+  if (!section) return;
+  const category = control.value || '';
+  const selectedRows = [];
+  section.querySelectorAll('[data-category-performance-row]').forEach((row) => {
+    const visible = !category || row.dataset.categoryPerformanceRow === category;
+    row.hidden = !visible;
+    if (visible) selectedRows.push(row);
+  });
+  updateCategoryPerformanceSummary(section, selectedRows, category);
+}
+
+function updateCategoryPerformanceSummary(section, rows, category) {
+  const count = (value) => {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
+  };
+  const percent = (part, whole) => {
+    const denominator = count(whole);
+    if (!denominator) return '0%';
+    return `${Math.round((count(part) / denominator) * 100)}%`;
+  };
+  const totals = rows.reduce((acc, row) => ({
+    applied: acc.applied + count(row.dataset.applications),
+    interviewed: acc.interviewed + count(row.dataset.interviewed),
+    closed: acc.closed + count(row.dataset.closed)
+  }), { applied: 0, interviewed: 0, closed: 0 });
+  const summary = section.querySelector('[data-category-performance-summary]');
+  if (!summary) return;
+  summary.dataset.categoryPerformanceSummary = category;
+  const setText = (selector, value) => {
+    const target = summary.querySelector(selector);
+    if (target) target.textContent = value;
+  };
+  setText('[data-category-summary-applications]', String(totals.applied));
+  setText('[data-category-summary-applied-percent]', percent(totals.applied, section.dataset.categoryPerformanceTotal));
+  setText('[data-category-summary-interview-percent]', percent(totals.interviewed, totals.applied));
+  setText('[data-category-summary-interviewed]', String(totals.interviewed));
+  setText('[data-category-summary-closed-percent]', percent(totals.closed, totals.applied));
+  setText('[data-category-summary-closed]', String(totals.closed));
 }
 
 async function loadActivity() {

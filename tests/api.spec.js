@@ -275,3 +275,160 @@ test('insights counts use distinct applications and consistent lifecycle conditi
   expect(allReports.lifecycle_counts).toEqual({ active: 2, closed: 2, archived: 1, total: 5 });
   expect(allStats.categories).toEqual([{ category: 'Insights Test', applications: 5, interviewed: 1 }]);
 });
+
+test('insights returns every company category while keeping top tags capped', async ({ request }) => {
+  const statusFor = (index) => {
+    if (index === 1) return 'interview_scheduled';
+    if (index === 2) return 'rejected';
+    if (index === 3) return 'ghosted';
+    if (index === 4) return 'withdrawn';
+    return 'applied';
+  };
+  const applications = Array.from({ length: 16 }, (_, index) => {
+    const id = 1001 + index;
+    const categoryNumber = index < 4 ? 1 : index - 2;
+    const status = statusFor(index + 1);
+    return {
+      id,
+      company_name: `Insights Category Company ${index + 1}`,
+      company_category: `Category ${String(categoryNumber).padStart(2, '0')}`,
+      role_title: 'Backend Engineer',
+      job_link: `https://example.com/jobs/insights-category-${index + 1}`,
+      job_description: 'Role used to verify uncapped Insights category reporting.',
+      status,
+      applied_date: `2026-07-${String(index + 1).padStart(2, '0')}`,
+      interview_date: status === 'interview_scheduled' ? '2026-07-30' : null,
+      notes: null,
+      created_at: '2026-07-01T00:00:00.000Z',
+      updated_at: '2026-07-01T00:00:00.000Z',
+      archived_at: null,
+      salary: null,
+      location: 'Remote',
+      recruiter: null,
+      contact_person: null,
+      next_action: null,
+      next_action_due_date: null
+    };
+  });
+  const tags = applications.map((application, index) => ({
+    id: 2001 + index,
+    name: `Skill ${String(index + 1).padStart(2, '0')}`
+  }));
+  const applicationTags = applications.map((application, index) => ({
+    application_id: application.id,
+    tag_id: tags[index].id
+  }));
+  const statusHistory = [
+    { id: 3001, application_id: 1001, from_status: 'applied', to_status: 'interview_scheduled', changed_at: '2026-07-02T00:00:00.000Z' }
+  ];
+
+  const restoreResponse = await request.post('/api/import/backup', {
+    multipart: {
+      backup: {
+        name: 'insights-categories-backup.json',
+        mimeType: 'application/json',
+        buffer: Buffer.from(JSON.stringify({
+          version: 1,
+          data: { applications, tags, application_tags: applicationTags, status_history: statusHistory },
+          files: []
+        }), 'utf8')
+      }
+    }
+  });
+  expect(restoreResponse.status()).toBe(200);
+
+  const statsResponse = await request.get('/api/stats?mode=all');
+  expect(statsResponse.status()).toBe(200);
+  const stats = await statsResponse.json();
+
+  expect(stats.tags).toHaveLength(12);
+  expect(stats.categories).toHaveLength(13);
+  expect(stats.categories.map((row) => row.category)).toContain('Category 13');
+  expect(stats.categories.find((row) => row.category === 'Category 01')).toMatchObject({
+    applications: 4,
+    interviewed: 1,
+    rejected: 1,
+    ghosted: 1,
+    withdrawn: 1,
+    closed: 3
+  });
+  expect(stats).not.toHaveProperty('tag_details');
+  expect(stats).not.toHaveProperty('category_details');
+});
+
+test('insights category period uses applied date windows', async ({ request }) => {
+  const daysAgo = (days) => {
+    const date = new Date();
+    date.setDate(date.getDate() - days);
+    return date.toISOString().slice(0, 10);
+  };
+  const applications = [
+    { id: 4001, category: 'Recent Category', days: 5, status: 'interview_scheduled' },
+    { id: 4002, category: 'Sixty Category', days: 45, status: 'rejected' },
+    { id: 4003, category: 'Ninety Category', days: 75, status: 'ghosted' },
+    { id: 4004, category: 'Old Category', days: 120, status: 'withdrawn' }
+  ].map((item) => ({
+    id: item.id,
+    company_name: `Period Company ${item.id}`,
+    company_category: item.category,
+    role_title: 'Backend Engineer',
+    job_link: `https://example.com/jobs/period-${item.id}`,
+    job_description: 'Role used to verify applied-date period reporting.',
+    status: item.status,
+    applied_date: daysAgo(item.days),
+    interview_date: item.status === 'interview_scheduled' ? daysAgo(1) : null,
+    notes: null,
+    created_at: `${daysAgo(item.days)}T00:00:00.000Z`,
+    updated_at: `${daysAgo(item.days)}T00:00:00.000Z`,
+    archived_at: null,
+    salary: null,
+    location: 'Remote',
+    recruiter: null,
+    contact_person: null,
+    next_action: null,
+    next_action_due_date: null
+  }));
+  const statusHistory = [
+    { id: 5001, application_id: 4001, from_status: 'applied', to_status: 'interview_scheduled', changed_at: `${daysAgo(1)}T00:00:00.000Z` }
+  ];
+
+  const restoreResponse = await request.post('/api/import/backup', {
+    multipart: {
+      backup: {
+        name: 'insights-period-backup.json',
+        mimeType: 'application/json',
+        buffer: Buffer.from(JSON.stringify({
+          version: 1,
+          data: { applications, status_history: statusHistory },
+          files: []
+        }), 'utf8')
+      }
+    }
+  });
+  expect(restoreResponse.status()).toBe(200);
+
+  const [allResponse, thirtyResponse, sixtyResponse, ninetyResponse] = await Promise.all([
+    request.get('/api/stats?period=all'),
+    request.get('/api/stats?period=30'),
+    request.get('/api/stats?period=60'),
+    request.get('/api/stats?period=90')
+  ]);
+  const allStats = await allResponse.json();
+  const thirtyStats = await thirtyResponse.json();
+  const sixtyStats = await sixtyResponse.json();
+  const ninetyStats = await ninetyResponse.json();
+
+  expect(allStats.totals.total).toBe(4);
+  expect(allStats.categories.map((row) => row.category)).toEqual([
+    'Ninety Category',
+    'Old Category',
+    'Recent Category',
+    'Sixty Category'
+  ]);
+  expect(thirtyStats.totals.total).toBe(1);
+  expect(thirtyStats.categories.map((row) => row.category)).toEqual(['Recent Category']);
+  expect(sixtyStats.totals.total).toBe(2);
+  expect(sixtyStats.categories.map((row) => row.category).sort()).toEqual(['Recent Category', 'Sixty Category']);
+  expect(ninetyStats.totals.total).toBe(3);
+  expect(ninetyStats.categories.map((row) => row.category).sort()).toEqual(['Ninety Category', 'Recent Category', 'Sixty Category']);
+});

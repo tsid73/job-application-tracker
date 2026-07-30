@@ -5437,3 +5437,41 @@ a.nav-item {
   padding: 8px 16px;
   font-weight: 600;
 }
+
+.category-percent-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 48px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  color: var(--text);
+  font-weight: 700;
+  font-size: 12px;
+}
+
+.category-percent-badge-blue {
+  background: #eff6ff;
+  border-color: #bfdbfe;
+  color: #1d4ed8;
+}
+
+.category-percent-badge-green {
+  background: #ecfdf5;
+  border-color: #bbf7d0;
+  color: #047857;
+}
+
+.category-percent-badge-amber {
+  background: #fffbeb;
+  border-color: #fde68a;
+  color: #b45309;
+}
+
+.category-percent-badge-red {
+  background: #fef2f2;
+  border-color: #fecaca;
+  color: #b91c1c;
+}

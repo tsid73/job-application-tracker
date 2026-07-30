@@ -258,8 +258,9 @@ export function renderHomeWorkspace() {
   `;
 }
 
-export function renderInsights(els, report, stats, statusLabels, mode = 'active') {
+export function renderInsights(els, report, stats, statusLabels, mode = 'active', categoryStats = stats, categoryPeriod = 'all', selectedCategory = '') {
   const total = Number(stats.totals.total || 0);
+  const categoryTotal = Number(categoryStats.totals?.total || 0);
   const funnelRows = [
     { label: 'Applied', count: total },
     { label: 'Interview', count: Number(stats.funnel.interviewed || 0) },
@@ -287,6 +288,7 @@ export function renderInsights(els, report, stats, statusLabels, mode = 'active'
     if (rateVal > 0) toIntStr = `${rateVal}% interview rate`;
     return reportRow(row.category, Number(row.applications), categoryMax, { category: row.category }, toIntStr, '--app');
   }).join('') || '<p>No category data.</p>';
+  const categoryPerformanceHtml = renderCategoryPerformanceSection(categoryStats.categories || [], categoryTotal, categoryPeriod, selectedCategory);
 
   const dropoffs = [
     { stage: 'App -> Interview', drop: total > 0 ? 100 - Math.round((funnelRows[1].count / total) * 100) : 0 },
@@ -421,19 +423,27 @@ export function renderInsights(els, report, stats, statusLabels, mode = 'active'
       </div>
     </section>
 
-    <section class="report-panel report-panel-tags wide" style="grid-column: 1 / -1;">
-      <div class="panel-kicker">Skills</div>
-      <h3>Top Tags</h3>
-      <div class="tags-grid">
-        ${tagHtml}
-      </div>
-    </section>
-
+    ${/*
     <section class="report-panel report-panel-tags wide" style="grid-column: 1 / -1;">
       <div class="panel-kicker">Companies</div>
       <h3>Company Categories</h3>
       <div class="tags-grid">
         ${categoryHtml}
+      </div>
+    </section>
+    */ ''}
+
+    <section class="report-panel report-panel-tags wide" style="grid-column: 1 / -1;">
+      <div class="panel-kicker">Companies</div>
+      <h3>Company Category Performance</h3>
+      ${categoryPerformanceHtml}
+    </section>
+
+    <section class="report-panel report-panel-tags wide" style="grid-column: 1 / -1;">
+      <div class="panel-kicker">Skills</div>
+      <h3>Top Tags</h3>
+      <div class="tags-grid">
+        ${tagHtml}
       </div>
     </section>
   `;
@@ -510,6 +520,186 @@ export function renderInsights(els, report, stats, statusLabels, mode = 'active'
       });
     }
   }, 0);
+}
+
+function renderCategoryPerformanceTable(categories, totalApplications, selectedCategory = '', period = 'all') {
+  if (!categories.length) return '<p>No category data.</p>';
+  const jumpDates = getCategoryPerformanceJumpDates(period);
+
+  return `
+    <div class="table-container">
+      <table class="companies-table" data-category-performance>
+        <thead>
+          <tr>
+            <th>Company category</th>
+            <th>Applied</th>
+            <th>Applied %</th>
+            <th>Interviewed</th>
+            <th>Interview %</th>
+            <th>Rejected</th>
+            <th>Ghosted</th>
+            <th>Closed</th>
+            <th>Closed %</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${categories.map((row) => {
+            const applied = countCategoryMetric(row.applications);
+            const interviewed = countCategoryMetric(row.interviewed);
+            const rejected = countCategoryMetric(row.rejected);
+            const ghosted = countCategoryMetric(row.ghosted);
+            const closed = row.closed === undefined || row.closed === null
+              ? rejected + ghosted + countCategoryMetric(row.withdrawn)
+              : countCategoryMetric(row.closed);
+            const jumpAttrs = ` data-jump-category="${escapeAttribute(row.category || '')}"${jumpDates.dateFrom ? ` data-jump-date-from="${escapeAttribute(jumpDates.dateFrom)}"` : ''}${jumpDates.dateTo ? ` data-jump-date-to="${escapeAttribute(jumpDates.dateTo)}"` : ''}`;
+            return `
+              <tr data-category-performance-row="${escapeAttribute(row.category || '')}" data-applications="${applied}" data-interviewed="${interviewed}" data-closed="${closed}"${jumpAttrs}${selectedCategory && row.category !== selectedCategory ? ' hidden' : ''}>
+                <td><button class="button-link report-row-jump" type="button"${jumpAttrs}>${escapeHtml(row.category || '')}</button></td>
+                <td>${applied}</td>
+                <td>${formatCategoryPercent(applied, totalApplications)}</td>
+                <td>${interviewed}</td>
+                <td>${renderCategoryPercentBadge(interviewed, applied, applied, 'interview')}</td>
+                <td>${rejected}</td>
+                <td>${ghosted}</td>
+                <td>${closed}</td>
+                <td>${renderCategoryPercentBadge(closed, applied, applied, 'closed')}</td>
+              </tr>
+            `;
+          }).join('')}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
+export function renderCategoryPerformanceSection(categories, totalApplications, period = 'all', selectedCategory = '') {
+  const rows = categories.map(normalizeCategoryPerformanceRow);
+  const selectedRows = selectedCategory ? rows.filter((row) => row.category === selectedCategory) : rows;
+  const allSummary = summarizeCategoryPerformanceRows(selectedRows, totalApplications);
+  const categoryOptions = rows.map((row) =>
+    `<option value="${escapeAttribute(row.category)}"${row.category === selectedCategory ? ' selected' : ''}>${escapeHtml(row.category)}</option>`
+  ).join('');
+
+  return `
+    <div data-category-performance-section data-category-performance-total="${countCategoryMetric(totalApplications)}">
+      <div class="toolbar" aria-label="Company category performance controls" style="margin-bottom: 16px;">
+        <div class="filter-panel" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; align-items: end;">
+          <label>
+            <span>Period</span>
+            <select data-category-performance-period aria-label="Period">
+              <option value="all"${period === 'all' ? ' selected' : ''}>All time</option>
+              <option value="30"${period === '30' ? ' selected' : ''}>Last 30 days</option>
+              <option value="60"${period === '60' ? ' selected' : ''}>Last 60 days</option>
+              <option value="90"${period === '90' ? ' selected' : ''}>Last 90 days</option>
+            </select>
+          </label>
+          <label>
+            <span>Company category</span>
+            <select data-category-performance-filter aria-label="Company category">
+              <option value="">All categories</option>
+              ${categoryOptions}
+            </select>
+          </label>
+        </div>
+      </div>
+      ${/* renderCategoryPerformanceSummary(allSummary, selectedCategory) */ ''}
+      ${renderCategoryPerformanceTable(rows, totalApplications, selectedCategory, period)}
+    </div>
+  `;
+}
+
+function renderCategoryPerformanceSummary(summary, selectedCategory = '') {
+  return `
+    <div class="kpi-cards" data-category-performance-summary="${escapeAttribute(selectedCategory)}" style="grid-column: 1 / -1; margin-bottom: 16px;">
+      <div class="kpi-card">
+        <div class="kpi-card-val total" data-category-summary-applications>${summary.applied}</div>
+        <div class="kpi-card-label">Applications</div>
+        <div style="font-size: 11px; color: var(--muted); margin-top: 8px; font-weight: 600;"><span data-category-summary-applied-percent>${summary.appliedPercent}</span> of selected period</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-card-val int" data-category-summary-interview-percent>${summary.interviewPercent}</div>
+        <div class="kpi-card-label">Interview rate</div>
+        <div style="font-size: 11px; color: var(--muted); margin-top: 8px; font-weight: 600;"><span data-category-summary-interviewed>${summary.interviewed}</span> interviewed</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-card-val rate" data-category-summary-closed-percent>${summary.closedPercent}</div>
+        <div class="kpi-card-label">Closed</div>
+        <div style="font-size: 11px; color: var(--muted); margin-top: 8px; font-weight: 600;"><span data-category-summary-closed>${summary.closed}</span> closed</div>
+      </div>
+    </div>
+  `;
+}
+
+function summarizeCategoryPerformanceRows(rows, totalApplications) {
+  const totals = rows.reduce((acc, row) => ({
+    applied: acc.applied + row.applications,
+    interviewed: acc.interviewed + row.interviewed,
+    closed: acc.closed + row.closed
+  }), { applied: 0, interviewed: 0, closed: 0 });
+  return {
+    ...totals,
+    appliedPercent: formatCategoryPercent(totals.applied, totalApplications),
+    interviewPercent: formatCategoryPercent(totals.interviewed, totals.applied),
+    closedPercent: formatCategoryPercent(totals.closed, totals.applied)
+  };
+}
+
+function normalizeCategoryPerformanceRow(row) {
+  const rejected = countCategoryMetric(row.rejected);
+  const ghosted = countCategoryMetric(row.ghosted);
+  const withdrawn = countCategoryMetric(row.withdrawn);
+  return {
+    ...row,
+    category: row.category || '',
+    applications: countCategoryMetric(row.applications),
+    interviewed: countCategoryMetric(row.interviewed),
+    rejected,
+    ghosted,
+    withdrawn,
+    closed: row.closed === undefined || row.closed === null ? rejected + ghosted + withdrawn : countCategoryMetric(row.closed)
+  };
+}
+
+function countCategoryMetric(value) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
+}
+
+function formatCategoryPercent(part, whole) {
+  const denominator = countCategoryMetric(whole);
+  if (!denominator) return '0%';
+  return `${Math.round((countCategoryMetric(part) / denominator) * 100)}%`;
+}
+
+function renderCategoryPercentBadge(part, whole, applied, kind) {
+  const denominator = countCategoryMetric(whole);
+  const percentValue = denominator ? Math.round((countCategoryMetric(part) / denominator) * 100) : 0;
+  const appliedCount = countCategoryMetric(applied);
+  let tone = 'neutral';
+
+  if (appliedCount >= 10) {
+    if (kind === 'interview') {
+      if (percentValue >= 20) tone = 'green';
+      else if (percentValue >= 10) tone = 'blue';
+    } else if (kind === 'closed') {
+      if (percentValue >= 50) tone = 'red';
+      else if (percentValue >= 25) tone = 'amber';
+    }
+  }
+
+  return `<span class="category-percent-badge category-percent-badge-${tone}">${percentValue}%</span>`;
+}
+
+function getCategoryPerformanceJumpDates(period) {
+  const days = Number(period);
+  if (![30, 60, 90].includes(days)) return {};
+  const end = new Date();
+  const start = new Date();
+  start.setDate(start.getDate() - days);
+  return {
+    dateFrom: isoDate(start),
+    dateTo: isoDate(end)
+  };
 }
 
 export function renderActivity(els, state, payload) {

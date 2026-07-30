@@ -176,6 +176,295 @@ test('insights section headings render', async ({ page }) => {
   await expect(page.getByText('Monthly Applications')).toBeVisible();
 });
 
+test('insights renders company category performance before top tags with safe percentages', async ({ page }) => {
+  await page.route('**/api/reports**', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        status_counts: [],
+        monthly_counts: [],
+        lifecycle_counts: { active: 13, closed: 0, archived: 0, total: 13 },
+        upcoming_interviews: []
+      })
+    });
+  });
+  await page.route('**/api/stats**', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        totals: { total: 16, active: 13, closed: 3, archived: 0, ghosted: 1 },
+        funnel: { interviewed: 0, offers: 0, accepted: 0, rejected: 0, responded: 0 },
+        timing: { avg_days_to_interview: null, avg_days_to_close: null },
+        tags: Array.from({ length: 12 }, (_, index) => ({
+          tag: `Skill ${String(index + 1).padStart(2, '0')}`,
+          applications: 1,
+          interviewed: 0
+        })),
+        categories: [
+          {
+            category: 'Category 01',
+            applications: 4,
+            interviewed: 1,
+            rejected: 1,
+            ghosted: 1,
+            withdrawn: 0,
+            closed: 2
+          },
+          ...Array.from({ length: 12 }, (_, index) => ({
+            category: `Category ${String(index + 2).padStart(2, '0')}`,
+            applications: 1,
+            interviewed: 0,
+            rejected: 0,
+            ghosted: 0,
+            withdrawn: 0,
+            closed: 0
+          })),
+          {
+            category: 'Zero Category',
+            applications: 0,
+            interviewed: null,
+            rejected: null,
+            ghosted: null,
+            withdrawn: null,
+            closed: null
+          }
+        ]
+      })
+    });
+  });
+
+  await page.goto('/');
+  await page.locator('[data-view="insights"]').click();
+  await expect(page.locator('#insightsContent')).toBeVisible();
+  await expect(page.locator('[data-category-performance] tbody tr', { hasText: 'Category 13' })).toBeVisible();
+  await expect(page.locator('[data-category-performance] tbody tr', { hasText: 'Zero Category' })).toBeVisible();
+  const periodControl = page.getByLabel('Period', { exact: true });
+  await expect(periodControl).toHaveValue('all');
+  const periodLabels = await periodControl.locator('option').evaluateAll((options) =>
+    options.map((option) => option.textContent?.trim())
+  );
+  expect(periodLabels).toEqual(['All time', 'Last 30 days', 'Last 60 days', 'Last 90 days']);
+  const controlTops = await page.locator('[data-category-performance-section] .filter-panel label').evaluateAll((labels) =>
+    labels.map((label) => Math.round(label.getBoundingClientRect().top))
+  );
+  expect(new Set(controlTops).size).toBe(1);
+  const categoryControl = page.locator('[data-category-performance-filter]');
+  await expect(categoryControl).toHaveValue('');
+
+  const summaryCards = page.locator('[data-category-performance-summary=""] .kpi-card');
+  await expect(page.locator('[data-category-performance-section] [data-category-performance-summary] .kpi-card')).toHaveCount(3);
+  await expect(summaryCards.nth(0)).toContainText('16');
+  await expect(summaryCards.nth(0)).toContainText('100% of selected period');
+  await expect(summaryCards.nth(1)).toContainText('6%');
+  await expect(summaryCards.nth(1)).toContainText('1 interviewed');
+  await expect(summaryCards.nth(2)).toContainText('13%');
+  await expect(summaryCards.nth(2)).toContainText('2 closed');
+
+  const insightHeadings = await page.locator('#insightsContent h3').evaluateAll((headings) =>
+    headings
+      .map((heading) => heading.textContent?.trim())
+      .filter((text) => text === 'Company Category Performance' || text === 'Top Tags')
+  );
+  expect(insightHeadings).toEqual(['Company Category Performance', 'Top Tags']);
+
+  const headers = await page.locator('[data-category-performance] thead th').evaluateAll((cells) =>
+    cells.map((cell) => cell.textContent?.trim())
+  );
+  expect(headers).toEqual([
+    'Company category',
+    'Applied',
+    'Applied %',
+    'Interviewed',
+    'Interview %',
+    'Rejected',
+    'Ghosted',
+    'Closed',
+    'Closed %'
+  ]);
+
+  await expect(page.locator('[data-category-performance] tbody tr', { hasText: 'Category 01' }).first()).toContainText('25%');
+  await expect(page.locator('[data-category-performance] tbody tr', { hasText: 'Category 01' }).first()).toContainText('50%');
+  await expect(page.locator('[data-category-performance] tbody tr', { hasText: 'Zero Category' }).first()).toContainText('0%');
+
+  await categoryControl.selectOption('Category 01');
+  await expect(page.locator('[data-category-performance] tbody tr', { hasText: 'Category 01' })).toBeVisible();
+  await expect(page.locator('[data-category-performance] tbody tr', { hasText: 'Category 02' })).toBeHidden();
+  await expect(page.locator('[data-category-performance-summary="Category 01"]')).toBeVisible();
+  await expect(page.locator('[data-category-performance-summary="Category 01"] .kpi-card').nth(0)).toContainText('4');
+  await expect(page.locator('[data-category-performance-summary="Category 01"] .kpi-card').nth(0)).toContainText('25% of selected period');
+  await expect(page.locator('[data-category-performance-summary="Category 01"] .kpi-card').nth(1)).toContainText('25%');
+  await expect(page.locator('[data-category-performance-summary="Category 01"] .kpi-card').nth(1)).toContainText('1 interviewed');
+  await expect(page.locator('[data-category-performance-summary="Category 01"] .kpi-card').nth(2)).toContainText('50%');
+  await expect(page.locator('[data-category-performance-summary="Category 01"] .kpi-card').nth(2)).toContainText('2 closed');
+
+  await categoryControl.selectOption('Zero Category');
+  await expect(page.locator('[data-category-performance] tbody tr', { hasText: 'Zero Category' })).toBeVisible();
+  await expect(page.locator('[data-category-performance-summary="Zero Category"] .kpi-card').nth(0)).toContainText('0');
+  await expect(page.locator('[data-category-performance-summary="Zero Category"] .kpi-card').nth(1)).toContainText('0%');
+  await expect(page.locator('[data-category-performance-summary="Zero Category"] .kpi-card').nth(2)).toContainText('0%');
+  await expect(page.locator('#insightsContent')).not.toContainText('NaN');
+  await expect(page.locator('#insightsContent')).not.toContainText('Infinity');
+});
+
+test('company category performance applies period and category filters together', async ({ page }) => {
+  const statsRequests = [];
+  const statsByPeriod = {
+    all: {
+      totals: { total: 15, active: 10, closed: 5, archived: 0, ghosted: 1 },
+      categories: [
+        { category: 'Alpha Category', applications: 10, interviewed: 2, rejected: 3, ghosted: 1, withdrawn: 0, closed: 4 },
+        { category: 'Beta Category', applications: 5, interviewed: 1, rejected: 1, ghosted: 0, withdrawn: 0, closed: 1 }
+      ]
+    },
+    30: {
+      totals: { total: 5, active: 3, closed: 2, archived: 0, ghosted: 0 },
+      categories: [
+        { category: 'Alpha Category', applications: 3, interviewed: 1, rejected: 1, ghosted: 0, withdrawn: 0, closed: 1 },
+        { category: 'Beta Category', applications: 2, interviewed: 0, rejected: 1, ghosted: 0, withdrawn: 0, closed: 1 }
+      ]
+    }
+  };
+  await page.route('**/api/reports**', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        status_counts: [],
+        monthly_counts: [],
+        lifecycle_counts: { active: 10, closed: 5, archived: 0, total: 15 },
+        upcoming_interviews: []
+      })
+    });
+  });
+  await page.route('**/api/stats**', async (route) => {
+    const url = new URL(route.request().url());
+    const period = url.searchParams.get('period') || 'pipeline';
+    statsRequests.push(period);
+    const periodStats = statsByPeriod[period] || statsByPeriod.all;
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        totals: periodStats.totals,
+        funnel: { interviewed: 3, offers: 0, accepted: 0, rejected: 0, responded: 3 },
+        timing: { avg_days_to_interview: null, avg_days_to_close: null },
+        tags: [{ tag: 'Backend', applications: 5, interviewed: 1 }],
+        categories: periodStats.categories
+      })
+    });
+  });
+
+  await page.goto('/');
+  await page.locator('[data-view="insights"]').click();
+  await expect(page.locator('[data-category-performance-summary] .kpi-card').first()).toContainText('15');
+  expect(statsRequests).toContain('all');
+
+  const periodResponse = page.waitForResponse((response) => {
+    const url = new URL(response.url());
+    return url.pathname === '/api/stats' && url.searchParams.get('period') === '30';
+  });
+  await page.getByLabel('Period', { exact: true }).selectOption('30');
+  await periodResponse;
+
+  await expect(page.locator('[data-category-performance-summary] .kpi-card').first()).toContainText('5');
+  await expect(page.locator('[data-category-performance] tbody tr', { hasText: 'Alpha Category' })).toContainText('3');
+  await expect(page.locator('[data-category-performance] tbody tr', { hasText: 'Beta Category' })).toContainText('2');
+
+  await page.locator('[data-category-performance-filter]').selectOption('Beta Category');
+  await expect(page.locator('[data-category-performance-row="Alpha Category"]')).toBeHidden();
+  await expect(page.locator('[data-category-performance-row="Beta Category"]')).toBeVisible();
+  await expect(page.locator('[data-category-performance-summary] .kpi-card')).toHaveCount(3);
+  await expect(page.locator('[data-category-performance-summary] .kpi-card').nth(0)).toContainText('2');
+  await expect(page.locator('[data-category-performance-summary] .kpi-card').nth(0)).toContainText('40% of selected period');
+  await expect(page.locator('[data-category-performance-summary] .kpi-card').nth(1)).toContainText('0%');
+  await expect(page.locator('[data-category-performance-summary] .kpi-card').nth(1)).toContainText('0 interviewed');
+  await expect(page.locator('[data-category-performance-summary] .kpi-card').nth(2)).toContainText('50%');
+  await expect(page.locator('[data-category-performance-summary] .kpi-card').nth(2)).toContainText('1 closed');
+  await expect(page.locator('#insightsContent')).not.toContainText('NaN');
+  await expect(page.locator('#insightsContent')).not.toContainText('Infinity');
+});
+
+test('company category performance filters update without replacing the insights page', async ({ page }) => {
+  const statsByPeriod = {
+    all: {
+      totals: { total: 15, active: 10, closed: 5, archived: 0, ghosted: 1 },
+      categories: [
+        { category: 'Alpha Category', applications: 10, interviewed: 2, rejected: 3, ghosted: 1, withdrawn: 0, closed: 4 },
+        { category: 'Beta Category', applications: 5, interviewed: 1, rejected: 1, ghosted: 0, withdrawn: 0, closed: 1 }
+      ]
+    },
+    30: {
+      totals: { total: 5, active: 3, closed: 2, archived: 0, ghosted: 0 },
+      categories: [
+        { category: 'Alpha Category', applications: 3, interviewed: 1, rejected: 1, ghosted: 0, withdrawn: 0, closed: 1 },
+        { category: 'Beta Category', applications: 2, interviewed: 0, rejected: 1, ghosted: 0, withdrawn: 0, closed: 1 }
+      ]
+    }
+  };
+  await page.route('**/api/reports**', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        status_counts: [],
+        monthly_counts: [],
+        lifecycle_counts: { active: 10, closed: 5, archived: 0, total: 15 },
+        upcoming_interviews: []
+      })
+    });
+  });
+  await page.route('**/api/stats**', async (route) => {
+    const url = new URL(route.request().url());
+    const period = url.searchParams.get('period') || 'all';
+    const periodStats = statsByPeriod[period] || statsByPeriod.all;
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        totals: periodStats.totals,
+        funnel: { interviewed: 3, offers: 0, accepted: 0, rejected: 0, responded: 3 },
+        timing: { avg_days_to_interview: null, avg_days_to_close: null },
+        tags: [{ tag: 'Backend', applications: 5, interviewed: 1 }],
+        categories: periodStats.categories
+      })
+    });
+  });
+
+  await page.goto('/');
+  await page.locator('[data-view="insights"]').click();
+  await expect(page.locator('[data-category-performance-section]')).toBeVisible();
+  await page.evaluate(() => {
+    document.querySelector('#insightsContent')?.setAttribute('data-stability-marker', 'keep');
+    [...document.querySelectorAll('#insightsContent h3')]
+      .find((heading) => heading.textContent?.trim() === 'Top Tags')
+      ?.closest('section')
+      ?.setAttribute('data-top-tags-marker', 'keep');
+  });
+
+  const periodResponse = page.waitForResponse((response) => {
+    const url = new URL(response.url());
+    return url.pathname === '/api/stats' && url.searchParams.get('period') === '30';
+  });
+  await page.getByLabel('Period', { exact: true }).selectOption('30');
+  await periodResponse;
+
+  await expect(page.locator('#insightsContent[data-stability-marker="keep"]')).toBeVisible();
+  await expect(page.locator('[data-top-tags-marker="keep"]')).toBeVisible();
+  await expect(page.locator('#insightsContent')).not.toContainText('Loading insights');
+  await expect(page.locator('[data-category-performance-summary] .kpi-card').first()).toContainText('5');
+  await expect(page.locator('[data-category-performance-row="Alpha Category"]')).toContainText('3');
+
+  await page.locator('[data-category-performance-filter]').selectOption('Beta Category');
+  await expect(page.locator('#insightsContent[data-stability-marker="keep"]')).toBeVisible();
+  await expect(page.locator('[data-top-tags-marker="keep"]')).toBeVisible();
+  await expect(page.locator('[data-category-performance-row="Alpha Category"]')).toBeHidden();
+  await expect(page.locator('[data-category-performance-row="Beta Category"]')).toBeVisible();
+  await expect(page.locator('[data-category-performance-summary] .kpi-card').nth(0)).toContainText('2');
+  await expect(page.locator('[data-category-performance-summary] .kpi-card').nth(2)).toContainText('1 closed');
+});
+
 // ─── Core CRUD flows ─────────────────────────────────────────────────────────
 
 test('create and immediately find application in list', async ({ page }) => {

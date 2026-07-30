@@ -63,7 +63,9 @@ export const state = {
     sort: 'newest'
   },
   toasts: [],
-  insightsMode: 'active'
+  insightsMode: 'active',
+  categoryPerformancePeriod: 'all',
+  categoryPerformanceCategory: ''
 };
 
 export const statusLabels = {

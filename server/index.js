@@ -658,16 +658,21 @@ function icsEscape(value) {
 }
 
 async function getStats(req, res, url) {
-  const allTime = url?.searchParams.get('mode') === 'all';
+  const period = url?.searchParams.get('period') || '';
+  const periodDays = { 30: 30, 60: 60, 90: 90 }[period];
+  const periodScoped = period === 'all' || Boolean(periodDays);
+  const allTime = periodScoped || url?.searchParams.get('mode') === 'all';
+  const scopeCondition = periodDays ? `applied_date >= CURRENT_DATE - INTERVAL '${periodDays} days'` : (allTime ? 'TRUE' : 'archived_at IS NULL');
+  const scopedAliasCondition = periodDays ? `a.applied_date >= CURRENT_DATE - INTERVAL '${periodDays} days'` : (allTime ? 'TRUE' : 'a.archived_at IS NULL');
 
   const totals = await pool.query(
     `
       SELECT
-        count(DISTINCT id) FILTER (WHERE ${allTime ? 'TRUE' : 'archived_at IS NULL'})::int AS total,
-        count(DISTINCT id) FILTER (WHERE archived_at IS NULL AND status NOT IN ('rejected', 'withdrawn', 'ghosted'))::int AS active,
-        count(DISTINCT id) FILTER (WHERE archived_at IS NULL AND status IN ('rejected', 'withdrawn', 'ghosted'))::int AS closed,
-        count(DISTINCT id) FILTER (WHERE archived_at IS NOT NULL)::int AS archived,
-        count(DISTINCT id) FILTER (WHERE ${allTime ? 'TRUE' : 'archived_at IS NULL'} AND status = 'ghosted')::int AS ghosted
+        count(DISTINCT id) FILTER (WHERE ${scopeCondition})::int AS total,
+        count(DISTINCT id) FILTER (WHERE ${scopeCondition} AND archived_at IS NULL AND status NOT IN ('rejected', 'withdrawn', 'ghosted'))::int AS active,
+        count(DISTINCT id) FILTER (WHERE ${scopeCondition} AND archived_at IS NULL AND status IN ('rejected', 'withdrawn', 'ghosted'))::int AS closed,
+        count(DISTINCT id) FILTER (WHERE ${scopeCondition} AND archived_at IS NOT NULL)::int AS archived,
+        count(DISTINCT id) FILTER (WHERE ${scopeCondition} AND status = 'ghosted')::int AS ghosted
       FROM applications
     `
   );
@@ -682,7 +687,7 @@ async function getStats(req, res, url) {
         count(DISTINCT sh.application_id) FILTER (WHERE sh.to_status IN ('interview_scheduled', 'offer', 'accepted'))::int AS responded
       FROM status_history sh
       JOIN applications a ON a.id = sh.application_id
-      ${allTime ? '' : 'WHERE a.archived_at IS NULL'}
+      WHERE ${scopedAliasCondition}
     `
   );
 
@@ -693,14 +698,14 @@ async function getStats(req, res, url) {
           SELECT min(sh.changed_at)::date - a.applied_date AS days
           FROM applications a
           JOIN status_history sh ON sh.application_id = a.id AND sh.to_status = 'interview_scheduled' AND sh.from_status IS NOT NULL
-          WHERE a.applied_date IS NOT NULL ${allTime ? '' : 'AND a.archived_at IS NULL'}
+          WHERE a.applied_date IS NOT NULL AND ${scopedAliasCondition}
           GROUP BY a.id, a.applied_date
         ) interview_days) AS avg_days_to_interview,
         (SELECT round(avg(days))::int FROM (
           SELECT min(sh.changed_at)::date - a.applied_date AS days
           FROM applications a
           JOIN status_history sh ON sh.application_id = a.id AND sh.to_status IN ('rejected', 'ghosted', 'withdrawn') AND sh.from_status IS NOT NULL
-          WHERE a.applied_date IS NOT NULL ${allTime ? '' : 'AND a.archived_at IS NULL'}
+          WHERE a.applied_date IS NOT NULL AND ${scopedAliasCondition}
           GROUP BY a.id, a.applied_date
         ) close_days) AS avg_days_to_close
     `
@@ -717,7 +722,7 @@ async function getStats(req, res, url) {
       FROM tags t
       JOIN application_tags at ON at.tag_id = t.id
       JOIN applications a ON a.id = at.application_id
-      ${allTime ? '' : 'WHERE a.archived_at IS NULL'}
+      WHERE ${scopedAliasCondition}
       GROUP BY t.name
       ORDER BY applications DESC, t.name
       LIMIT 12
@@ -731,13 +736,16 @@ async function getStats(req, res, url) {
         count(DISTINCT id) FILTER (WHERE EXISTS (
           SELECT 1 FROM status_history sh
           WHERE sh.application_id = a.id AND sh.to_status = 'interview_scheduled'
-        ))::int AS interviewed
+        ))::int AS interviewed,
+        count(DISTINCT id) FILTER (WHERE status = 'rejected')::int AS rejected,
+        count(DISTINCT id) FILTER (WHERE status = 'ghosted')::int AS ghosted,
+        count(DISTINCT id) FILTER (WHERE status = 'withdrawn')::int AS withdrawn,
+        count(DISTINCT id) FILTER (WHERE status IN ('rejected', 'ghosted', 'withdrawn'))::int AS closed
       FROM applications a
       WHERE company_category IS NOT NULL AND company_category != ''
-      ${allTime ? '' : 'AND archived_at IS NULL'}
+      AND ${scopedAliasCondition}
       GROUP BY company_category
       ORDER BY applications DESC, category
-      LIMIT 12
     `
   );
 
