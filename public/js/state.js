@@ -68,13 +68,17 @@ export const state = {
   categoryPerformanceCategory: '',
   tagPerformancePeriod: 'all',
   chartTagPerformancePeriod: 'all',
+  insightsReturn: null,
+  insightsScrollTarget: '',
   selectedTagSettings: {
     availableTags: [],
-    selectedTags: []
+    selectedTags: [],
+    pendingTags: []
   },
   selectedChartTagSettings: {
     availableTags: [],
-    selectedTags: []
+    selectedTags: [],
+    pendingTags: []
   }
 };
 

@@ -426,7 +426,7 @@ export function renderInsights(els, report, stats, statusLabels, mode = 'active'
     </section>
 
     ${/*
-    <section class="report-panel report-panel-tags wide" style="grid-column: 1 / -1;">
+    <section id="company-category-performance" class="report-panel report-panel-tags wide" style="grid-column: 1 / -1;">
       <div class="panel-kicker">Companies</div>
       <h3>Company Categories</h3>
       <div class="tags-grid">
@@ -435,14 +435,14 @@ export function renderInsights(els, report, stats, statusLabels, mode = 'active'
     </section>
     */ ''}
 
-    <section class="report-panel report-panel-tags wide" style="grid-column: 1 / -1;">
+    <section id="selected-tag-performance" class="report-panel report-panel-tags wide" style="grid-column: 1 / -1;">
       <div class="panel-kicker">Companies</div>
       <h3>Company Category Performance</h3>
       ${categoryPerformanceHtml}
     </section>
 
     ${/*
-    <section class="report-panel report-panel-tags wide" style="grid-column: 1 / -1;">
+    <section id="selected-tag-comparison" class="report-panel report-panel-tags wide" style="grid-column: 1 / -1;">
       <div class="panel-kicker">Skills</div>
       <h3>Top Tags</h3>
       <div class="tags-grid">
@@ -543,7 +543,7 @@ function renderCategoryPerformanceTable(categories, totalApplications, selectedC
   const jumpDates = getCategoryPerformanceJumpDates(period);
 
   return `
-    <div class="table-container">
+    <div class="table-container insights-scroll-panel">
       <table class="companies-table" data-category-performance>
         <thead>
           <tr>
@@ -567,7 +567,7 @@ function renderCategoryPerformanceTable(categories, totalApplications, selectedC
             const closed = row.closed === undefined || row.closed === null
               ? rejected + ghosted + countCategoryMetric(row.withdrawn)
               : countCategoryMetric(row.closed);
-            const jumpAttrs = ` data-jump-category="${escapeAttribute(row.category || '')}"${jumpDates.dateFrom ? ` data-jump-date-from="${escapeAttribute(jumpDates.dateFrom)}"` : ''}${jumpDates.dateTo ? ` data-jump-date-to="${escapeAttribute(jumpDates.dateTo)}"` : ''}`;
+            const jumpAttrs = ` data-jump-category="${escapeAttribute(row.category || '')}" data-jump-source-section="company-category-performance" data-jump-source-period="${escapeAttribute(period)}"${jumpDates.dateFrom ? ` data-jump-date-from="${escapeAttribute(jumpDates.dateFrom)}"` : ''}${jumpDates.dateTo ? ` data-jump-date-to="${escapeAttribute(jumpDates.dateTo)}"` : ''}`;
             return `
               <tr data-category-performance-row="${escapeAttribute(row.category || '')}" data-applications="${applied}" data-interviewed="${interviewed}" data-closed="${closed}"${jumpAttrs}${selectedCategory && row.category !== selectedCategory ? ' hidden' : ''}>
                 <td><button class="button-link report-row-jump" type="button"${jumpAttrs}>${escapeHtml(row.category || '')}</button></td>
@@ -626,8 +626,9 @@ export function renderCategoryPerformanceSection(categories, totalApplications, 
 
 export function renderSelectedTagPerformanceSection(tags, totalApplications, period = 'all') {
   const rows = tags.map(normalizeTagPerformanceRow);
+  const jumpDates = getCategoryPerformanceJumpDates(period);
   const tableHtml = rows.length ? `
-    <div class="table-container">
+    <div class="table-container insights-scroll-panel">
       <table class="companies-table" data-selected-tag-performance>
         <thead>
           <tr>
@@ -643,9 +644,11 @@ export function renderSelectedTagPerformanceSection(tags, totalApplications, per
           </tr>
         </thead>
         <tbody>
-          ${rows.map((row) => `
-            <tr data-selected-tag-performance-row="${escapeAttribute(row.tag)}">
-              <td><span class="selected-tag-table-pill">${escapeHtml(row.tag)}</span></td>
+          ${rows.map((row) => {
+            const jumpAttrs = ` data-jump-tag="${escapeAttribute(row.tag)}" data-jump-source-section="selected-tag-performance" data-jump-source-period="${escapeAttribute(period)}"${jumpDates.dateFrom ? ` data-jump-date-from="${escapeAttribute(jumpDates.dateFrom)}"` : ''}${jumpDates.dateTo ? ` data-jump-date-to="${escapeAttribute(jumpDates.dateTo)}"` : ''}`;
+            return `
+            <tr data-selected-tag-performance-row="${escapeAttribute(row.tag)}"${jumpAttrs}>
+              <td><button class="button-link report-row-jump" type="button"${jumpAttrs}><span class="selected-tag-table-pill">${escapeHtml(row.tag)}</span></button></td>
               <td>${row.applications}</td>
               <td>${formatCategoryPercent(row.applications, totalApplications)}</td>
               <td>${row.interviewed}</td>
@@ -655,7 +658,8 @@ export function renderSelectedTagPerformanceSection(tags, totalApplications, per
               <td>${row.closed}</td>
               <td>${renderCategoryPercentBadge(row.closed, row.applications, row.applications, 'closed')}</td>
             </tr>
-          `).join('')}
+          `;
+          }).join('')}
         </tbody>
       </table>
     </div>
@@ -684,18 +688,20 @@ export function renderSelectedTagPerformanceSection(tags, totalApplications, per
 
 export function renderSelectedTagComparisonSection(tags, period = 'all') {
   const rows = tags.map(normalizeTagPerformanceRow);
+  const jumpDates = getCategoryPerformanceJumpDates(period);
   const chartHtml = rows.length ? `
-    <div class="selected-tag-comparison-list">
+    <div class="selected-tag-comparison-list insights-scroll-panel">
       ${rows.map((row) => {
         const active = Math.max(0, row.applications - row.closed);
         const barWidth = (part) => row.applications ? Math.max(2, Math.round((part / row.applications) * 100)) : 0;
         const activePercent = formatCategoryPercent(active, row.applications);
         const interviewPercent = formatCategoryPercent(row.interviewed, row.applications);
         const closedPercent = formatCategoryPercent(row.closed, row.applications);
+        const jumpAttrs = ` data-jump-tag="${escapeAttribute(row.tag)}" data-jump-source-section="selected-tag-comparison" data-jump-source-period="${escapeAttribute(period)}"${jumpDates.dateFrom ? ` data-jump-date-from="${escapeAttribute(jumpDates.dateFrom)}"` : ''}${jumpDates.dateTo ? ` data-jump-date-to="${escapeAttribute(jumpDates.dateTo)}"` : ''}`;
         return `
-          <article class="selected-tag-comparison-group">
+          <article class="selected-tag-comparison-group"${jumpAttrs}>
             <div class="selected-tag-comparison-heading">
-              <strong class="selected-tag-comparison-title">${escapeHtml(row.tag)}</strong>
+              <button class="button-link selected-tag-comparison-title" type="button"${jumpAttrs}>${escapeHtml(row.tag)}</button>
               <span class="selected-tag-comparison-applied">${row.applications} applied</span>
             </div>
             <div class="selected-tag-comparison-bars">
@@ -908,6 +914,7 @@ function getListSummaryCounts(state) {
 }
 
 export function renderApplications(els, state, statusOptions) {
+  renderInsightsReturnBar(els, state);
   els.table.innerHTML = '';
   els.empty.hidden = state.applications.length !== 0;
   const summaryCounts = getListSummaryCounts(state);
@@ -929,6 +936,23 @@ export function renderApplications(els, state, statusOptions) {
   for (const application of state.applications) {
     els.table.appendChild(buildApplicationRow(application, statusOptions, state.selectedIds?.has(application.id)));
   }
+}
+
+function renderInsightsReturnBar(els, state) {
+  const existing = els.listView?.querySelector('[data-insights-return-bar]');
+  if (existing) existing.remove();
+  if (!state.insightsReturn?.section || !els.listView) return;
+  const labels = {
+    'company-category-performance': 'Company Category Performance',
+    'selected-tag-performance': 'Selected Tag Performance',
+    'selected-tag-comparison': 'Selected Tag Comparison'
+  };
+  const label = labels[state.insightsReturn.section] || 'Insights';
+  const bar = document.createElement('div');
+  bar.className = 'insights-return-bar';
+  bar.dataset.insightsReturnBar = 'true';
+  bar.innerHTML = `<button class="button-link" type="button" data-insights-return="${escapeAttribute(state.insightsReturn.section)}" data-insights-period="${escapeAttribute(state.insightsReturn.period || '')}">Back to Insights: ${escapeHtml(label)}</button>`;
+  els.listView.prepend(bar);
 }
 
 export function buildApplicationRow(application, statusOptions, selected = false) {
@@ -1398,11 +1422,11 @@ function renderSettingsPanel() {
           <div class="toolbar-main-row">
             <label style="min-width: 260px;">
               <span>Search tags</span>
-              <input id="selectedTagInput" type="search" list="selectedTagOptions" placeholder="Type an existing tag">
-              <datalist id="selectedTagOptions"></datalist>
+              <input id="selectedTagInput" type="search" placeholder="Search current tags">
             </label>
-            <button id="selectedTagAddSaveButton" type="button">Add and save</button>
+            <button id="selectedTagAddSaveButton" type="button" disabled>Add selected and save</button>
           </div>
+          <div id="selectedTagOptions" class="selected-tag-option-list" aria-label="Available selected tag report tags"></div>
         </div>
         <div id="selectedTagList" class="tag-row" style="margin-top: 12px;"></div>
       </section>
@@ -1417,11 +1441,11 @@ function renderSettingsPanel() {
           <div class="toolbar-main-row">
             <label style="min-width: 260px;">
               <span>Search tags</span>
-              <input id="selectedChartTagInput" type="search" list="selectedChartTagOptions" placeholder="Type an existing tag">
-              <datalist id="selectedChartTagOptions"></datalist>
+              <input id="selectedChartTagInput" type="search" placeholder="Search current tags">
             </label>
-            <button id="selectedChartTagAddSaveButton" type="button">Add and save</button>
+            <button id="selectedChartTagAddSaveButton" type="button" disabled>Add selected and save</button>
           </div>
+          <div id="selectedChartTagOptions" class="selected-tag-option-list" aria-label="Available chart tags"></div>
         </div>
         <div id="selectedChartTagList" class="tag-row" style="margin-top: 12px;"></div>
       </section>
@@ -1429,12 +1453,19 @@ function renderSettingsPanel() {
   `;
 }
 
-export function renderSelectedTagsSettings(els, availableTags = [], selectedTags = []) {
+export function renderSelectedTagsSettings(els, availableTags = [], selectedTags = [], pendingTags = []) {
   const selectedSet = new Set(selectedTags);
-  const options = availableTags
+  const pendingSet = new Set(pendingTags);
+  const optionRows = availableTags
     .filter((tag) => !selectedSet.has(tag))
-    .map((tag) => `<option value="${escapeAttribute(tag)}"></option>`)
+    .map((tag) => `
+      <label class="selected-tag-option-row" data-selected-tag-option-row>
+        <input type="checkbox" data-selected-tag-option value="${escapeAttribute(tag)}"${pendingSet.has(tag) ? ' checked' : ''}>
+        <span>${escapeHtml(tag)}</span>
+      </label>
+    `)
     .join('');
+  const options = `${optionRows}<div class="selected-tag-options-empty" data-selected-tag-options-empty>${optionRows ? 'Search to find tags.' : 'No available tags.'}</div>`;
   const tray = selectedTags.map((tag) => `
     <span class="selected-tag-chip selected-tag-chip-removable">
       ${escapeHtml(tag)}
@@ -1455,17 +1486,29 @@ export function renderSelectedTagsSettings(els, availableTags = [], selectedTags
   const optionsEl = els.settingsContent?.querySelector('#selectedTagOptions');
   const listEl = els.settingsContent?.querySelector('#selectedTagList');
   const statusEl = els.settingsContent?.querySelector('#selectedTagSettingsStatus');
+  const addButton = els.settingsContent?.querySelector('#selectedTagAddSaveButton');
   if (optionsEl) optionsEl.innerHTML = options;
   if (listEl) listEl.innerHTML = list;
-  if (statusEl) statusEl.textContent = `${selectedTags.length} selected. Available current tags: ${availableTags.length}.`;
+  if (statusEl) statusEl.textContent = `${selectedTags.length} selected. ${pendingTags.length} pending. Available current tags: ${availableTags.length}.`;
+  if (addButton) {
+    addButton.disabled = pendingTags.length === 0;
+    addButton.textContent = pendingTags.length ? `Add ${pendingTags.length} selected and save` : 'Add selected and save';
+  }
 }
 
-export function renderSelectedChartTagsSettings(els, availableTags = [], selectedTags = []) {
+export function renderSelectedChartTagsSettings(els, availableTags = [], selectedTags = [], pendingTags = []) {
   const selectedSet = new Set(selectedTags);
-  const options = availableTags
+  const pendingSet = new Set(pendingTags);
+  const optionRows = availableTags
     .filter((tag) => !selectedSet.has(tag))
-    .map((tag) => `<option value="${escapeAttribute(tag)}"></option>`)
+    .map((tag) => `
+      <label class="selected-tag-option-row" data-selected-chart-tag-option-row>
+        <input type="checkbox" data-selected-chart-tag-option value="${escapeAttribute(tag)}"${pendingSet.has(tag) ? ' checked' : ''}>
+        <span>${escapeHtml(tag)}</span>
+      </label>
+    `)
     .join('');
+  const options = `${optionRows}<div class="selected-tag-options-empty" data-selected-chart-tag-options-empty>${optionRows ? 'Search to find tags.' : 'No available tags.'}</div>`;
   const tray = selectedTags.map((tag) => `
     <span class="selected-tag-chip selected-tag-chip-removable">
       ${escapeHtml(tag)}
@@ -1486,9 +1529,14 @@ export function renderSelectedChartTagsSettings(els, availableTags = [], selecte
   const optionsEl = els.settingsContent?.querySelector('#selectedChartTagOptions');
   const listEl = els.settingsContent?.querySelector('#selectedChartTagList');
   const statusEl = els.settingsContent?.querySelector('#selectedChartTagSettingsStatus');
+  const addButton = els.settingsContent?.querySelector('#selectedChartTagAddSaveButton');
   if (optionsEl) optionsEl.innerHTML = options;
   if (listEl) listEl.innerHTML = list;
-  if (statusEl) statusEl.textContent = `${selectedTags.length} selected. Available current tags: ${availableTags.length}.`;
+  if (statusEl) statusEl.textContent = `${selectedTags.length} selected. ${pendingTags.length} pending. Available current tags: ${availableTags.length}.`;
+  if (addButton) {
+    addButton.disabled = pendingTags.length === 0;
+    addButton.textContent = pendingTags.length ? `Add ${pendingTags.length} selected and save` : 'Add selected and save';
+  }
 }
 
 export function renderToolkit(els) {

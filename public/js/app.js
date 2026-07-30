@@ -153,6 +153,17 @@ function bindGlobalEvents() {
   els.targetCompanyForm.querySelectorAll('[data-date-input]').forEach(attachDateMask);
 
   document.addEventListener('click', (event) => {
+    const insightsReturn = event.target.closest('[data-insights-return]');
+    if (insightsReturn) {
+      event.preventDefault();
+      const params = new URLSearchParams({ view: 'insights' });
+      if (insightsReturn.dataset.insightsReturn) params.set('section', insightsReturn.dataset.insightsReturn);
+      if (insightsReturn.dataset.insightsPeriod) params.set('period', insightsReturn.dataset.insightsPeriod);
+      state.insightsReturn = null;
+      navigateTo(`/?${params.toString()}`);
+      return;
+    }
+
     const link = event.target.closest('a[href^="/applications/"], a[href="/"], a[href^="/?"]');
     if (!link || link.target === '_blank' || event.defaultPrevented) return;
     if (isModifiedClick(event)) return;
@@ -231,6 +242,17 @@ function applyHomeRouteState(route) {
   if (route.page !== 'home') return;
   if (route.view) state.view = route.view;
   if (route.hasFilters) Object.assign(state.filters, route.filters);
+  state.insightsReturn = route.insightsReturn || null;
+  state.insightsScrollTarget = route.insightsSection || '';
+  if (route.insightsSection === 'company-category-performance' && route.insightsPeriod) {
+    state.categoryPerformancePeriod = route.insightsPeriod;
+  }
+  if (route.insightsSection === 'selected-tag-performance' && route.insightsPeriod) {
+    state.tagPerformancePeriod = route.insightsPeriod;
+  }
+  if (route.insightsSection === 'selected-tag-comparison' && route.insightsPeriod) {
+    state.chartTagPerformancePeriod = route.insightsPeriod;
+  }
 }
 
 function bindApplicationListKeyboardNav() {
@@ -588,7 +610,9 @@ function bindHomeWorkspaceEvents() {
         dateFrom: row.dataset.jumpDateFrom,
         dateTo: row.dataset.jumpDateTo,
         category: row.dataset.jumpCategory,
-        tag: row.dataset.jumpTag
+        tag: row.dataset.jumpTag,
+        sourceSection: row.dataset.jumpSourceSection,
+        sourcePeriod: row.dataset.jumpSourcePeriod
       });
     });
   });
@@ -655,6 +679,13 @@ function bindSettingsActions() {
       const chartRemoveButton = event.target.closest('[data-selected-chart-tag-remove]');
       if (addSaveButton) {
         await withAsyncButton(addSaveButton, addAndSaveSelectedTagForReport);
+        updateSelectedTagPendingUi(
+          '#selectedTagAddSaveButton',
+          '#selectedTagSettingsStatus',
+          state.selectedTagSettings.selectedTags,
+          state.selectedTagSettings.pendingTags,
+          state.selectedTagSettings.availableTags
+        );
       }
       if (removeButton) {
         await withAsyncButton(removeButton, async () => {
@@ -664,12 +695,53 @@ function bindSettingsActions() {
       }
       if (chartAddSaveButton) {
         await withAsyncButton(chartAddSaveButton, addAndSaveSelectedChartTag);
+        updateSelectedTagPendingUi(
+          '#selectedChartTagAddSaveButton',
+          '#selectedChartTagSettingsStatus',
+          state.selectedChartTagSettings.selectedTags,
+          state.selectedChartTagSettings.pendingTags,
+          state.selectedChartTagSettings.availableTags
+        );
       }
       if (chartRemoveButton) {
         await withAsyncButton(chartRemoveButton, async () => {
           removeSelectedChartTag(chartRemoveButton.dataset.selectedChartTagRemove);
           await saveSelectedChartTags();
         });
+      }
+    });
+    els.settingsContent.addEventListener('input', (event) => {
+      const selectedTagSearch = event.target.closest('#selectedTagInput');
+      const selectedChartTagSearch = event.target.closest('#selectedChartTagInput');
+      if (selectedTagSearch) {
+        filterSelectedTagOptions(selectedTagSearch.value, '[data-selected-tag-option-row]', '[data-selected-tag-options-empty]');
+      }
+      if (selectedChartTagSearch) {
+        filterSelectedTagOptions(selectedChartTagSearch.value, '[data-selected-chart-tag-option-row]', '[data-selected-chart-tag-options-empty]');
+      }
+    });
+    els.settingsContent.addEventListener('change', (event) => {
+      const selectedTagOption = event.target.closest('[data-selected-tag-option]');
+      const selectedChartTagOption = event.target.closest('[data-selected-chart-tag-option]');
+      if (selectedTagOption) {
+        updatePendingSelectedTags(state.selectedTagSettings.pendingTags, selectedTagOption.value, selectedTagOption.checked);
+        updateSelectedTagPendingUi(
+          '#selectedTagAddSaveButton',
+          '#selectedTagSettingsStatus',
+          state.selectedTagSettings.selectedTags,
+          state.selectedTagSettings.pendingTags,
+          state.selectedTagSettings.availableTags
+        );
+      }
+      if (selectedChartTagOption) {
+        updatePendingSelectedTags(state.selectedChartTagSettings.pendingTags, selectedChartTagOption.value, selectedChartTagOption.checked);
+        updateSelectedTagPendingUi(
+          '#selectedChartTagAddSaveButton',
+          '#selectedChartTagSettingsStatus',
+          state.selectedChartTagSettings.selectedTags,
+          state.selectedChartTagSettings.pendingTags,
+          state.selectedChartTagSettings.availableTags
+        );
       }
     });
   }
@@ -852,6 +924,7 @@ async function switchView(view) {
   if (view === 'insights') {
     renderSectionLoading(els.insightsContent, 'Loading insights');
     await loadInsights();
+    scrollToInsightsSection(state.insightsScrollTarget);
   }
   if (view === 'activity') {
     renderSectionLoading(els.activityTable, 'Loading activity');
@@ -872,7 +945,7 @@ async function switchView(view) {
   }
 }
 
-async function jumpToFilteredList({ status = '', view = '', dateFrom = '', dateTo = '', month = '', category = '', tag = '' } = {}) {
+async function jumpToFilteredList({ status = '', view = '', dateFrom = '', dateTo = '', month = '', category = '', tag = '', sourceSection = '', sourcePeriod = '' } = {}) {
   // Status counts reflect current status across every lifecycle, so widen the
   // archive view to 'all' to guarantee the filtered list matches the count.
   state.filters.status = status || '';
@@ -880,6 +953,8 @@ async function jumpToFilteredList({ status = '', view = '', dateFrom = '', dateT
   state.filters.search = '';
   state.filters.category = category || '';
   state.filters.tag = tag || '';
+  state.filters.page = 1;
+  state.insightsReturn = sourceSection ? { section: sourceSection, period: sourcePeriod || '' } : null;
   
   if (month) {
     const year = parseInt(month.split('-')[0], 10);
@@ -929,7 +1004,20 @@ function applicationQueryParams() {
   if (state.filters.dateTo) params.set('dateTo', state.filters.dateTo);
   params.set('archived', state.filters.archived);
   if (state.filters.page > 1) params.set('page', state.filters.page);
+  if (state.insightsReturn?.section) {
+    params.set('from', 'insights');
+    params.set('section', state.insightsReturn.section);
+    if (state.insightsReturn.period) params.set('period', state.insightsReturn.period);
+  }
   return params;
+}
+
+function scrollToInsightsSection(section) {
+  if (!section) return;
+  requestAnimationFrame(() => {
+    document.getElementById(section)?.scrollIntoView({ block: 'start' });
+    state.insightsScrollTarget = '';
+  });
 }
 
 async function loadApplications() {
@@ -1116,35 +1204,39 @@ async function loadSelectedTagSettings() {
   const payload = await api('/api/selected-tags');
   state.selectedTagSettings.availableTags = payload.available_tags || [];
   state.selectedTagSettings.selectedTags = payload.selected_tags || [];
-  renderSelectedTagsSettings(els, state.selectedTagSettings.availableTags, state.selectedTagSettings.selectedTags);
+  state.selectedTagSettings.pendingTags = [];
+  renderSelectedTagsSettings(els, state.selectedTagSettings.availableTags, state.selectedTagSettings.selectedTags, state.selectedTagSettings.pendingTags);
 }
 
 async function loadSelectedChartTagSettings() {
   const payload = await api('/api/selected-chart-tags');
   state.selectedChartTagSettings.availableTags = payload.available_tags || [];
   state.selectedChartTagSettings.selectedTags = payload.selected_tags || [];
-  renderSelectedChartTagsSettings(els, state.selectedChartTagSettings.availableTags, state.selectedChartTagSettings.selectedTags);
+  state.selectedChartTagSettings.pendingTags = [];
+  renderSelectedChartTagsSettings(els, state.selectedChartTagSettings.availableTags, state.selectedChartTagSettings.selectedTags, state.selectedChartTagSettings.pendingTags);
 }
 
 function addSelectedTagForReport() {
   const input = els.settingsContent?.querySelector('#selectedTagInput');
-  const value = input?.value.trim();
-  if (!value) {
-    showToast('Choose a tag before saving.', 'warning');
+  const values = state.selectedTagSettings.pendingTags;
+  if (!values.length) {
+    showToast('Choose at least one tag before saving.', 'warning');
     return false;
   }
-  if (!state.selectedTagSettings.availableTags.includes(value)) {
+  const unknown = values.find((value) => !state.selectedTagSettings.availableTags.includes(value));
+  if (unknown) {
     showToast('Select an existing application tag.', 'warning');
     return false;
   }
-  if (state.selectedTagSettings.selectedTags.includes(value)) {
+  const duplicate = values.find((value) => state.selectedTagSettings.selectedTags.includes(value));
+  if (duplicate) {
     showToast('Tag is already selected.', 'warning');
-    if (input) input.value = '';
     return false;
   }
-  state.selectedTagSettings.selectedTags.push(value);
-  renderSelectedTagsSettings(els, state.selectedTagSettings.availableTags, state.selectedTagSettings.selectedTags);
+  state.selectedTagSettings.selectedTags.push(...values);
+  state.selectedTagSettings.pendingTags = [];
   if (input) input.value = '';
+  renderSelectedTagsSettings(els, state.selectedTagSettings.availableTags, state.selectedTagSettings.selectedTags, state.selectedTagSettings.pendingTags);
   return true;
 }
 
@@ -1155,7 +1247,8 @@ async function addAndSaveSelectedTagForReport() {
 
 function removeSelectedTagForReport(tag) {
   state.selectedTagSettings.selectedTags = state.selectedTagSettings.selectedTags.filter((item) => item !== tag);
-  renderSelectedTagsSettings(els, state.selectedTagSettings.availableTags, state.selectedTagSettings.selectedTags);
+  state.selectedTagSettings.pendingTags = state.selectedTagSettings.pendingTags.filter((item) => item !== tag);
+  renderSelectedTagsSettings(els, state.selectedTagSettings.availableTags, state.selectedTagSettings.selectedTags, state.selectedTagSettings.pendingTags);
 }
 
 async function saveSelectedTagsForReport() {
@@ -1165,29 +1258,32 @@ async function saveSelectedTagsForReport() {
     body: JSON.stringify({ tags: state.selectedTagSettings.selectedTags })
   });
   state.selectedTagSettings.selectedTags = payload.selected_tags || [];
-  renderSelectedTagsSettings(els, state.selectedTagSettings.availableTags, state.selectedTagSettings.selectedTags);
+  state.selectedTagSettings.pendingTags = [];
+  renderSelectedTagsSettings(els, state.selectedTagSettings.availableTags, state.selectedTagSettings.selectedTags, state.selectedTagSettings.pendingTags);
   showToast('Selected tag report saved.', 'success');
 }
 
 function addSelectedChartTag() {
   const input = els.settingsContent?.querySelector('#selectedChartTagInput');
-  const value = input?.value.trim();
-  if (!value) {
-    showToast('Choose a tag before saving.', 'warning');
+  const values = state.selectedChartTagSettings.pendingTags;
+  if (!values.length) {
+    showToast('Choose at least one tag before saving.', 'warning');
     return false;
   }
-  if (!state.selectedChartTagSettings.availableTags.includes(value)) {
+  const unknown = values.find((value) => !state.selectedChartTagSettings.availableTags.includes(value));
+  if (unknown) {
     showToast('Select an existing application tag.', 'warning');
     return false;
   }
-  if (state.selectedChartTagSettings.selectedTags.includes(value)) {
+  const duplicate = values.find((value) => state.selectedChartTagSettings.selectedTags.includes(value));
+  if (duplicate) {
     showToast('Tag is already selected.', 'warning');
-    if (input) input.value = '';
     return false;
   }
-  state.selectedChartTagSettings.selectedTags.push(value);
-  renderSelectedChartTagsSettings(els, state.selectedChartTagSettings.availableTags, state.selectedChartTagSettings.selectedTags);
+  state.selectedChartTagSettings.selectedTags.push(...values);
+  state.selectedChartTagSettings.pendingTags = [];
   if (input) input.value = '';
+  renderSelectedChartTagsSettings(els, state.selectedChartTagSettings.availableTags, state.selectedChartTagSettings.selectedTags, state.selectedChartTagSettings.pendingTags);
   return true;
 }
 
@@ -1198,7 +1294,8 @@ async function addAndSaveSelectedChartTag() {
 
 function removeSelectedChartTag(tag) {
   state.selectedChartTagSettings.selectedTags = state.selectedChartTagSettings.selectedTags.filter((item) => item !== tag);
-  renderSelectedChartTagsSettings(els, state.selectedChartTagSettings.availableTags, state.selectedChartTagSettings.selectedTags);
+  state.selectedChartTagSettings.pendingTags = state.selectedChartTagSettings.pendingTags.filter((item) => item !== tag);
+  renderSelectedChartTagsSettings(els, state.selectedChartTagSettings.availableTags, state.selectedChartTagSettings.selectedTags, state.selectedChartTagSettings.pendingTags);
 }
 
 async function saveSelectedChartTags() {
@@ -1208,8 +1305,53 @@ async function saveSelectedChartTags() {
     body: JSON.stringify({ tags: state.selectedChartTagSettings.selectedTags })
   });
   state.selectedChartTagSettings.selectedTags = payload.selected_tags || [];
-  renderSelectedChartTagsSettings(els, state.selectedChartTagSettings.availableTags, state.selectedChartTagSettings.selectedTags);
+  state.selectedChartTagSettings.pendingTags = [];
+  renderSelectedChartTagsSettings(els, state.selectedChartTagSettings.availableTags, state.selectedChartTagSettings.selectedTags, state.selectedChartTagSettings.pendingTags);
   showToast('Selected chart tags saved.', 'success');
+}
+
+function updatePendingSelectedTags(pendingTags, tag, checked) {
+  const index = pendingTags.indexOf(tag);
+  if (checked && index === -1) pendingTags.push(tag);
+  if (!checked && index !== -1) pendingTags.splice(index, 1);
+}
+
+function updateSelectedTagPendingUi(buttonSelector, statusSelector, selectedTags, pendingTags, availableTags) {
+  const button = els.settingsContent?.querySelector(buttonSelector);
+  const status = els.settingsContent?.querySelector(statusSelector);
+  if (button) {
+    button.disabled = pendingTags.length === 0;
+    button.textContent = pendingTags.length ? `Add ${pendingTags.length} selected and save` : 'Add selected and save';
+  }
+  if (status) {
+    status.textContent = `${selectedTags.length} selected. ${pendingTags.length} pending. Available current tags: ${availableTags.length}.`;
+  }
+}
+
+function filterSelectedTagOptions(query, rowSelector, emptySelector) {
+  const normalizedQuery = String(query || '').trim().toLowerCase();
+  const rows = [...(els.settingsContent?.querySelectorAll(rowSelector) || [])];
+  const visibleLimit = 30;
+  let matches = 0;
+  let visible = 0;
+  for (const row of rows) {
+    const matched = Boolean(normalizedQuery) && row.textContent.toLowerCase().includes(normalizedQuery);
+    if (matched) matches += 1;
+    const shouldShow = matched && visible < visibleLimit;
+    row.classList.toggle('is-visible', shouldShow);
+    if (shouldShow) visible += 1;
+  }
+  const empty = els.settingsContent?.querySelector(emptySelector);
+  if (empty) {
+    empty.hidden = Boolean(normalizedQuery) && visible > 0 && matches <= visibleLimit;
+    if (!normalizedQuery) {
+      empty.textContent = 'Search to find tags.';
+    } else if (!matches) {
+      empty.textContent = 'No matching tags.';
+    } else if (matches > visibleLimit) {
+      empty.textContent = `Showing first ${visibleLimit} matches. Keep typing to narrow.`;
+    }
+  }
 }
 
 function updateCategoryPerformanceSummary(section, rows, category) {
@@ -2583,6 +2725,12 @@ function parseRoute(pathname, search) {
   const hasFilters = filterKeys.some((key) => searchParams.has(key));
   const statusParam = searchParams.get('status') || '';
   const archivedParam = searchParams.get('archived');
+  const sectionParam = searchParams.get('section') || '';
+  const periodParam = searchParams.get('period') || '';
+  const insightSections = new Set(['company-category-performance', 'selected-tag-performance', 'selected-tag-comparison']);
+  const insightPeriods = new Set(['all', '30', '60', '90']);
+  const insightsSection = insightSections.has(sectionParam) ? sectionParam : '';
+  const insightsPeriod = insightPeriods.has(periodParam) ? periodParam : '';
   return {
     path: '/',
     page: 'home',
@@ -2590,6 +2738,11 @@ function parseRoute(pathname, search) {
     documentId: null,
     tab: 'overview',
     view: homeViews.includes(requestedView) ? requestedView : null,
+    insightsSection,
+    insightsPeriod,
+    insightsReturn: searchParams.get('from') === 'insights' && insightsSection
+      ? { section: insightsSection, period: insightsPeriod }
+      : null,
     hasFilters,
     filters: hasFilters ? {
       search: searchParams.get('search') || '',
