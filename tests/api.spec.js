@@ -98,6 +98,59 @@ test('application REST API supports workflow CRUD and lookup', async ({ request 
   expect(deletedReadResponse.status()).toBe(404);
 });
 
+test('application REST API preserves more than 12 tags on create and update', async ({ request }) => {
+  const cvResponse = await request.post('/api/cv', {
+    multipart: {
+      version_label: 'API tags test CV',
+      is_latest: 'true',
+      cv: {
+        name: 'sample-cv.pdf',
+        mimeType: 'application/pdf',
+        buffer: fs.readFileSync(sampleCvPath)
+      }
+    }
+  });
+  expect([201, 409]).toContain(cvResponse.status());
+  const cvPayload = cvResponse.status() === 201 ? await cvResponse.json() : null;
+
+  const createTags = Array.from({ length: 13 }, (_, index) => `Tag ${index + 1}`);
+  const createResponse = await request.post('/api/applications', {
+    data: {
+      company_name: 'API Tags Limit Labs',
+      role_title: 'Backend Engineer',
+      job_link: 'https://example.com/jobs/api-tags-limit-labs',
+      job_description: 'Role used to verify tag persistence above the old twelve tag cap.',
+      status: 'applied',
+      applied_date: '2026-07-30',
+      tags: createTags.join(', '),
+      ...(cvPayload ? { cv_id: cvPayload.cv.id } : {})
+    }
+  });
+  expect(createResponse.status()).toBe(200);
+  const createdPayload = await createResponse.json();
+  const applicationId = createdPayload.application.id;
+
+  const createdReadResponse = await request.get(`/api/applications/${applicationId}`);
+  expect(createdReadResponse.status()).toBe(200);
+  const createdReadPayload = await createdReadResponse.json();
+  expect(createdReadPayload.tags).toHaveLength(13);
+  expect(createdReadPayload.tags).toEqual(expect.arrayContaining(createTags));
+
+  const updateTags = Array.from({ length: 14 }, (_, index) => `Updated Tag ${index + 1}`);
+  const updateResponse = await request.put(`/api/applications/${applicationId}`, {
+    data: {
+      tags: updateTags
+    }
+  });
+  expect(updateResponse.status()).toBe(200);
+
+  const updatedReadResponse = await request.get(`/api/applications/${applicationId}`);
+  expect(updatedReadResponse.status()).toBe(200);
+  const updatedReadPayload = await updatedReadResponse.json();
+  expect(updatedReadPayload.tags).toHaveLength(14);
+  expect(updatedReadPayload.tags).toEqual(expect.arrayContaining(updateTags));
+});
+
 test('backup restore accepts next action fields in application rows', async ({ request }) => {
   const backup = {
     version: 1,

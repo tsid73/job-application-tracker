@@ -58,7 +58,7 @@ export function validateUrl(value) {
 export function parseTags(value) {
   if (!value) return [];
   const source = Array.isArray(value) ? value.join(',') : String(value);
-  return [...new Set(source.split(',').map((tag) => tag.trim()).filter(Boolean))].slice(0, 12);
+  return [...new Set(source.split(',').map((tag) => tag.trim()).filter(Boolean))];
 }
 
 export function parseInteger(value, fieldName) {
