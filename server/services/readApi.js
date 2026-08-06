@@ -75,7 +75,7 @@ export function createReadApi({ pool, audit }) {
     },
 
     async getNotifications() {
-      const [upcomingInterviews, followUps, upcomingTodos, nextActions] =
+      const [upcomingInterviews, nextActions] =
         await Promise.all([
           pool.query(
             `
@@ -96,6 +96,7 @@ export function createReadApi({ pool, audit }) {
             LIMIT 6
           `,
           ),
+          /*
           pool.query(
             `
             SELECT
@@ -142,6 +143,7 @@ export function createReadApi({ pool, audit }) {
             LIMIT 6
           `,
           ),
+          */
           pool.query(
             `
             SELECT
@@ -167,8 +169,6 @@ export function createReadApi({ pool, audit }) {
         notifications: [
           ...upcomingInterviews.rows,
           ...nextActions.rows,
-          ...followUps.rows,
-          ...upcomingTodos.rows,
         ]
           .sort((left, right) =>
             String(left.due_date || "").localeCompare(

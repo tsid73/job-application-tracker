@@ -38,9 +38,6 @@ test('all primary views render without errors', async ({ page }) => {
   await page.goto('/');
   await expect(page.getByRole('heading', { name: 'Applications' })).toBeVisible();
 
-  await page.locator('[data-view="kanban"]').click();
-  await expect(page.locator('#kanbanBoard')).toBeVisible();
-
   await page.locator('[data-view="reminders"]').click();
   await expect(page.locator('#remindersView')).toBeVisible();
 
@@ -79,6 +76,11 @@ test('toolkit absent from sidebar nav', async ({ page }) => {
   // There should be no sidebar button labelled "Toolkit"
   const toolkitBtn = page.locator('nav').getByRole('button', { name: 'Toolkit' });
   await expect(toolkitBtn).toHaveCount(0);
+});
+
+test('kanban absent from sidebar nav', async ({ page }) => {
+  await page.goto('/');
+  await expect(page.locator('nav [data-view="kanban"]')).toHaveCount(0);
 });
 
 test('toolkit section present inside settings', async ({ page }) => {
