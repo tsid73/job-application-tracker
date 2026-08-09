@@ -17,6 +17,16 @@ const meaningfulActivityActions = [
   "todo_added",
   "todo_completed",
   "ai_document_deleted",
+  "process_step_created",
+  "process_step_updated",
+  "process_step_completed",
+  "process_step_rescheduled",
+  "process_step_response_recorded",
+  "process_step_closed",
+  "process_step_reopened",
+  "process_step_cancelled",
+  "process_step_reordered",
+  "process_step_deleted",
 ];
 
 const meaningfulAiActivityPattern = "^ai_(?!.*_queued$).+";

@@ -5,12 +5,13 @@ Local-first job application tracker for private use. It runs with Node.js, a sta
 ## What It Does
 
 - Track applications, statuses, tags, reminders, interview dates, next actions, and due dates.
+- Track flexible hiring process steps such as screening calls, assessments, interview rounds, HR discussions, outcomes, feedback, and no-response closures.
 - Store CV versions and keep each application linked to the CV used.
 - Manage preparation notes, recruiter questions, feedback, and todos.
 - Use the Today view to review due next actions, upcoming interviews, stale applications, and priority reminders.
 - Track job boards and company lists for Germany/EU targets.
 - Generate optional AI artifacts such as CV drafts, cover letters, ATS checks, role-fit notes, and follow-up emails.
-- Export/import CSV and create full local backups.
+- Export/import CSV and create full local backups, including hiring process history.
 - Export interview dates and next-action due dates as an `.ics` calendar file.
 - Review your funnel in the Stats view: interview/offer rates, response rate, time in stage, and interview rate by tag.
 - Select multiple applications for bulk archive, restore, or delete.

@@ -1023,6 +1023,7 @@ function scrollToInsightsSection(section) {
 async function loadApplications() {
   const payload = await api(`/api/applications?${applicationQueryParams().toString()}`);
   state.applications = payload.applications;
+  await loadProcessSummariesForCurrentPage();
   const totalFromPayload = Number(payload.total);
   state.applicationTotal = Number.isFinite(totalFromPayload) ? totalFromPayload : state.applications.length;
   const pageSizeFromPayload = Number(payload.pageSize);
@@ -1033,6 +1034,16 @@ async function loadApplications() {
   updateSelectionUI();
   if (state.view === 'kanban' && els.kanbanBoard) renderKanban(els, state.applications, statusLabels);
   syncHomeUrl();
+}
+
+async function loadProcessSummariesForCurrentPage() {
+  const ids = state.applications.map((application) => application.id).filter(Boolean);
+  state.processSummaries = new Map();
+  if (!ids.length) return;
+  const payload = await api(`/api/process-steps/summaries?application_ids=${ids.join(',')}`);
+  for (const summary of payload.summaries || []) {
+    state.processSummaries.set(Number(summary.application_id), summary);
+  }
 }
 
 async function refreshApplicationRow(id) {
@@ -1050,7 +1061,7 @@ async function refreshApplicationRow(id) {
     updateSelectionUI();
     return;
   }
-  row.replaceWith(buildApplicationRow(application, statusOptions, state.selectedIds.has(id)));
+  row.replaceWith(buildApplicationRow(application, statusOptions, state.selectedIds.has(id), state.processSummaries?.get(Number(id))));
   updateSelectionUI();
 }
 
@@ -1105,11 +1116,24 @@ async function loadTargetCompanies() {
 }
 
 async function loadReminders() {
-  const payload = await api('/api/reminders');
+  const [payload, processPayload] = await Promise.all([
+    api('/api/reminders'),
+    api('/api/process-steps/upcoming')
+  ]);
   if (els.remindersList) {
     const seen = new Set();
-    const unique = (payload.reminders || []).filter((r) => {
-      const key = `${r.id}-${r.event_date}-${r.type}`;
+    const processReminders = (processPayload.reminders || []).map((step) => ({
+      id: `process-${step.id}-${step.reminder_type}`,
+      application_id: step.application_id,
+      company_name: step.company_name,
+      role_title: step.role_title,
+      event_date: step.reminder_date || step.event_date,
+      type: step.reminder_type === 'follow_up' ? 'process_follow_up' : 'process_step',
+      details: step.reminder_type === 'follow_up' ? `Follow up: ${step.step_name}` : step.step_name,
+      process_step_id: step.id
+    }));
+    const unique = [...(payload.reminders || []), ...processReminders].filter((r) => {
+      const key = r.process_step_id ? `process-${r.process_step_id}-${r.type}` : `${r.id}-${r.event_date}-${r.type}`;
       if (seen.has(key)) return false;
       seen.add(key);
       return true;
@@ -1135,15 +1159,16 @@ async function loadInsights() {
   const tagQs = `?period=${encodeURIComponent(tagPeriod)}`;
   const chartTagPeriod = state.chartTagPerformancePeriod || 'all';
   const chartTagQs = `?period=${encodeURIComponent(chartTagPeriod)}`;
-  const [reportsPayload, statsPayload, categoryStatsPayload, selectedTagStatsPayload, selectedChartTagStatsPayload] = await Promise.all([
+  const [reportsPayload, statsPayload, categoryStatsPayload, selectedTagStatsPayload, selectedChartTagStatsPayload, processInsightsPayload] = await Promise.all([
     api(`/api/reports${qs}`),
     api(`/api/stats${qs}`),
     api(`/api/stats${categoryQs}`),
     api(`/api/selected-tag-stats${tagQs}`),
-    api(`/api/selected-chart-tag-stats${chartTagQs}`)
+    api(`/api/selected-chart-tag-stats${chartTagQs}`),
+    api(`/api/process-insights${qs}`)
   ]);
   if (els.insightsContent) {
-    renderInsights(els, reportsPayload, statsPayload, statusLabels, mode, categoryStatsPayload, categoryPeriod, state.categoryPerformanceCategory, selectedTagStatsPayload, tagPeriod, selectedChartTagStatsPayload, chartTagPeriod);
+    renderInsights(els, reportsPayload, statsPayload, statusLabels, mode, categoryStatsPayload, categoryPeriod, state.categoryPerformanceCategory, selectedTagStatsPayload, tagPeriod, selectedChartTagStatsPayload, chartTagPeriod, processInsightsPayload);
   }
 }
 
@@ -1907,7 +1932,11 @@ async function renderCurrentRoute() {
     state.currentApplication = payload;
     state.currentApplicationDocuments = payload.ai_documents;
     state.currentApplicationJobs = payload.ai_jobs;
-    renderApplicationPage(els, payload, statusLabels, {
+    const pagePayload = state.route.tab === 'hiring-process'
+      ? { ...payload, process_steps: (await api(`/api/applications/${state.route.applicationId}/process-steps`)).process_steps || [] }
+      : payload;
+
+    renderApplicationPage(els, pagePayload, statusLabels, {
       activeTab: state.route.tab,
       selectedProvider: state.selectedAIProvider,
       capabilities: state.appConfig,
@@ -1915,7 +1944,7 @@ async function renderCurrentRoute() {
     });
     bindWorkspaceElements();
     assertSingleWorkspaceView('application');
-    bindApplicationPageActions(payload);
+    bindApplicationPageActions(pagePayload);
     
     if (isSameApp) {
       window.scrollTo(0, previousScrollY);
@@ -2006,7 +2035,7 @@ function assertSingleWorkspaceView(viewName) {
 }
 
 function bindApplicationPageActions(payload) {
-  const { application, recruiter_questions: recruiterQuestions, todos, tags } = payload;
+  const { application, recruiter_questions: recruiterQuestions, todos, tags, process_steps: processSteps = [] } = payload;
   const root = els.applicationPageContent;
 
   root.querySelectorAll('[data-ai-provider-select]').forEach((button) => {
@@ -2069,6 +2098,89 @@ function bindApplicationPageActions(payload) {
 
   root.querySelectorAll('[data-ai]').forEach((button) => {
     button.addEventListener('click', () => runAI(button, application.id));
+  });
+
+  root.querySelector('[data-process-add]')?.addEventListener('click', () => {
+    openProcessStepDialog(application, null);
+  });
+
+  root.querySelectorAll('[data-process-edit]').forEach((button) => {
+    button.addEventListener('click', () => {
+      const step = processSteps.find((item) => Number(item.id) === Number(button.dataset.processEdit));
+      if (step) openProcessStepDialog(application, step);
+    });
+  });
+
+  root.querySelectorAll('[data-process-close]').forEach((button) => {
+    button.addEventListener('click', async () => {
+      await withAsyncButton(button, async () => {
+        await api(`/api/process-steps/${button.dataset.processClose}`, {
+          method: 'PUT',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+            step_state: 'completed',
+            response_state: 'no_response',
+            tracking_state: 'closed',
+            closure_reason: 'no_response'
+          })
+        });
+        showToast('Process step closed.');
+        await Promise.all([loadApplications(), loadReminders(), renderCurrentRoute()]);
+      });
+    });
+  });
+
+  root.querySelectorAll('[data-process-reopen]').forEach((button) => {
+    button.addEventListener('click', async () => {
+      await withAsyncButton(button, async () => {
+        await api(`/api/process-steps/${button.dataset.processReopen}`, {
+          method: 'PUT',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+            tracking_state: 'open',
+            response_state: 'awaiting_response'
+          })
+        });
+        showToast('Process step reopened.');
+        await Promise.all([loadApplications(), loadReminders(), renderCurrentRoute()]);
+      });
+    });
+  });
+
+  root.querySelectorAll('[data-process-delete]').forEach((button) => {
+    button.addEventListener('click', async () => {
+      await runConfirmedAction({
+        title: 'Delete process step',
+        body: 'Remove this hiring process step?',
+        acceptLabel: 'Delete',
+        triggerButton: button,
+        successMessage: 'Process step deleted.',
+        onConfirm: async () => {
+          await api(`/api/process-steps/${button.dataset.processDelete}`, { method: 'DELETE' });
+          await Promise.all([loadApplications(), loadReminders(), renderCurrentRoute()]);
+        }
+      });
+    });
+  });
+
+  root.querySelectorAll('[data-process-move]').forEach((button) => {
+    button.addEventListener('click', async () => {
+      const ids = processSteps.map((step) => Number(step.id));
+      const currentIndex = ids.indexOf(Number(button.dataset.processMove));
+      const offset = button.dataset.direction === 'up' ? -1 : 1;
+      const targetIndex = currentIndex + offset;
+      if (currentIndex < 0 || targetIndex < 0 || targetIndex >= ids.length) return;
+      [ids[currentIndex], ids[targetIndex]] = [ids[targetIndex], ids[currentIndex]];
+      await withAsyncButton(button, async () => {
+        await api(`/api/applications/${application.id}/process-steps/order`, {
+          method: 'PUT',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ ordered_ids: ids })
+        });
+        showToast('Process order updated.');
+        await renderCurrentRoute();
+      });
+    });
   });
 
   root.querySelector('[data-note-form]')?.addEventListener('submit', async (event) => {
@@ -2715,7 +2827,7 @@ function parseRoute(pathname, search) {
       page: 'application',
       applicationId: Number(appMatch[1]),
       documentId: searchParams.get('document') ? Number(searchParams.get('document')) : null,
-      tab: ['overview', 'workflow', 'content', 'history'].includes(requestedTab) ? requestedTab : 'overview'
+      tab: ['overview', 'workflow', 'hiring-process', 'content', 'history'].includes(requestedTab) ? requestedTab : 'overview'
     };
   }
 
@@ -2928,10 +3040,165 @@ function toastTypeLabel(type) {
   return 'Success';
 }
 
-function openDetailDialog(title, body) {
+function openDetailDialog(title, body, options = {}) {
   els.detailTitle.textContent = title;
   els.detailContent.innerHTML = body;
+  els.detailDialog.classList.toggle('process-step-dialog', options.variant === 'process-step');
   els.detailDialog.showModal();
+}
+
+const processStepGroups = [
+  ['screening', 'Screening Call'],
+  ['assessment', 'Assessment'],
+  ['interview', 'Interview'],
+  ['discussion', 'Discussion'],
+  ['other', 'Other']
+];
+
+const processStepStates = [
+  ['scheduled', 'Scheduled'],
+  ['completed', 'Completed'],
+  ['cancelled', 'Cancelled']
+];
+
+const processResponseStates = [
+  ['not_applicable', 'Not Applicable'],
+  ['awaiting_response', 'Awaiting Response'],
+  ['advanced', 'Advanced'],
+  ['not_advanced', 'Not Advanced'],
+  ['on_hold', 'On Hold'],
+  ['no_response', 'No Response'],
+  ['other', 'Other']
+];
+
+const processClosureReasons = [
+  ['advanced', 'Advanced'],
+  ['not_advanced', 'Not Advanced'],
+  ['no_response', 'No Response'],
+  ['cancelled', 'Cancelled'],
+  ['withdrew', 'Withdrew'],
+  ['other', 'Other']
+];
+
+function openProcessStepDialog(application, step = null) {
+  const editing = Boolean(step);
+  const showDetails = hasProcessStepDetails(step);
+  openDetailDialog(editing ? 'Edit Process Step' : 'Add Process Step', `
+    <form class="process-step-form process-step-dialog-form" data-process-step-dialog-form="${editing ? step.id : ''}">
+      <label>
+        <span>Type</span>
+        <select name="step_group">${renderProcessOptions(processStepGroups, step?.step_group || 'screening')}</select>
+      </label>
+      <label>
+        <span>Name</span>
+        <input name="step_name" type="text" value="${escapeAttribute(step?.step_name || '')}" placeholder="L1, AI Test, HR Discussion" required>
+      </label>
+      <label>
+        <span>State</span>
+        <select name="step_state">${renderProcessOptions(processStepStates, step?.step_state || 'scheduled')}</select>
+      </label>
+      <label>
+        <span>Date</span>
+        <input name="event_date" type="date" value="${escapeAttribute(step?.event_date || localToday())}" required>
+      </label>
+      <details class="process-step-more" ${showDetails ? 'open' : ''}>
+        <summary>Response and notes</summary>
+        <div class="process-step-form process-step-more-grid">
+          <label>
+            <span>Response</span>
+            <select name="response_state">${renderProcessOptions(processResponseStates, step?.response_state || 'awaiting_response')}</select>
+          </label>
+          <label>
+            <span>Response Date</span>
+            <input name="response_date" type="date" value="${escapeAttribute(step?.response_date || '')}">
+          </label>
+          <label>
+            <span>Follow-up</span>
+            <input name="follow_up_due_date" type="date" value="${escapeAttribute(step?.follow_up_due_date || '')}">
+          </label>
+          <label>
+            <span>Tracking</span>
+            <select name="tracking_state">
+              <option value="open"${step?.tracking_state !== 'closed' ? ' selected' : ''}>Open</option>
+              <option value="closed"${step?.tracking_state === 'closed' ? ' selected' : ''}>Closed</option>
+            </select>
+          </label>
+          <label>
+            <span>Close Reason</span>
+            <select name="closure_reason">
+              <option value="">None</option>
+              ${renderProcessOptions(processClosureReasons, step?.closure_reason || '')}
+            </select>
+          </label>
+          <label>
+            <span>Feedback</span>
+            <select name="feedback_received">
+              <option value=""${step?.feedback_received === null || step?.feedback_received === undefined ? ' selected' : ''}>Unknown</option>
+              <option value="true"${step?.feedback_received === true ? ' selected' : ''}>Received</option>
+              <option value="false"${step?.feedback_received === false ? ' selected' : ''}>Not Received</option>
+            </select>
+          </label>
+          <label class="wide">
+            <span>Response Detail</span>
+            <textarea name="response_detail" rows="2">${escapeHtml(step?.response_detail || '')}</textarea>
+          </label>
+          <label class="wide">
+            <span>Notes</span>
+            <textarea name="notes" rows="2">${escapeHtml(step?.notes || '')}</textarea>
+          </label>
+        </div>
+      </details>
+      <div class="dialog-actions process-dialog-actions">
+        <button class="secondary" type="button" data-process-dialog-cancel>Cancel</button>
+        <button type="submit">${editing ? 'Save Step' : 'Add Step'}</button>
+      </div>
+    </form>
+  `, { variant: 'process-step' });
+
+  const form = els.detailContent.querySelector('[data-process-step-dialog-form]');
+  form.querySelector('[data-process-dialog-cancel]')?.addEventListener('click', () => els.detailDialog.close());
+  form.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const input = readProcessStepForm(form);
+    if (!input) return;
+    await withAsyncForm(form, async () => {
+      if (editing) {
+        await api(`/api/process-steps/${step.id}`, {
+          method: 'PUT',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify(input)
+        });
+      } else {
+        await api(`/api/applications/${application.id}/process-steps`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify(input)
+        });
+      }
+      els.detailDialog.close();
+      showToast(editing ? 'Process step saved.' : 'Process step added.');
+      await Promise.all([loadApplications(), loadReminders(), renderCurrentRoute()]);
+    });
+  });
+}
+
+function renderProcessOptions(options, selectedValue) {
+  return options.map(([value, label]) => `<option value="${escapeAttribute(value)}"${value === selectedValue ? ' selected' : ''}>${escapeHtml(label)}</option>`).join('');
+}
+
+function hasProcessStepDetails(step) {
+  if (!step) return false;
+  return Boolean(
+    step.response_detail ||
+    step.response_date ||
+    step.follow_up_due_date ||
+    step.closure_reason ||
+    step.notes ||
+    step.feedback_received === true ||
+    step.feedback_received === false ||
+    step.tracking_state === 'closed' ||
+    ['advanced', 'not_advanced', 'on_hold', 'no_response', 'other'].includes(step.response_state)
+  );
 }
 
 function bindValidatedForms(root) {
@@ -3069,6 +3336,31 @@ function readRequiredText(form, fieldName, message) {
   return value;
 }
 
+function readProcessStepForm(form) {
+  const data = new FormData(form);
+  const input = {};
+  for (const [key, value] of data.entries()) {
+    const normalized = String(value || '').trim();
+    if (normalized !== '') input[key] = normalized;
+  }
+  if (!input.step_name) {
+    setFormError(form, 'Add a process step name.');
+    showToast('Validation error.', 'warning');
+    return null;
+  }
+  if (!input.event_date) {
+    setFormError(form, 'Choose the process step date.');
+    showToast('Validation error.', 'warning');
+    return null;
+  }
+  if (input.tracking_state === 'closed' && !input.closure_reason) {
+    setFormError(form, 'Choose a close reason before closing the step.');
+    showToast('Validation error.', 'warning');
+    return null;
+  }
+  return input;
+}
+
 function normalizeOptionalDisplayDate(form, fieldName) {
   const field = form?.elements?.[fieldName];
   const value = String(field?.value || '').trim();
@@ -3115,6 +3407,7 @@ function resetDialogState(dialog) {
   }
   if (dialog === els.detailDialog) {
     els.detailContent.innerHTML = '';
+    els.detailDialog.classList.remove('process-step-dialog');
   }
   if (dialog === els.targetCompanyDialog) {
     resetTargetCompanyForm();

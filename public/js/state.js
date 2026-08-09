@@ -5,6 +5,7 @@ export const state = {
   targetCompanies: [],
   savedFilters: [],
   currentApplication: null,
+  processSummaries: new Map(),
   currentApplicationDocuments: [],
   currentApplicationJobs: [],
   appConfig: {

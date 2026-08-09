@@ -15,7 +15,8 @@ const env = {
   DB_CLIENT: 'pglite',
   PGLITE_DATA_DIR: path.relative(rootDir, dataDir),
   UPLOAD_DIR: path.relative(rootDir, uploadDir),
-  AI_PROVIDER: 'mock'
+  AI_PROVIDER: 'mock',
+  DEFAULT_AI_REQUEST_PROVIDER: 'mock'
 };
 
 let serverProcess;
@@ -29,6 +30,7 @@ try {
   await waitForHealth();
 
   const created = await createApplicationWithUploads();
+  const processStep = await createProcessStep(created.application.id);
   const atsDoc = await generateAtsDocument(created.application.id, created.cvs[0].id);
   await ensureFileExists(path.join(uploadDir, 'cv'));
   await ensureFileExists(path.join(uploadDir, 'ai'));
@@ -50,6 +52,10 @@ try {
   if (restored.application.company_name !== created.application.company_name) {
     throw new Error('Round-trip restore mismatch for application data');
   }
+  const restoredSteps = await getJson(`/api/applications/${created.application.id}/process-steps`);
+  if (!restoredSteps.process_steps.some((step) => step.id === processStep.process_step.id && step.step_name === 'Backup Screening')) {
+    throw new Error('Round-trip restore missing hiring process step');
+  }
 
   const restoredDoc = restored.ai_documents.find((item) => item.id === atsDoc.document.id);
   if (!restoredDoc) {
@@ -62,6 +68,7 @@ try {
   console.log(JSON.stringify({
     ok: true,
     applicationId: created.application.id,
+    processStepId: processStep.process_step.id,
     cvId: created.cvs[0].id,
     aiDocumentId: atsDoc.document.id,
     backupDir
@@ -88,6 +95,21 @@ async function createApplicationWithUploads() {
     method: 'POST',
     headers: { 'content-type': `multipart/form-data; boundary=${boundary}` },
     body
+  });
+}
+
+async function createProcessStep(applicationId) {
+  return getJson(`/api/applications/${applicationId}/process-steps`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      step_group: 'screening',
+      step_name: 'Backup Screening',
+      step_state: 'completed',
+      event_date: '2026-08-10',
+      response_state: 'advanced',
+      feedback_received: true
+    })
   });
 }
 

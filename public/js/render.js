@@ -258,7 +258,7 @@ export function renderHomeWorkspace() {
   `;
 }
 
-export function renderInsights(els, report, stats, statusLabels, mode = 'active', categoryStats = stats, categoryPeriod = 'all', selectedCategory = '', selectedTagStats = { totals: { total: 0 }, tags: [] }, tagPeriod = 'all', selectedChartTagStats = { tags: [] }, chartTagPeriod = 'all') {
+export function renderInsights(els, report, stats, statusLabels, mode = 'active', categoryStats = stats, categoryPeriod = 'all', selectedCategory = '', selectedTagStats = { totals: { total: 0 }, tags: [] }, tagPeriod = 'all', selectedChartTagStats = { tags: [] }, chartTagPeriod = 'all', processInsights = null) {
   const total = Number(stats.totals.total || 0);
   const categoryTotal = Number(categoryStats.totals?.total || 0);
   const funnelRows = [
@@ -291,6 +291,7 @@ export function renderInsights(els, report, stats, statusLabels, mode = 'active'
   const categoryPerformanceHtml = renderCategoryPerformanceSection(categoryStats.categories || [], categoryTotal, categoryPeriod, selectedCategory);
   const selectedTagPerformanceHtml = renderSelectedTagPerformanceSection(selectedTagStats.tags || [], Number(selectedTagStats.totals?.total || 0), tagPeriod);
   const selectedTagComparisonHtml = renderSelectedTagComparisonSection(selectedChartTagStats.tags || [], chartTagPeriod);
+  const processHtml = renderProcessInsightsSection(processInsights);
 
   const dropoffs = [
     { stage: 'App -> Interview', drop: total > 0 ? 100 - Math.round((funnelRows[1].count / total) * 100) : 0 },
@@ -462,6 +463,8 @@ export function renderInsights(els, report, stats, statusLabels, mode = 'active'
       <h3>Selected Tag Comparison</h3>
       ${selectedTagComparisonHtml}
     </section>
+
+    ${processHtml}
   `;
 
   // Render Charts
@@ -585,6 +588,52 @@ function renderCategoryPerformanceTable(categories, totalApplications, selectedC
         </tbody>
       </table>
     </div>
+  `;
+}
+
+function renderProcessInsightsSection(processInsights) {
+  const totals = processInsights?.totals || {};
+  const paths = processInsights?.paths || {};
+  const timing = processInsights?.timing || {};
+  const groups = processInsights?.groups || {};
+  const groupRows = Object.entries(groups);
+  const maxCompleted = Math.max(1, ...groupRows.map(([, row]) => Number(row.completed || 0)));
+  return `
+    <section class="report-panel report-panel-tags wide process-insights-panel" style="grid-column: 1 / -1;">
+      <div class="panel-kicker">Hiring Process</div>
+      <h3>Screening and Interview Flow</h3>
+      <div class="tags-grid process-summary-grid">
+        ${reportRow('Screening calls', Number(totals.completed_screening_calls || 0), 1, null, `${Number(totals.screened_applications || 0)} applications screened`, '--app')}
+        ${reportRow('Awaiting response', Number(totals.awaiting_response_steps || 0), 1, null, `${Number(totals.on_hold_steps || 0)} on hold`, '--focus')}
+        ${reportRow('No response closures', Number(totals.no_response_closures || 0), 1, null, 'closed on your side', '--cls')}
+        ${reportRow('Feedback received', Number(totals.feedback_received || 0), 1, null, `${Number(totals.feedback_unknown || 0)} unknown`, '--act')}
+        <div class="report-row" style="--row-fill:3%;--row-color:var(--muted);">
+          <span>Median response days</span>
+          <strong>${escapeHtml(timing.median_response_days === null || timing.median_response_days === undefined ? '—' : String(timing.median_response_days))}</strong>
+        </div>
+      </div>
+      <div class="report-columns">
+        <div>
+          <h4>Step Types</h4>
+          ${(groupRows.length ? groupRows : [['screening', {}], ['assessment', {}], ['interview', {}], ['discussion', {}], ['other', {}]]).map(([group, row]) => reportRow(
+            formatAction(group),
+            Number(row.completed || 0),
+            maxCompleted,
+            null,
+            `${Number(row.scheduled || 0)} scheduled, ${Math.round(Number(row.progression_rate || 0) * 100)}% progressed`,
+            '--focus'
+          )).join('')}
+        </div>
+        <div>
+          <h4>Paths</h4>
+          ${reportRow('Screening to assessment', Number(paths.screening_to_assessment || 0), 1)}
+          ${reportRow('Screening to interview', Number(paths.screening_to_interview || 0), 1)}
+          ${reportRow('Direct to assessment', Number(paths.direct_to_assessment || 0), 1)}
+          ${reportRow('Direct to interview', Number(paths.direct_to_interview || 0), 1)}
+          ${reportRow('Assessment to interview', Number(paths.assessment_to_interview || 0), 1)}
+        </div>
+      </div>
+    </section>
   `;
 }
 
@@ -934,7 +983,7 @@ export function renderApplications(els, state, statusOptions) {
   }
 
   for (const application of state.applications) {
-    els.table.appendChild(buildApplicationRow(application, statusOptions, state.selectedIds?.has(application.id)));
+    els.table.appendChild(buildApplicationRow(application, statusOptions, state.selectedIds?.has(application.id), state.processSummaries?.get(Number(application.id))));
   }
 }
 
@@ -955,7 +1004,7 @@ function renderInsightsReturnBar(els, state) {
   els.listView.prepend(bar);
 }
 
-export function buildApplicationRow(application, statusOptions, selected = false) {
+export function buildApplicationRow(application, statusOptions, selected = false, processSummary = null) {
   const closed = !application.archived_at && isClosedStatus(application.status);
   const row = document.createElement('tr');
   row.dataset.id = application.id;
@@ -970,6 +1019,7 @@ export function buildApplicationRow(application, statusOptions, selected = false
       <div class="company-cell">
         <strong title="${escapeAttribute(application.company_name)}"><a class="company-link" href="/applications/${application.id}">${escapeHtml(application.company_name)}</a>${Number(application.company_count) > 1 ? `<button class="company-count-badge" type="button" data-filter-company="${escapeAttribute(application.company_name)}" title="Show all ${application.company_count} applications for ${escapeAttribute(application.company_name)}">×${application.company_count}</button>` : ''}</strong>
         <span title="${escapeAttribute(subtitle)}">${escapeHtml(subtitle)}</span>
+        ${renderProcessRowSummary(processSummary)}
       </div>
     </td>
     <td>${formatDate(application.applied_date)}</td>
@@ -995,6 +1045,15 @@ export function buildApplicationRow(application, statusOptions, selected = false
 
   row.querySelector('[data-field="status"]').value = application.status;
   return row;
+}
+
+function renderProcessRowSummary(summary) {
+  if (!summary || !Number(summary.total_steps || 0)) return '';
+  const total = Number(summary.total_steps);
+  const next = summary.next_scheduled_name
+    ? `${summary.next_scheduled_name}${summary.next_scheduled_date ? `, ${formatDate(summary.next_scheduled_date)}` : ''}`
+    : 'No open process step';
+  return `<span class="process-row-summary process-row-count" title="${escapeAttribute(next)}">${total} ${total === 1 ? 'step' : 'steps'}</span>`;
 }
 
 function renderNextAction(application) {
@@ -1609,7 +1668,8 @@ export function renderApplicationPage(els, payload, statusLabels, viewState) {
     preparation,
     recruiter_questions: recruiterQuestions,
     feedback_entries: feedbackEntries,
-    todos
+    todos,
+    process_steps: processSteps = []
   } = payload;
 
   const activeTab = viewState.activeTab && viewState.activeTab !== 'overview' ? viewState.activeTab : 'workflow';
@@ -1620,6 +1680,7 @@ export function renderApplicationPage(els, payload, statusLabels, viewState) {
 
   const tabBodies = {
     workflow: renderWorkflowTab({ application, preparation, recruiterQuestions, feedbackEntries, todos }),
+    'hiring-process': renderHiringProcessTab({ application, processSteps }),
     content: renderContentSummaryTab({ application, primaryCv, queuedJobs, failedJobs, allDocuments: documents, allJobs: jobs, selectedProvider: viewState.selectedProvider, capabilities: viewState.capabilities, workspace: viewState.contentWorkspace }),
     history: renderHistoryTab({ application, history, notes, activity, statusLabels })
   };
@@ -1633,7 +1694,6 @@ export function renderApplicationPage(els, payload, statusLabels, viewState) {
   els.workspaceRoot.innerHTML = `
     <section class="workspace-view workspace-view-application${closed ? ' is-closed' : ''}" data-workspace-view="application">
     <div id="applicationPageContent" class="route-page-shell">
-      <a class="back-link" href="${state.view === 'list' ? '/' : `/?view=${state.view}`}"><i class="bi bi-arrow-left"></i> Back</a>
       <section class="application-hero-card application-hero-compact">
         <div class="hero-main-row">
           <div class="hero-copy-group">
@@ -1652,6 +1712,7 @@ export function renderApplicationPage(els, payload, statusLabels, viewState) {
           </div>
           <div class="page-header-actions application-hero-actions">
             <div class="hero-action-row">
+              <a class="back-link hero-back-link" href="${state.view === 'list' ? '/' : `/?view=${state.view}`}"><i class="bi bi-arrow-left"></i> Back</a>
               ${closed ? '' : `<button type="button" data-edit-application="${application.id}" class="icon-button" aria-label="Edit application" title="Edit">
                 <i class="bi bi-pencil" style="color: var(--focus)"></i>
               </button>`}
@@ -1674,6 +1735,7 @@ export function renderApplicationPage(els, payload, statusLabels, viewState) {
       </section>
       <nav class="detail-tabbar" aria-label="Application sections">
         ${renderDetailTab(application.id, 'workflow', 'Workflow', activeTab, 'signpost-split')}
+        ${renderDetailTab(application.id, 'hiring-process', 'Hiring Process', activeTab, 'diagram-3')}
         ${renderDetailTab(application.id, 'content', 'Content', activeTab, 'file-earmark-text')}
         ${renderDetailTab(application.id, 'history', 'History', activeTab, 'clock-history')}
       </nav>
@@ -2020,6 +2082,110 @@ function renderWorkflowTab({ application, preparation, recruiterQuestions, feedb
   `;
 }
 
+const processStepGroups = [
+  ['screening', 'Screening Call'],
+  ['assessment', 'Assessment'],
+  ['interview', 'Interview'],
+  ['discussion', 'Discussion'],
+  ['other', 'Other']
+];
+
+const processStepStates = [
+  ['scheduled', 'Scheduled'],
+  ['completed', 'Completed'],
+  ['cancelled', 'Cancelled']
+];
+
+const processResponseStates = [
+  ['not_applicable', 'Not Applicable'],
+  ['awaiting_response', 'Awaiting Response'],
+  ['advanced', 'Advanced'],
+  ['not_advanced', 'Not Advanced'],
+  ['on_hold', 'On Hold'],
+  ['no_response', 'No Response'],
+  ['other', 'Other']
+];
+
+const processClosureReasons = [
+  ['advanced', 'Advanced'],
+  ['not_advanced', 'Not Advanced'],
+  ['no_response', 'No Response'],
+  ['cancelled', 'Cancelled'],
+  ['withdrew', 'Withdrew'],
+  ['other', 'Other']
+];
+
+function renderHiringProcessTab({ application, processSteps }) {
+  const openCount = processSteps.filter((step) => step.tracking_state === 'open').length;
+  const completedCount = processSteps.filter((step) => step.step_state === 'completed').length;
+  const waitingCount = processSteps.filter((step) => step.response_state === 'awaiting_response').length;
+  const hasLegacyStep = processSteps.some((step) => step.source === 'legacy_interview_date');
+  return `
+    <div class="tab-grid hiring-process-grid">
+      <section class="route-card process-list-card">
+        <div class="section-heading">
+          <div>
+            <div class="panel-kicker">Hiring Process</div>
+            <h3>Steps</h3>
+          </div>
+          <div class="toolbar-pills">
+            <span class="pill subtle">${processSteps.length} total</span>
+            <span class="pill info-pill">${openCount} open</span>
+            <span class="pill success-pill">${completedCount} completed</span>
+            <span class="pill warning-pill">${waitingCount} awaiting response</span>
+            <button type="button" data-process-add="${application.id}">Add Step</button>
+          </div>
+        </div>
+        <div class="process-step-list">
+          ${processSteps.map((step, index) => renderProcessStepCard(step, index, processSteps.length, hasLegacyStep)).join('') || renderInlineEmpty('No process steps yet', 'Add screening calls, assessments, interviews, or discussions in the order they happen.')}
+        </div>
+      </section>
+    </div>
+  `;
+}
+
+function renderProcessStepCard(step, index, total, hasLegacyStep = false) {
+  const isLegacy = step.source === 'legacy_interview_date';
+  const responseText = step.step_state === 'scheduled' ? 'Pending' : formatAction(step.response_state);
+  const feedbackText = step.feedback_received === true ? 'Feedback received' : step.feedback_received === false ? 'No feedback' : '';
+  const followUpText = step.follow_up_due_date ? `Follow up ${formatDate(step.follow_up_due_date)}` : '';
+  return `
+    <article class="process-step-card ${step.tracking_state === 'closed' ? 'is-closed' : ''}" data-process-step-id="${step.id}">
+      <div class="process-step-header">
+        <div class="process-step-main">
+          <span class="process-position">#${Number(step.position || index + 1)}</span>
+          <div>
+            <strong>${escapeHtml(step.step_name)}</strong>
+            <div class="item-meta">
+              <span>${escapeHtml(formatAction(step.step_group))}</span>
+              <span>${escapeHtml(formatDate(step.event_date))}</span>
+              <span>${escapeHtml(formatAction(step.step_state))}</span>
+              <span>${escapeHtml(responseText)}</span>
+              ${feedbackText ? `<span>${escapeHtml(feedbackText)}</span>` : ''}
+              ${followUpText ? `<span>${escapeHtml(followUpText)}</span>` : ''}
+            </div>
+          </div>
+        </div>
+        <div class="row-actions compact-actions">
+          <button class="icon-button text-muted" type="button" data-process-move="${step.id}" data-direction="up" ${index === 0 || hasLegacyStep ? 'disabled' : ''} title="Move up"><i class="bi bi-arrow-up"></i></button>
+          <button class="icon-button text-muted" type="button" data-process-move="${step.id}" data-direction="down" ${index === total - 1 || hasLegacyStep ? 'disabled' : ''} title="Move down"><i class="bi bi-arrow-down"></i></button>
+          <button class="secondary" type="button" data-process-edit="${step.id}">${isLegacy ? 'Edit as Step' : 'Edit'}</button>
+          ${!isLegacy && step.tracking_state === 'open'
+            ? `<button class="secondary" type="button" data-process-close="${step.id}">Close No Response</button>`
+            : !isLegacy ? `<button class="secondary" type="button" data-process-reopen="${step.id}">Reopen</button>` : '<span class="pill subtle">From interview date</span>'}
+          ${!isLegacy ? `<button class="secondary" type="button" data-process-delete="${step.id}">Delete</button>` : ''}
+        </div>
+      </div>
+      ${step.notes ? `<p class="process-step-note">${escapeHtml(step.notes)}</p>` : ''}
+      ${isLegacy ? '<p class="muted-text">This came from the old interview date. Edit it to turn it into a normal process step.</p>' : ''}
+    </article>
+  `;
+}
+
+function renderSelectOptions(options, selectedValue) {
+  return options.map(([value, label]) => `<option value="${escapeAttribute(value)}"${value === selectedValue ? ' selected' : ''}>${escapeHtml(label)}</option>`).join('');
+}
+
 function renderContentSummaryTab({ application, primaryCv, queuedJobs, failedJobs, allDocuments, allJobs, selectedProvider, capabilities, workspace }) {
   const primaryCvId = primaryCv?.id || '';
   const isClosed = isClosedStatus(application.status) && !application.archived_at;
@@ -2114,6 +2280,8 @@ function renderContentSummaryTab({ application, primaryCv, queuedJobs, failedJob
 }
 
 function renderHistoryTab({ application, history, notes, activity, statusLabels }) {
+  const processActivity = activity.filter((item) => String(item.action || '').startsWith('process_step_'));
+  const generalActivity = activity.filter((item) => !String(item.action || '').startsWith('process_step_'));
   return `
     <div class="tab-grid history-grid">
       <section class="route-card">
@@ -2140,7 +2308,18 @@ function renderHistoryTab({ application, history, notes, activity, statusLabels 
           </div>
         </div>
         <div class="history-list history-timeline">
-          ${renderTimeline(activity)}
+          ${renderTimeline(generalActivity)}
+        </div>
+      </section>
+      <section class="route-card">
+        <div class="section-heading">
+          <div>
+            <div class="panel-kicker">Hiring Process</div>
+            <h3>Process Activity</h3>
+          </div>
+        </div>
+        <div class="history-list history-timeline">
+          ${renderTimeline(processActivity)}
         </div>
       </section>
       <section class="route-card">
@@ -2801,6 +2980,8 @@ export function renderCalendar(els, calendarDate, reminders) {
     if (type === 'applied') return { css: 'badge-app', label: 'APP' };
     if (type === 'interview') return { css: 'badge-int', label: 'INT' };
     if (type === 'next_action') return { css: 'badge-act', label: 'ACT' };
+    if (type === 'process_step') return { css: 'badge-int', label: 'STEP' };
+    if (type === 'process_follow_up') return { css: 'badge-act', label: 'FUP' };
     if (type.startsWith('status_change_')) {
       const status = type.replace('status_change_', '');
       if (['rejected', 'withdrawn', 'ghosted'].includes(status)) {
@@ -2819,7 +3000,7 @@ export function renderCalendar(els, calendarDate, reminders) {
         const displayStatus = statusLabels[newStatus] || newStatus;
         label += ` (${displayStatus.charAt(0).toUpperCase() + displayStatus.slice(1)})`;
       }
-    } else if (event.type === 'next_action' && event.details) {
+    } else if ((event.type === 'next_action' || event.type === 'process_step' || event.type === 'process_follow_up') && event.details) {
        label += `: ${event.details}`;
     }
     return label;

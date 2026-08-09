@@ -3,6 +3,10 @@ import path from 'node:path';
 import { test, expect } from '@playwright/test';
 
 const sampleCvPath = path.resolve(process.cwd(), 'sample-data', 'sample-cv.pdf');
+const applicationResponseKeys = [
+  'activity', 'ai_documents', 'ai_jobs', 'application', 'audit_events', 'cvs',
+  'feedback_entries', 'notes', 'preparation', 'recruiter_questions', 'status_history', 'tags', 'todos'
+];
 
 test('application REST API supports workflow CRUD and lookup', async ({ request }) => {
   const cvResponse = await request.post('/api/cv', {
@@ -39,6 +43,7 @@ test('application REST API supports workflow CRUD and lookup', async ({ request 
   });
   expect(createResponse.status()).toBe(200);
   const createdPayload = await createResponse.json();
+  expect(Object.keys(createdPayload).sort()).toEqual(applicationResponseKeys);
   const applicationId = createdPayload.application.id;
   expect(createdPayload.application.company_name).toBe('API Workflow Labs');
 
@@ -66,6 +71,7 @@ test('application REST API supports workflow CRUD and lookup', async ({ request 
   const readResponse = await request.get(`/api/applications/${applicationId}`);
   expect(readResponse.status()).toBe(200);
   const readPayload = await readResponse.json();
+  expect(Object.keys(readPayload).sort()).toEqual(applicationResponseKeys);
   expect(readPayload.application.job_link).toBe('https://example.com/jobs/api-workflow-labs');
 
   const updateResponse = await request.put(`/api/applications/${applicationId}`, {
@@ -79,17 +85,29 @@ test('application REST API supports workflow CRUD and lookup', async ({ request 
   });
   expect(updateResponse.status()).toBe(200);
   const updatePayload = await updateResponse.json();
+  expect(Object.keys(updatePayload).sort()).toEqual(applicationResponseKeys);
   expect(updatePayload.application.status).toBe('interview_scheduled');
   expect(updatePayload.application.interview_date).toBe('2026-06-25');
+  const mirroredStepsResponse = await request.get(`/api/applications/${applicationId}/process-steps`);
+  expect(mirroredStepsResponse.status()).toBe(200);
+  expect((await mirroredStepsResponse.json()).process_steps).toEqual([
+    expect.objectContaining({
+      source: 'legacy_interview_date',
+      event_date: '2026-06-25',
+      step_state: 'scheduled'
+    })
+  ]);
 
   const archiveResponse = await request.post(`/api/applications/${applicationId}/archive`);
   expect(archiveResponse.status()).toBe(200);
   const archivePayload = await archiveResponse.json();
+  expect(Object.keys(archivePayload).sort()).toEqual(applicationResponseKeys);
   expect(archivePayload.application.archived_at).toBeTruthy();
 
   const restoreResponse = await request.post(`/api/applications/${applicationId}/restore`);
   expect(restoreResponse.status()).toBe(200);
   const restorePayload = await restoreResponse.json();
+  expect(Object.keys(restorePayload).sort()).toEqual(applicationResponseKeys);
   expect(restorePayload.application.archived_at).toBeNull();
 
   const deleteResponse = await request.delete(`/api/applications/${applicationId}`);
@@ -431,4 +449,103 @@ test('insights category period uses applied date windows', async ({ request }) =
   expect(sixtyStats.categories.map((row) => row.category).sort()).toEqual(['Recent Category', 'Sixty Category']);
   expect(ninetyStats.totals.total).toBe(3);
   expect(ninetyStats.categories.map((row) => row.category).sort()).toEqual(['Ninety Category', 'Recent Category', 'Sixty Category']);
+});
+
+test('reports and calendar include process interview evidence without double counting rounds', async ({ request }) => {
+  const application = (id, status = 'applied') => ({
+    id,
+    company_name: `Process Report ${id}`,
+    company_category: 'Process Reporting',
+    role_title: 'Backend Engineer',
+    job_link: `https://example.com/jobs/process-report-${id}`,
+    job_description: 'Role used to verify process reporting.',
+    status,
+    applied_date: '2026-08-01',
+    interview_date: null,
+    notes: null,
+    created_at: '2026-08-01T00:00:00.000Z',
+    updated_at: '2026-08-01T00:00:00.000Z',
+    archived_at: null,
+    salary: null,
+    location: 'Remote',
+    recruiter: null,
+    contact_person: null,
+    next_action: null,
+    next_action_due_date: null
+  });
+  const processStep = (id, applicationId, position, name, state = 'scheduled') => ({
+    id,
+    application_id: applicationId,
+    position,
+    step_group: 'interview',
+    step_name: name,
+    step_state: state,
+    event_date: `2026-08-${String(10 + position).padStart(2, '0')}`,
+    response_state: state === 'scheduled' ? 'not_applicable' : 'awaiting_response',
+    tracking_state: state === 'cancelled' ? 'closed' : 'open',
+    closure_reason: state === 'cancelled' ? 'cancelled' : null,
+    closed_at: state === 'cancelled' ? '2026-08-12T00:00:00.000Z' : null,
+    source: 'manual'
+  });
+
+  const restoreResponse = await request.post('/api/import/backup', {
+    multipart: {
+      backup: {
+        name: 'process-reporting-backup.json',
+        mimeType: 'application/json',
+        buffer: Buffer.from(JSON.stringify({
+          version: 1,
+          data: {
+            applications: [application(9301), application(9302), application(9303)],
+            application_process_steps: [
+              processStep(991, 9301, 1, 'L1'),
+              processStep(992, 9301, 2, 'L2'),
+              processStep(993, 9303, 1, 'Cancelled interview', 'cancelled')
+            ],
+            status_history: [
+              { id: 9302, application_id: 9302, from_status: 'applied', to_status: 'interview_scheduled', changed_at: '2026-08-05T00:00:00.000Z' }
+            ],
+            tags: [{ id: 9301, name: 'ProcessTag' }],
+            application_tags: [
+              { application_id: 9301, tag_id: 9301 },
+              { application_id: 9302, tag_id: 9301 },
+              { application_id: 9303, tag_id: 9301 }
+            ],
+            selected_tag_reports: [{ tag_name: 'ProcessTag', sort_order: 0, created_at: '2026-08-01T00:00:00.000Z' }],
+            selected_chart_tags: [{ tag_name: 'ProcessTag', sort_order: 0, created_at: '2026-08-01T00:00:00.000Z' }]
+          },
+          files: []
+        }), 'utf8')
+      }
+    }
+  });
+  expect(restoreResponse.status()).toBe(200);
+
+  const stats = await (await request.get('/api/stats?mode=all')).json();
+  expect(stats.funnel.interviewed).toBe(2);
+  expect(stats.funnel.responded).toBe(2);
+  expect(stats.timing.avg_days_to_interview).toBe(7);
+  expect(stats.categories).toEqual([
+    expect.objectContaining({ category: 'Process Reporting', applications: 3, interviewed: 2 })
+  ]);
+  expect(stats.tags).toEqual([
+    expect.objectContaining({ tag: 'ProcessTag', applications: 3, interviewed: 2 })
+  ]);
+
+  const selectedTags = await (await request.get('/api/selected-tag-stats?period=all')).json();
+  expect(selectedTags.tags).toEqual([
+    expect.objectContaining({ tag: 'ProcessTag', applications: 3, interviewed: 2 })
+  ]);
+
+  const selectedChartTags = await (await request.get('/api/selected-chart-tag-stats?period=all')).json();
+  expect(selectedChartTags.tags).toEqual([
+    expect.objectContaining({ tag: 'ProcessTag', applications: 3, interviewed: 2 })
+  ]);
+
+  const calendar = await request.get('/api/export/calendar.ics?ids=9301');
+  expect(calendar.status()).toBe(200);
+  const ics = await calendar.text();
+  expect(ics).toContain('UID:process-step-991@job-application-tracker');
+  expect(ics).toContain('UID:process-step-992@job-application-tracker');
+  expect(ics).toContain('SUMMARY:L1 - Process Report 9301 (Backend Engineer)');
 });

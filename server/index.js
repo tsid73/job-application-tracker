@@ -20,12 +20,14 @@ import { extractCVText } from './services/cvTextExtractor.js';
 import { applyMigrations } from './db/ensureSchema.js';
 import { explainConnectionError } from './db/connectionError.js';
 import { queueAWSGeneration, syncCompletedAWSJob } from './services/awsAiQueue.js';
+import { createProcessStepsService } from './services/processSteps.js';
 
 const publicDir = join(process.cwd(), 'public');
 const storage = new LocalFileStorage();
 const enforceRequestGuards = createRequestGuard({ config });
 const audit = createAuditLogger(pool);
 const readApi = createReadApi({ pool, audit });
+const processSteps = createProcessStepsService({ pool, audit, logActivity });
 const spaIndexPath = join(publicDir, 'index.html');
 let shuttingDown = false;
 
@@ -103,6 +105,14 @@ const routeApi = createApiRouter({
   getApplications: async (req, res, url) => sendJson(res, 200, await readApi.getApplications(url)),
   lookupApplications: async (req, res, url) => sendJson(res, 200, await readApi.lookupApplications(url)),
   createApplication,
+  getProcessSteps: async (req, res, id) => sendJson(res, 200, { process_steps: await processSteps.list(id) }),
+  createProcessStep,
+  updateProcessStep,
+  deleteProcessStep,
+  reorderProcessSteps,
+  getUpcomingProcessSteps: async (req, res) => sendJson(res, 200, { reminders: await processSteps.upcoming() }),
+  getProcessStepSummaries: async (req, res, url) => sendJson(res, 200, { summaries: await processSteps.summaries(parseApplicationIds(url)) }),
+  getProcessInsights: async (req, res, url) => sendJson(res, 200, await processSteps.insights({ mode: url.searchParams.get('mode'), period: url.searchParams.get('period') })),
   getApplication: async (req, res, id) => sendJson(res, 200, await readApi.getApplication(id)),
   updateApplication,
   deleteApplication,
@@ -695,7 +705,23 @@ async function exportCalendar(req, res) {
         ${hasIds && ids.length > 0 ? 'AND id = ANY($1::int[])' : ''}
       ORDER BY id
     `;
-  const result = await pool.query(query, hasIds && ids.length > 0 ? [ids] : []);
+  const processQuery = `
+      SELECT ps.id AS step_id, ps.application_id, ps.step_name, a.company_name, a.role_title,
+        to_char(ps.event_date, 'YYYYMMDD') AS event_day
+      FROM application_process_steps ps
+      JOIN applications a ON a.id = ps.application_id
+      WHERE a.archived_at IS NULL
+        AND ps.source = 'manual'
+        AND ps.step_state = 'scheduled'
+        AND ps.tracking_state = 'open'
+        ${hasIds && ids.length > 0 ? 'AND ps.application_id = ANY($1::int[])' : ''}
+      ORDER BY ps.event_date, ps.id
+    `;
+  const params = hasIds && ids.length > 0 ? [ids] : [];
+  const [result, processResult] = await Promise.all([
+    pool.query(query, params),
+    pool.query(processQuery, params)
+  ]);
 
   const stamp = new Date().toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '');
   const events = [];
@@ -719,6 +745,16 @@ async function exportCalendar(req, res) {
         description: `Next action for job application ${row.id}`
       }));
     }
+  }
+  for (const row of processResult.rows) {
+    const label = row.role_title ? `${row.company_name} (${row.role_title})` : row.company_name;
+    events.push(...calendarEvent({
+      uid: `process-step-${row.step_id}`,
+      day: row.event_day,
+      stamp,
+      summary: `${row.step_name} - ${label}`,
+      description: `Hiring process step ${row.step_id} for job application ${row.application_id}`
+    }));
   }
 
   const body = [
@@ -774,6 +810,7 @@ async function getStats(req, res, url) {
   const allTime = periodScoped || url?.searchParams.get('mode') === 'all';
   const scopeCondition = periodDays ? `applied_date >= CURRENT_DATE - INTERVAL '${periodDays} days'` : (allTime ? 'TRUE' : 'archived_at IS NULL');
   const scopedAliasCondition = periodDays ? `a.applied_date >= CURRENT_DATE - INTERVAL '${periodDays} days'` : (allTime ? 'TRUE' : 'a.archived_at IS NULL');
+  const interviewedCondition = interviewEvidenceCondition('a');
 
   const totals = await pool.query(
     `
@@ -790,13 +827,12 @@ async function getStats(req, res, url) {
   const funnel = await pool.query(
     `
       SELECT
-        count(DISTINCT sh.application_id) FILTER (WHERE sh.to_status = 'interview_scheduled')::int AS interviewed,
-        count(DISTINCT sh.application_id) FILTER (WHERE sh.to_status = 'offer')::int AS offers,
-        count(DISTINCT sh.application_id) FILTER (WHERE sh.to_status = 'accepted')::int AS accepted,
-        count(DISTINCT sh.application_id) FILTER (WHERE sh.to_status = 'rejected')::int AS rejected,
-        count(DISTINCT sh.application_id) FILTER (WHERE sh.to_status IN ('interview_scheduled', 'offer', 'accepted'))::int AS responded
-      FROM status_history sh
-      JOIN applications a ON a.id = sh.application_id
+        count(DISTINCT a.id) FILTER (WHERE ${interviewedCondition})::int AS interviewed,
+        count(DISTINCT a.id) FILTER (WHERE EXISTS (SELECT 1 FROM status_history sh WHERE sh.application_id = a.id AND sh.to_status = 'offer'))::int AS offers,
+        count(DISTINCT a.id) FILTER (WHERE EXISTS (SELECT 1 FROM status_history sh WHERE sh.application_id = a.id AND sh.to_status = 'accepted'))::int AS accepted,
+        count(DISTINCT a.id) FILTER (WHERE EXISTS (SELECT 1 FROM status_history sh WHERE sh.application_id = a.id AND sh.to_status = 'rejected'))::int AS rejected,
+        count(DISTINCT a.id) FILTER (WHERE ${interviewedCondition} OR EXISTS (SELECT 1 FROM status_history sh WHERE sh.application_id = a.id AND sh.to_status IN ('offer', 'accepted')))::int AS responded
+      FROM applications a
       WHERE ${scopedAliasCondition}
     `
   );
@@ -805,11 +841,22 @@ async function getStats(req, res, url) {
     `
       SELECT
         (SELECT round(avg(days))::int FROM (
-          SELECT min(sh.changed_at)::date - a.applied_date AS days
-          FROM applications a
-          JOIN status_history sh ON sh.application_id = a.id AND sh.to_status = 'interview_scheduled' AND sh.from_status IS NOT NULL
-          WHERE a.applied_date IS NOT NULL AND ${scopedAliasCondition}
-          GROUP BY a.id, a.applied_date
+          SELECT min(event_day) - applied_date AS days
+          FROM (
+            SELECT a.id, a.applied_date, min(sh.changed_at)::date AS event_day
+            FROM applications a
+            JOIN status_history sh ON sh.application_id = a.id AND sh.to_status = 'interview_scheduled' AND sh.from_status IS NOT NULL
+            WHERE a.applied_date IS NOT NULL AND ${scopedAliasCondition}
+            GROUP BY a.id, a.applied_date
+            UNION ALL
+            SELECT a.id, a.applied_date, min(ps.event_date)::date AS event_day
+            FROM applications a
+            JOIN application_process_steps ps ON ps.application_id = a.id AND ps.step_group = 'interview' AND ps.step_state <> 'cancelled'
+            WHERE a.applied_date IS NOT NULL AND ${scopedAliasCondition}
+            GROUP BY a.id, a.applied_date
+          ) interview_events
+          WHERE event_day IS NOT NULL
+          GROUP BY id, applied_date
         ) interview_days) AS avg_days_to_interview,
         (SELECT round(avg(days))::int FROM (
           SELECT min(sh.changed_at)::date - a.applied_date AS days
@@ -825,10 +872,7 @@ async function getStats(req, res, url) {
     `
       SELECT t.name AS tag,
         count(DISTINCT a.id)::int AS applications,
-        count(DISTINCT a.id) FILTER (WHERE EXISTS (
-          SELECT 1 FROM status_history sh
-          WHERE sh.application_id = a.id AND sh.to_status = 'interview_scheduled'
-        ))::int AS interviewed
+        count(DISTINCT a.id) FILTER (WHERE ${interviewedCondition})::int AS interviewed
       FROM tags t
       JOIN application_tags at ON at.tag_id = t.id
       JOIN applications a ON a.id = at.application_id
@@ -843,10 +887,7 @@ async function getStats(req, res, url) {
     `
       SELECT company_category AS category,
         count(DISTINCT id)::int AS applications,
-        count(DISTINCT id) FILTER (WHERE EXISTS (
-          SELECT 1 FROM status_history sh
-          WHERE sh.application_id = a.id AND sh.to_status = 'interview_scheduled'
-        ))::int AS interviewed,
+        count(DISTINCT id) FILTER (WHERE ${interviewedCondition})::int AS interviewed,
         count(DISTINCT id) FILTER (WHERE status = 'rejected')::int AS rejected,
         count(DISTINCT id) FILTER (WHERE status = 'ghosted')::int AS ghosted,
         count(DISTINCT id) FILTER (WHERE status = 'withdrawn')::int AS withdrawn,
@@ -870,6 +911,7 @@ async function getStats(req, res, url) {
 
 async function getSelectedTagStats(req, res, url) {
   const { scopeCondition, scopedAliasCondition } = buildInsightsScope(url);
+  const interviewedCondition = interviewEvidenceCondition('a');
   const totals = await pool.query(`
     SELECT count(DISTINCT id) FILTER (WHERE ${scopeCondition})::int AS total
     FROM applications
@@ -877,10 +919,7 @@ async function getSelectedTagStats(req, res, url) {
   const tags = await pool.query(`
     SELECT selected.tag_name AS tag,
       count(DISTINCT a.id)::int AS applications,
-      count(DISTINCT a.id) FILTER (WHERE EXISTS (
-        SELECT 1 FROM status_history sh
-        WHERE sh.application_id = a.id AND sh.to_status = 'interview_scheduled'
-      ))::int AS interviewed,
+      count(DISTINCT a.id) FILTER (WHERE ${interviewedCondition})::int AS interviewed,
       count(DISTINCT a.id) FILTER (WHERE a.status = 'rejected')::int AS rejected,
       count(DISTINCT a.id) FILTER (WHERE a.status = 'ghosted')::int AS ghosted,
       count(DISTINCT a.id) FILTER (WHERE a.status = 'withdrawn')::int AS withdrawn,
@@ -900,13 +939,11 @@ async function getSelectedTagStats(req, res, url) {
 
 async function getSelectedChartTagStats(req, res, url) {
   const { scopedAliasCondition } = buildInsightsScope(url);
+  const interviewedCondition = interviewEvidenceCondition('a');
   const tags = await pool.query(`
     SELECT selected.tag_name AS tag,
       count(DISTINCT a.id)::int AS applications,
-      count(DISTINCT a.id) FILTER (WHERE EXISTS (
-        SELECT 1 FROM status_history sh
-        WHERE sh.application_id = a.id AND sh.to_status = 'interview_scheduled'
-      ))::int AS interviewed,
+      count(DISTINCT a.id) FILTER (WHERE ${interviewedCondition})::int AS interviewed,
       count(DISTINCT a.id) FILTER (WHERE a.status IN ('rejected', 'ghosted', 'withdrawn'))::int AS closed
     FROM selected_chart_tags selected
     LEFT JOIN tags t ON t.name = selected.tag_name
@@ -916,6 +953,22 @@ async function getSelectedChartTagStats(req, res, url) {
     ORDER BY selected.sort_order, selected.tag_name
   `);
   sendJson(res, 200, { tags: tags.rows });
+}
+
+function interviewEvidenceCondition(applicationAlias) {
+  return `(
+    EXISTS (
+      SELECT 1 FROM status_history sh
+      WHERE sh.application_id = ${applicationAlias}.id
+        AND sh.to_status = 'interview_scheduled'
+    )
+    OR EXISTS (
+      SELECT 1 FROM application_process_steps ps
+      WHERE ps.application_id = ${applicationAlias}.id
+        AND ps.step_group = 'interview'
+        AND ps.step_state <> 'cancelled'
+    )
+  )`;
 }
 
 function buildInsightsScope(url) {
@@ -958,6 +1011,7 @@ async function importApplicationsCsv(req, res) {
         [data.company_name, data.company_category, data.role_title, data.job_link, data.job_description, data.status, data.salary, data.location, data.recruiter, data.contact_person, data.applied_date, data.interview_date, data.notes, data.next_action, data.next_action_due_date, cleanString(fields.lifecycle)]
       );
       const applicationId = created.rows[0].id;
+      await processSteps.syncLegacyInterviewStep(client, applicationId, data.interview_date);
       await client.query('INSERT INTO application_cvs (application_id, cv_id) VALUES ($1, $2)', [applicationId, latest.rows[0].id]);
       await client.query('INSERT INTO status_history (application_id, from_status, to_status) VALUES ($1, NULL, $2)', [applicationId, data.status]);
       await replaceTags(client, applicationId, data.tags);
@@ -977,7 +1031,7 @@ async function importApplicationsCsv(req, res) {
 
 async function exportBackup(req, res) {
   const backup = {
-    version: 1,
+    version: 2,
     created_at: new Date().toISOString(),
     config: {
       default_provider: config.defaultAiRequestProvider,
@@ -1070,6 +1124,33 @@ async function exportApplicationArtifacts(req, res, id) {
   res.end(payload);
 }
 
+async function createProcessStep(req, res, applicationId) {
+  const step = await processSteps.create(req, applicationId, await readJson(req, 256 * 1024));
+  sendJson(res, 201, { process_step: step });
+}
+
+async function updateProcessStep(req, res, stepId) {
+  const step = await processSteps.update(req, stepId, await readJson(req, 256 * 1024));
+  sendJson(res, 200, { process_step: step });
+}
+
+async function deleteProcessStep(req, res, stepId) {
+  const step = await processSteps.remove(req, stepId);
+  sendJson(res, 200, { process_step: step });
+}
+
+async function reorderProcessSteps(req, res, applicationId) {
+  const body = await readJson(req, 256 * 1024);
+  const processStepsRows = await processSteps.reorder(req, applicationId, body.ordered_ids);
+  sendJson(res, 200, { process_steps: processStepsRows });
+}
+
+function parseApplicationIds(url) {
+  const value = url.searchParams.get('application_ids');
+  if (!value) return undefined;
+  return value.split(',').map(Number);
+}
+
 
 async function createApplication(req, res) {
   const contentType = req.headers['content-type'] || '';
@@ -1133,6 +1214,7 @@ async function createApplication(req, res) {
     );
 
     const applicationId = created.rows[0].id;
+    await processSteps.syncLegacyInterviewStep(client, applicationId, data.interview_date);
     await client.query(
       'INSERT INTO application_cvs (application_id, cv_id) VALUES ($1, $2)',
       [applicationId, cvId]
@@ -1221,6 +1303,7 @@ async function updateApplication(req, res, id) {
     }
 
     if (dateForLog(previous.interview_date) !== dateForLog(data.interview_date)) {
+      await processSteps.syncLegacyInterviewStep(client, id, data.interview_date);
       await logActivity(client, id, 'interview_date_changed', `${data.company_name}: ${dateForLog(previous.interview_date)} to ${dateForLog(data.interview_date)}`);
     }
 
@@ -1850,6 +1933,7 @@ async function readApplicationMultipart(req) {
 async function readBackupData() {
   const tableQueries = {
     applications: 'SELECT * FROM applications ORDER BY id',
+    application_process_steps: 'SELECT * FROM application_process_steps ORDER BY application_id, position, id',
     cv_versions: 'SELECT * FROM cv_versions ORDER BY id',
     application_cvs: 'SELECT * FROM application_cvs ORDER BY application_id, cv_id',
     status_history: 'SELECT * FROM status_history ORDER BY id',
@@ -1868,7 +1952,14 @@ async function readBackupData() {
     hiring_feedback: 'SELECT * FROM hiring_feedback ORDER BY id',
     application_todos: 'SELECT * FROM application_todos ORDER BY id',
     job_boards: 'SELECT * FROM job_boards ORDER BY id',
-    target_companies: 'SELECT * FROM target_companies ORDER BY id'
+    target_companies: 'SELECT * FROM target_companies ORDER BY id',
+    research_sources: 'SELECT * FROM research_sources ORDER BY id',
+    job_context_snapshots: 'SELECT * FROM job_context_snapshots ORDER BY id',
+    knowledge_chunks: 'SELECT * FROM knowledge_chunks ORDER BY id',
+    retrieval_runs: 'SELECT * FROM retrieval_runs ORDER BY id',
+    agent_runs: 'SELECT * FROM agent_runs ORDER BY id',
+    agent_steps: 'SELECT * FROM agent_steps ORDER BY id',
+    pending_agent_actions: 'SELECT * FROM pending_agent_actions ORDER BY id'
   };
 
   const entries = await Promise.all(
@@ -1889,11 +1980,20 @@ async function readBackupFiles() {
 }
 
 async function restoreBackupPayload(backup) {
+  const shouldBackfillLegacyProcessSteps = backup.version === 1 && !Object.hasOwn(backup.data, 'application_process_steps');
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
     await client.query(`
       TRUNCATE TABLE
+        pending_agent_actions,
+        agent_steps,
+        agent_runs,
+        retrieval_runs,
+        knowledge_chunks,
+        job_context_snapshots,
+        research_sources,
+        application_process_steps,
         ai_generation_jobs,
         audit_events,
         hiring_feedback,
@@ -1920,6 +2020,7 @@ async function restoreBackupPayload(backup) {
     const insertionOrder = [
       'cv_versions',
       'applications',
+      'application_process_steps',
       'application_cvs',
       'status_history',
       'application_notes',
@@ -1937,14 +2038,25 @@ async function restoreBackupPayload(backup) {
       'hiring_feedback',
       'application_todos',
       'job_boards',
-      'target_companies'
+      'target_companies',
+      'research_sources',
+      'job_context_snapshots',
+      'knowledge_chunks',
+      'retrieval_runs',
+      'agent_runs',
+      'agent_steps',
+      'pending_agent_actions'
     ];
 
     for (const table of insertionOrder) {
       await insertBackupRows(client, table, backup.data[table] || []);
     }
 
-    await resetBackupSequences(client, backup.data);
+    if (shouldBackfillLegacyProcessSteps) {
+      await restoreLegacyInterviewSteps(client);
+    }
+
+    await resetBackupSequences(client);
     await client.query('COMMIT');
   } catch (error) {
     await client.query('ROLLBACK');
@@ -1958,7 +2070,7 @@ async function restoreBackupPayload(backup) {
 
 async function insertBackupRows(client, table, rows) {
   if (!rows.length) return;
-  const columns = Object.keys(rows[0]);
+  const columns = backupRowColumns(rows);
   validateBackupTableColumns(table, rows, columns);
   const valueGroups = [];
   const values = [];
@@ -2009,6 +2121,7 @@ function validateBackupTableColumns(table, rows, columns) {
 
 const backupTableColumns = {
   applications: new Set(['id', 'company_name', 'company_category', 'job_link', 'job_description', 'status', 'applied_date', 'interview_date', 'notes', 'created_at', 'updated_at', 'archived_at', 'salary', 'location', 'recruiter', 'contact_person', 'role_title', 'next_action', 'next_action_due_date']),
+  application_process_steps: new Set(['id', 'application_id', 'position', 'step_group', 'step_name', 'step_state', 'event_date', 'event_time', 'response_state', 'response_detail', 'response_date', 'follow_up_due_date', 'feedback_received', 'tracking_state', 'closure_reason', 'closed_at', 'contact_name', 'notes', 'source', 'created_at', 'updated_at']),
   cv_versions: new Set(['id', 'file_path', 'original_name', 'mime_type', 'file_size', 'version_label', 'is_latest', 'created_at', 'extracted_text', 'deleted_at', 'file_hash', 'storage_kind', 's3_bucket', 's3_key']),
   application_cvs: new Set(['application_id', 'cv_id', 'linked_at']),
   status_history: new Set(['id', 'application_id', 'from_status', 'to_status', 'changed_at']),
@@ -2027,12 +2140,20 @@ const backupTableColumns = {
   hiring_feedback: new Set(['id', 'application_id', 'source_type', 'body', 'created_at']),
   application_todos: new Set(['id', 'application_id', 'body', 'completed', 'due_date', 'created_at', 'updated_at']),
   job_boards: new Set(['id', 'name', 'url', 'notes', 'last_checked_date', 'is_active', 'created_at', 'updated_at']),
-  target_companies: new Set(['id', 'name', 'company_url', 'career_url', 'linkedin_url', 'region', 'primary_location', 'germany_offices', 'additional_offices', 'industry', 'company_type', 'description', 'work_mode', 'employee_count', 'visa_signal', 'relocation_signal', 'fit_notes', 'source', 'source_notes', 'last_checked_date', 'is_active', 'created_at', 'updated_at'])
+  target_companies: new Set(['id', 'name', 'company_url', 'career_url', 'linkedin_url', 'region', 'primary_location', 'germany_offices', 'additional_offices', 'industry', 'company_type', 'description', 'work_mode', 'employee_count', 'visa_signal', 'relocation_signal', 'fit_notes', 'source', 'source_notes', 'last_checked_date', 'is_active', 'created_at', 'updated_at']),
+  research_sources: new Set(['id', 'application_id', 'source_type', 'url', 'title', 'content', 'confidence', 'warnings', 'extracted_at', 'created_at']),
+  job_context_snapshots: new Set(['id', 'application_id', 'research_source_id', 'company_name', 'role_title', 'job_link', 'company_url', 'recruiter', 'location', 'job_description', 'extraction_confidence', 'warnings', 'created_at']),
+  knowledge_chunks: new Set(['id', 'application_id', 'source_table', 'source_id', 'chunk_type', 'title', 'content', 'token_count', 'created_at']),
+  retrieval_runs: new Set(['id', 'application_id', 'workflow_type', 'query', 'matched_chunk_ids', 'result_summary', 'created_at']),
+  agent_runs: new Set(['id', 'application_id', 'workflow_type', 'status', 'provider_name', 'model_name', 'input_summary', 'retrieved_context', 'output_summary', 'error_message', 'created_at', 'completed_at']),
+  agent_steps: new Set(['id', 'agent_run_id', 'step_order', 'step_type', 'status', 'input_text', 'output_text', 'error_message', 'created_at']),
+  pending_agent_actions: new Set(['id', 'agent_run_id', 'application_id', 'action_type', 'target_type', 'target_id', 'payload', 'status', 'decision_note', 'created_at', 'decided_at'])
 };
 
-async function resetBackupSequences(client, data) {
+async function resetBackupSequences(client) {
   const sequences = [
     ['applications', 'applications_id_seq'],
+    ['application_process_steps', 'application_process_steps_id_seq'],
     ['cv_versions', 'cv_versions_id_seq'],
     ['status_history', 'status_history_id_seq'],
     ['application_notes', 'application_notes_id_seq'],
@@ -2046,11 +2167,19 @@ async function resetBackupSequences(client, data) {
     ['hiring_feedback', 'hiring_feedback_id_seq'],
     ['application_todos', 'application_todos_id_seq'],
     ['job_boards', 'job_boards_id_seq'],
-    ['target_companies', 'target_companies_id_seq']
+    ['target_companies', 'target_companies_id_seq'],
+    ['research_sources', 'research_sources_id_seq'],
+    ['job_context_snapshots', 'job_context_snapshots_id_seq'],
+    ['knowledge_chunks', 'knowledge_chunks_id_seq'],
+    ['retrieval_runs', 'retrieval_runs_id_seq'],
+    ['agent_runs', 'agent_runs_id_seq'],
+    ['agent_steps', 'agent_steps_id_seq'],
+    ['pending_agent_actions', 'pending_agent_actions_id_seq']
   ];
 
   for (const [table, sequence] of sequences) {
-    const maxId = Math.max(0, ...(data[table] || []).map((row) => Number(row.id || 0)));
+    const result = await client.query(`SELECT COALESCE(max(id), 0)::bigint AS max_id FROM ${table}`);
+    const maxId = Number(result.rows[0].max_id || 0);
     await client.query('SELECT setval($1::regclass, $2, $3)', [sequence, maxId || 1, maxId > 0]);
   }
 }
@@ -2061,7 +2190,7 @@ function validateBackupPayload(backup) {
     error.statusCode = 400;
     throw error;
   }
-  if (backup.version !== 1) {
+  if (![1, 2].includes(backup.version)) {
     const error = new Error('Unsupported backup version');
     error.statusCode = 400;
     throw error;
@@ -2076,6 +2205,68 @@ function validateBackupPayload(backup) {
     error.statusCode = 400;
     throw error;
   }
+  validateBackupDataShape(backup);
+}
+
+function validateBackupDataShape(backup) {
+  const keys = Object.keys(backup.data);
+  for (const key of keys) {
+    if (!backupTableColumns[key]) {
+      const error = new Error(`Backup contains an unsupported table: ${key}`);
+      error.statusCode = 400;
+      throw error;
+    }
+    if (!Array.isArray(backup.data[key])) {
+      const error = new Error(`Backup table must be an array: ${key}`);
+      error.statusCode = 400;
+      throw error;
+    }
+    validateBackupTableColumns(key, backup.data[key], backupRowColumns(backup.data[key]));
+  }
+
+  if (backup.version === 2) {
+    const expected = Object.keys(backupTableColumns).sort();
+    const actual = keys.sort();
+    if (expected.length !== actual.length || expected.some((key, index) => key !== actual[index])) {
+      const error = new Error('Backup version 2 must include the full supported table set');
+      error.statusCode = 400;
+      throw error;
+    }
+  }
+}
+
+function backupRowColumns(rows) {
+  return [...new Set(rows.flatMap((row) => (row && typeof row === 'object' && !Array.isArray(row)) ? Object.keys(row) : []))];
+}
+
+async function restoreLegacyInterviewSteps(client) {
+  await client.query(`
+    INSERT INTO application_process_steps (
+      application_id,
+      position,
+      step_group,
+      step_name,
+      step_state,
+      event_date,
+      response_state,
+      tracking_state,
+      source
+    )
+    SELECT
+      id,
+      1,
+      'interview',
+      'Interview',
+      'scheduled',
+      interview_date,
+      'not_applicable',
+      'open',
+      'legacy_interview_date'
+    FROM applications
+    WHERE interview_date IS NOT NULL
+    ON CONFLICT (application_id, position)
+    DO NOTHING
+  `);
 }
 
 function remapBackupUploadPaths(backup) {
