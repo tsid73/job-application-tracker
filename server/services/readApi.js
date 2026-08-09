@@ -90,19 +90,27 @@ export function createReadApi({ pool, audit }) {
           pool.query(
             `
             SELECT
-              id,
-              company_name,
-              status,
-              to_char(interview_date, 'YYYY-MM-DD') AS due_date,
-              interview_date - CURRENT_DATE AS days_remaining,
+              a.id,
+              a.company_name,
+              a.status,
+              to_char(a.interview_date, 'YYYY-MM-DD') AS due_date,
+              a.interview_date - CURRENT_DATE AS days_remaining,
               'interview' AS type,
               'Upcoming interview scheduled' AS message
-            FROM applications
-            WHERE archived_at IS NULL
-              AND status = 'interview_scheduled'
-              AND interview_date IS NOT NULL
-              AND interview_date <= CURRENT_DATE + INTERVAL '7 days'
-            ORDER BY interview_date ASC
+            FROM applications a
+            WHERE a.archived_at IS NULL
+              AND a.status = 'interview_scheduled'
+              AND a.interview_date IS NOT NULL
+              AND a.interview_date <= CURRENT_DATE + INTERVAL '7 days'
+              AND NOT EXISTS (
+                SELECT 1
+                FROM application_process_steps ps
+                WHERE ps.application_id = a.id
+                  AND ps.source = 'manual'
+                  AND ps.event_date = a.interview_date
+                  AND (ps.step_state <> 'scheduled' OR ps.tracking_state <> 'open')
+              )
+            ORDER BY a.interview_date ASC
             LIMIT 6
           `,
           ),
