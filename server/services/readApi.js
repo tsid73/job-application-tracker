@@ -31,20 +31,35 @@ const meaningfulActivityActions = [
 
 const meaningfulAiActivityPattern = "^ai_(?!.*_queued$).+";
 
+function manualProcessStepExistsForInterviewDate(applicationAlias = 'a') {
+  return `EXISTS (
+    SELECT 1
+    FROM application_process_steps ps
+    WHERE ps.application_id = ${applicationAlias}.id
+      AND ps.source = 'manual'
+      AND ps.event_date = ${applicationAlias}.interview_date
+  )`;
+}
+
 export function createReadApi({ pool, audit }) {
   return {
     async getReminders() {
       const result = await pool.query(
         `
+        SELECT * FROM (
           SELECT
             id,
             company_name,
             status,
             'interview' AS type,
             to_char(interview_date, 'YYYY-MM-DD') AS event_date,
-            interview_date - CURRENT_DATE AS days_remaining
+            interview_date - CURRENT_DATE AS days_remaining,
+            NULL::text AS details,
+            NULL::bigint AS process_step_id
           FROM applications
-          WHERE archived_at IS NULL AND interview_date IS NOT NULL
+          WHERE archived_at IS NULL
+            AND interview_date IS NOT NULL
+            AND NOT ${manualProcessStepExistsForInterviewDate('applications')}
           UNION ALL
           SELECT
             id,
@@ -52,9 +67,31 @@ export function createReadApi({ pool, audit }) {
             status,
             'next_action' AS type,
             to_char(next_action_due_date, 'YYYY-MM-DD') AS event_date,
-            next_action_due_date - CURRENT_DATE AS days_remaining
+            next_action_due_date - CURRENT_DATE AS days_remaining,
+            next_action AS details,
+            NULL::bigint AS process_step_id
           FROM applications
           WHERE archived_at IS NULL AND next_action_due_date IS NOT NULL
+          UNION ALL
+          SELECT
+            a.id,
+            a.company_name,
+            a.status,
+            'process_step' AS type,
+            to_char(ps.event_date, 'YYYY-MM-DD') AS event_date,
+            ps.event_date - CURRENT_DATE AS days_remaining,
+            ps.step_name || ' (' ||
+              CASE ps.step_state
+                WHEN 'scheduled' THEN 'Scheduled'
+                WHEN 'completed' THEN 'Completed'
+                WHEN 'cancelled' THEN 'Cancelled'
+                ELSE ps.step_state
+              END || ')' AS details,
+            ps.id AS process_step_id
+          FROM application_process_steps ps
+          JOIN applications a ON a.id = ps.application_id
+          WHERE a.archived_at IS NULL
+            AND ps.source = 'manual'
           UNION ALL
           SELECT
             id,
@@ -62,7 +99,9 @@ export function createReadApi({ pool, audit }) {
             status,
             'applied' AS type,
             to_char(applied_date, 'YYYY-MM-DD') AS event_date,
-            applied_date - CURRENT_DATE AS days_remaining
+            applied_date - CURRENT_DATE AS days_remaining,
+            NULL::text AS details,
+            NULL::bigint AS process_step_id
           FROM applications
           WHERE archived_at IS NULL AND applied_date IS NOT NULL
             AND applied_date >= CURRENT_DATE - INTERVAL '90 days'
@@ -73,19 +112,23 @@ export function createReadApi({ pool, audit }) {
             a.status,
             'status_change_' || sh.to_status AS type,
             to_char(sh.changed_at, 'YYYY-MM-DD') AS event_date,
-            sh.changed_at::date - CURRENT_DATE AS days_remaining
+            sh.changed_at::date - CURRENT_DATE AS days_remaining,
+            NULL::text AS details,
+            NULL::bigint AS process_step_id
           FROM status_history sh
           JOIN applications a ON a.id = sh.application_id
           WHERE a.archived_at IS NULL
             AND sh.to_status NOT IN ('applied', 'interview_scheduled')
             AND sh.changed_at >= NOW() - INTERVAL '30 days'
+        ) reminders
+        ORDER BY event_date ASC, id ASC, type ASC
         `,
       );
       return { reminders: result.rows };
     },
 
     async getNotifications() {
-      const [upcomingInterviews, nextActions] =
+      const [upcomingInterviews, upcomingProcessSteps, nextActions] =
         await Promise.all([
           pool.query(
             `
@@ -102,15 +145,30 @@ export function createReadApi({ pool, audit }) {
               AND a.status = 'interview_scheduled'
               AND a.interview_date IS NOT NULL
               AND a.interview_date <= CURRENT_DATE + INTERVAL '7 days'
-              AND NOT EXISTS (
-                SELECT 1
-                FROM application_process_steps ps
-                WHERE ps.application_id = a.id
-                  AND ps.source = 'manual'
-                  AND ps.event_date = a.interview_date
-                  AND (ps.step_state <> 'scheduled' OR ps.tracking_state <> 'open')
-              )
+              AND NOT ${manualProcessStepExistsForInterviewDate('a')}
             ORDER BY a.interview_date ASC
+            LIMIT 6
+          `,
+          ),
+          pool.query(
+            `
+            SELECT
+              a.id,
+              a.company_name,
+              a.status,
+              to_char(ps.event_date, 'YYYY-MM-DD') AS due_date,
+              ps.event_date - CURRENT_DATE AS days_remaining,
+              'process_step' AS type,
+              ps.step_name || ' scheduled' AS message,
+              ps.id AS process_step_id
+            FROM application_process_steps ps
+            JOIN applications a ON a.id = ps.application_id
+            WHERE a.archived_at IS NULL
+              AND ps.source = 'manual'
+              AND ps.step_state = 'scheduled'
+              AND ps.tracking_state = 'open'
+              AND ps.event_date <= CURRENT_DATE + INTERVAL '7 days'
+            ORDER BY ps.event_date ASC, ps.event_time ASC NULLS LAST, ps.id ASC
             LIMIT 6
           `,
           ),
@@ -186,6 +244,7 @@ export function createReadApi({ pool, audit }) {
       return {
         notifications: [
           ...upcomingInterviews.rows,
+          ...upcomingProcessSteps.rows,
           ...nextActions.rows,
         ]
           .sort((left, right) =>

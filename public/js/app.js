@@ -1053,6 +1053,7 @@ async function refreshApplicationRow(id) {
     const idx = state.applications.findIndex((item) => item.id === id);
     if (idx !== -1) state.applications[idx] = updated;
     else state.applications.push(updated);
+    await loadProcessSummariesForCurrentPage();
   }
   const row = els.table?.querySelector(`tr[data-id="${id}"]`);
   const application = state.applications.find((item) => item.id === id);
@@ -1434,10 +1435,6 @@ async function submitApplicationForm(event) {
 
   const status = formData.get('status');
   const interviewDate = formData.get('interview_date');
-  if (status === 'interview_scheduled' && !interviewDate) {
-    setError(els.applicationError, 'Interview date is required when status is Interview Scheduled.');
-    return;
-  }
   if (status !== 'interview_scheduled' && interviewDate) {
     setError(els.applicationError, 'Use Interview Scheduled status before adding an interview date.');
     return;
@@ -1562,18 +1559,11 @@ async function updateInlineStatus(event) {
   if (!application) return;
 
   const status = row.querySelector('[data-field="status"]').value;
-  const interviewDate = row.querySelector('[data-field="interview_date"]')?.value || '';
+  let interviewDate = row.querySelector('[data-field="interview_date"]')?.value || '';
 
   if (event.target.dataset.field === 'status' && status === 'interview_scheduled' && !row.querySelector('[data-field="interview_date"]')) {
     row.querySelector('[data-interview-cell]').innerHTML = renderDateInput(application);
-    row.querySelector('[data-field="interview_date"]').focus();
-    return;
-  }
-
-  if (status === 'interview_scheduled' && !interviewDate) {
-    showToast('Set an interview date before saving Interview Scheduled.', 'warning');
-    await loadApplications();
-    return;
+    interviewDate = '';
   }
 
   let notes = application.notes || '';
@@ -2902,10 +2892,6 @@ async function submitApplicationEditForm(event) {
   const form = new FormData(els.applicationEditForm);
   const status = form.get('status');
   const interviewDate = form.get('interview_date');
-  if (status === 'interview_scheduled' && !interviewDate) {
-    setError(els.applicationEditError, 'Set an interview date before saving Interview Scheduled.');
-    return;
-  }
   if (status !== 'interview_scheduled' && interviewDate) {
     setError(els.applicationEditError, 'Clear the interview date or use Interview Scheduled status.');
     return;
@@ -3056,27 +3042,27 @@ const processStepGroups = [
 ];
 
 const processStepStates = [
-  ['scheduled', 'Scheduled'],
-  ['completed', 'Completed'],
+  ['scheduled', 'Scheduled / waiting to happen'],
+  ['completed', 'Completed / done'],
   ['cancelled', 'Cancelled']
 ];
 
 const processResponseStates = [
-  ['not_applicable', 'Not Applicable'],
-  ['awaiting_response', 'Awaiting Response'],
-  ['advanced', 'Advanced'],
-  ['not_advanced', 'Not Advanced'],
+  ['not_applicable', 'Not needed for scheduled step'],
+  ['awaiting_response', 'Waiting for result'],
+  ['advanced', 'Advanced to next step'],
+  ['not_advanced', 'Not advanced'],
   ['on_hold', 'On Hold'],
   ['no_response', 'No Response'],
   ['other', 'Other']
 ];
 
 const processClosureReasons = [
-  ['advanced', 'Advanced'],
-  ['not_advanced', 'Not Advanced'],
-  ['no_response', 'No Response'],
+  ['advanced', 'Advanced to next step'],
+  ['not_advanced', 'Not advanced'],
+  ['no_response', 'No response, closed by me'],
   ['cancelled', 'Cancelled'],
-  ['withdrew', 'Withdrew'],
+  ['withdrew', 'I withdrew'],
   ['other', 'Other']
 ];
 
@@ -3094,7 +3080,7 @@ function openProcessStepDialog(application, step = null) {
         <input name="step_name" type="text" value="${escapeAttribute(step?.step_name || '')}" placeholder="L1, AI Test, HR Discussion" required>
       </label>
       <label>
-        <span>State</span>
+        <span>Step Status</span>
         <select name="step_state">${renderProcessOptions(processStepStates, step?.step_state || 'scheduled')}</select>
       </label>
       <label>
@@ -3102,10 +3088,10 @@ function openProcessStepDialog(application, step = null) {
         <input name="event_date" type="date" value="${escapeAttribute(step?.event_date || localToday())}" required>
       </label>
       <details class="process-step-more" ${showDetails ? 'open' : ''}>
-        <summary>Response and notes</summary>
+        <summary>Outcome, follow-up, and notes</summary>
         <div class="process-step-form process-step-more-grid">
           <label>
-            <span>Response</span>
+            <span>Outcome</span>
             <select name="response_state">${renderProcessOptions(processResponseStates, step?.response_state || 'awaiting_response')}</select>
           </label>
           <label>
@@ -3117,21 +3103,21 @@ function openProcessStepDialog(application, step = null) {
             <input name="follow_up_due_date" type="date" value="${escapeAttribute(step?.follow_up_due_date || '')}">
           </label>
           <label>
-            <span>Tracking</span>
+            <span>Reminder State</span>
             <select name="tracking_state">
-              <option value="open"${step?.tracking_state !== 'closed' ? ' selected' : ''}>Open</option>
-              <option value="closed"${step?.tracking_state === 'closed' ? ' selected' : ''}>Closed</option>
+              <option value="open"${step?.tracking_state !== 'closed' ? ' selected' : ''}>Track this step</option>
+              <option value="closed"${step?.tracking_state === 'closed' ? ' selected' : ''}>Closed on my side</option>
             </select>
           </label>
           <label>
-            <span>Close Reason</span>
+            <span>Closed Because</span>
             <select name="closure_reason">
               <option value="">None</option>
               ${renderProcessOptions(processClosureReasons, step?.closure_reason || '')}
             </select>
           </label>
           <label>
-            <span>Feedback</span>
+            <span>Company Feedback</span>
             <select name="feedback_received">
               <option value=""${step?.feedback_received === null || step?.feedback_received === undefined ? ' selected' : ''}>Unknown</option>
               <option value="true"${step?.feedback_received === true ? ' selected' : ''}>Received</option>

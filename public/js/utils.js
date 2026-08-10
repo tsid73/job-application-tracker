@@ -35,7 +35,10 @@ export function renderDays(value) {
   return `<span class="${daysClass(value)}">${text}</span>`;
 }
 
-export function renderInterviewControl(application) {
+export function renderInterviewControl(application, processSummary = null) {
+  if (processSummary?.next_scheduled_date) {
+    return `<span class="days-badge" title="From Hiring Process">${escapeHtml(formatDate(processSummary.next_scheduled_date))}</span>`;
+  }
   if (application.status !== 'interview_scheduled') {
     return '<span class="muted-text">Not scheduled</span>';
   }

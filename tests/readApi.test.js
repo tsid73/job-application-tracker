@@ -49,6 +49,7 @@ test('getNotifications excludes follow-up and todo reminders', async () => {
 
 test('getNotifications suppresses legacy interview reminder after matching process step is completed', async () => {
   const db = await createDatabase();
+  await db.query('DELETE FROM application_process_steps');
   const readApi = createReadApi({ pool: db, audit: {} });
 
   const created = await db.query(
@@ -70,4 +71,97 @@ test('getNotifications suppresses legacy interview reminder after matching proce
   const result = await readApi.getNotifications();
 
   assert.deepEqual(result.notifications, []);
+});
+
+test('getNotifications returns scheduled manual process steps without an application interview date', async () => {
+  const db = await createDatabase();
+  await db.query('DELETE FROM application_process_steps');
+  const readApi = createReadApi({ pool: db, audit: {} });
+
+  const created = await db.query(
+    `INSERT INTO applications (company_name, job_link, status, applied_date)
+     VALUES ('Deloitte', 'https://example.com/deloitte', 'interview_scheduled', '2026-08-06')
+     RETURNING id`,
+  );
+  const applicationId = created.rows[0].id;
+  await db.query(
+    `INSERT INTO application_process_steps (
+       application_id, position, step_group, step_name, step_state, event_date,
+       response_state, tracking_state, source
+     )
+     VALUES ($1, 1, 'assessment', 'AI Test', 'scheduled', CURRENT_DATE + INTERVAL '2 days',
+       'not_applicable', 'open', 'manual')`,
+    [applicationId],
+  );
+
+  const result = await readApi.getNotifications();
+
+  assert.deepEqual(
+    result.notifications.map((notification) => [notification.type, notification.message]),
+    [['process_step', 'AI Test scheduled']],
+  );
+});
+
+test('getReminders suppresses legacy interview event when a manual process step exists on the same date', async () => {
+  const db = await createDatabase();
+  await db.query('DELETE FROM application_process_steps');
+  const readApi = createReadApi({ pool: db, audit: {} });
+
+  const created = await db.query(
+    `INSERT INTO applications (company_name, job_link, status, applied_date, interview_date)
+     VALUES ('Wipro', 'https://example.com/wipro', 'interview_scheduled', '2026-08-06', '2026-08-13')
+     RETURNING id`,
+  );
+  const applicationId = created.rows[0].id;
+  await db.query(
+    `INSERT INTO application_process_steps (
+       application_id, position, step_group, step_name, step_state, event_date,
+       response_state, tracking_state, source
+     )
+     VALUES ($1, 2, 'interview', 'L1', 'scheduled', '2026-08-13',
+       'not_applicable', 'open', 'manual')`,
+    [applicationId],
+  );
+
+  const result = await readApi.getReminders();
+
+  assert.equal(result.reminders.some((reminder) => reminder.type === 'interview'), false);
+});
+
+test('getReminders returns completed and scheduled manual process steps as timeline events', async () => {
+  const db = await createDatabase();
+  await db.query('DELETE FROM application_process_steps');
+  const readApi = createReadApi({ pool: db, audit: {} });
+
+  const created = await db.query(
+    `INSERT INTO applications (company_name, job_link, status, applied_date, interview_date)
+     VALUES ('Mobile Programming LLC', 'https://example.com/mobile-process', 'interview_scheduled', '2026-08-06', '2026-08-08')
+     RETURNING id`,
+  );
+  const applicationId = created.rows[0].id;
+  await db.query(
+    `INSERT INTO application_process_steps (
+       application_id, position, step_group, step_name, step_state, event_date,
+       response_state, tracking_state, source
+     )
+     VALUES
+       ($1, 1, 'assessment', 'AI Test', 'completed', '2026-08-08',
+        'advanced', 'open', 'manual'),
+       ($1, 2, 'discussion', 'HR Call', 'scheduled', '2026-08-13',
+        'not_applicable', 'open', 'manual')`,
+    [applicationId],
+  );
+
+  const result = await readApi.getReminders();
+
+  assert.equal(result.reminders.some((reminder) => reminder.type === 'interview'), false);
+  assert.deepEqual(
+    result.reminders
+      .filter((reminder) => reminder.type === 'process_step')
+      .map((reminder) => [reminder.event_date, reminder.details]),
+    [
+      ['2026-08-08', 'AI Test (Completed)'],
+      ['2026-08-13', 'HR Call (Scheduled)'],
+    ],
+  );
 });

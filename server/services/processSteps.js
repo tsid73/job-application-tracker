@@ -31,6 +31,19 @@ function selectedStepColumns(alias = '') {
   `;
 }
 
+function canonicalStepCondition(alias = 'ps') {
+  return `NOT (
+    ${alias}.source = 'legacy_interview_date'
+    AND EXISTS (
+      SELECT 1
+      FROM application_process_steps manual_ps
+      WHERE manual_ps.application_id = ${alias}.application_id
+        AND manual_ps.source = 'manual'
+        AND manual_ps.event_date = ${alias}.event_date
+    )
+  )`;
+}
+
 export function normalizeProcessStepInput(input = {}, currentStep = null) {
   const values = { ...(currentStep || {}), ...input };
   const stepGroup = requiredValue(values.step_group, STEP_GROUPS, 'step_group');
@@ -162,7 +175,11 @@ export function createProcessStepsService({ pool, audit, logActivity }) {
     validId(applicationId, 'application ID');
     await ensureApplication(executor, applicationId);
     const result = await executor.query(
-      `SELECT ${selectedStepColumns()} FROM application_process_steps WHERE application_id = $1 ORDER BY position ASC, id ASC`,
+      `SELECT ${selectedStepColumns('ps.')}
+       FROM application_process_steps ps
+       WHERE ps.application_id = $1
+         AND ${canonicalStepCondition('ps')}
+       ORDER BY ps.position ASC, ps.id ASC`,
       [applicationId]
     );
     return result.rows;
@@ -234,7 +251,14 @@ export function createProcessStepsService({ pool, audit, logActivity }) {
     }
     return transaction(pool, async (client) => {
       await ensureApplication(client, applicationId);
-      const existing = await client.query('SELECT id, source FROM application_process_steps WHERE application_id = $1 ORDER BY position, id', [applicationId]);
+      const existing = await client.query(
+        `SELECT id, source
+         FROM application_process_steps ps
+         WHERE ps.application_id = $1
+           AND ${canonicalStepCondition('ps')}
+         ORDER BY ps.position, ps.id`,
+        [applicationId]
+      );
       const existingIds = existing.rows.map((row) => row.id);
       if (existingIds.length !== ids.length || existingIds.some((id) => !ids.includes(id))) {
         throw inputError('orderedIds must contain every process step for this application');
@@ -301,12 +325,13 @@ export function createProcessStepsService({ pool, audit, logActivity }) {
                 WHERE next_ps.application_id = a.id
                   AND next_ps.step_state = 'scheduled'
                   AND next_ps.tracking_state = 'open'
+                  AND ${canonicalStepCondition('next_ps')}
                 ORDER BY next_ps.event_date ASC, next_ps.position ASC, next_ps.id ASC
                 LIMIT 1
               ) AS next_scheduled_name,
               count(ps.id) FILTER (WHERE ps.step_state = 'completed' AND ps.tracking_state = 'open' AND ps.response_state = 'awaiting_response')::int AS awaiting_response_steps
        FROM applications a
-       LEFT JOIN application_process_steps ps ON ps.application_id = a.id
+       LEFT JOIN application_process_steps ps ON ps.application_id = a.id AND ${canonicalStepCondition('ps')}
        WHERE ($1::bigint[] IS NULL OR a.id = ANY($1::bigint[]))
        GROUP BY a.id
        ORDER BY a.id`,
@@ -345,6 +370,7 @@ export function createProcessStepsService({ pool, audit, logActivity }) {
     const conditions = [];
     if (mode !== 'all') conditions.push('a.archived_at IS NULL');
     if (days) conditions.push(`ps.event_date >= CURRENT_DATE - INTERVAL '${days} days'`);
+    conditions.push(canonicalStepCondition('ps'));
     const result = await pool.query(
       `SELECT ${selectedStepColumns('ps.')},
               a.status AS application_status,

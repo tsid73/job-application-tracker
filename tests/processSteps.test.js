@@ -368,6 +368,31 @@ test('service rejects legacy interview mirrors in reorder requests', async (t) =
   );
 });
 
+test('service hides legacy interview mirror when a manual step exists on the same date', async (t) => {
+  const db = await createDatabase();
+  t.after(() => db.close());
+  await db.query(`
+    INSERT INTO applications (company_name, job_link, status, applied_date)
+    VALUES ('Canonical Process Co', 'https://example.com/canonical-process', 'interview_scheduled', '2026-08-01')
+  `);
+  const service = createProcessStepsService({ pool: db, audit: null, logActivity: async () => {} });
+  await service.syncLegacyInterviewStep(db, 1, '2026-08-13');
+  const manual = await service.create({}, 1, {
+    step_group: 'interview', step_name: 'L1', step_state: 'scheduled', event_date: '2026-08-13'
+  });
+
+  const listed = await service.list(1);
+  const summaries = await service.summaries([1]);
+  const insights = await service.insights({ mode: 'active', period: 'all' });
+
+  assert.deepEqual(listed.map((step) => [step.id, step.source, step.step_name]), [
+    [manual.id, 'manual', 'L1']
+  ]);
+  assert.equal(summaries[0].total_steps, 1);
+  assert.equal(summaries[0].next_scheduled_name, 'L1');
+  assert.equal(insights.groups.interview.scheduled, 1);
+});
+
 test('upcoming returns manual scheduled steps and open follow-up reminders without legacy duplicates', async (t) => {
   const db = await createDatabase();
   t.after(() => db.close());

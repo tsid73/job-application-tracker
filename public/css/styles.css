@@ -36,6 +36,7 @@
   --focus: #3b82f6;
   --app: #3b82f6;
   --int: #d97706;
+  --proc: #7c3aed;
   --act: #059669;
   --cls: #dc2626;
   --shadow-sm: 0 1px 2px 0 rgba(15, 23, 42, 0.05);
@@ -4380,6 +4381,11 @@ a {
   color: white;
 }
 
+.badge-proc {
+  background: var(--proc);
+  color: white;
+}
+
 .badge-act {
   background: var(--act);
   color: white;
@@ -4424,6 +4430,11 @@ a {
   border-color: transparent;
 }
 
+.calendar-event.badge-proc {
+  background: var(--proc);
+  border-color: transparent;
+}
+
 .calendar-event.badge-act {
   background: var(--act);
   border-color: transparent;
@@ -4436,6 +4447,7 @@ a {
 
 .calendar-event.badge-app .event-text,
 .calendar-event.badge-int .event-text,
+.calendar-event.badge-proc .event-text,
 .calendar-event.badge-act .event-text,
 .calendar-event.badge-cls .event-text {
   color: white;

@@ -20,11 +20,6 @@ export function normalizeApplicationInput(fields) {
 
   const status = validateStatus(fields.status);
   const interviewDate = parseDate(fields.interview_date, 'interview_date');
-  if (status === 'interview_scheduled' && !interviewDate) {
-    const error = new Error('Interview date is required when status is interview_scheduled');
-    error.statusCode = 400;
-    throw error;
-  }
   if (status !== 'interview_scheduled' && interviewDate) {
     const error = new Error('Interview date is only allowed when status is interview_scheduled');
     error.statusCode = 400;

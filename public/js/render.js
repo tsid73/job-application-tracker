@@ -1031,9 +1031,9 @@ export function buildApplicationRow(application, statusOptions, selected = false
         </select>
       </div>
     </td>
-    <td>${closed ? '' : renderNextAction(application)}</td>
+    <td>${closed ? '' : renderNextAction(application, processSummary)}</td>
     <td>${renderStaleSignal(application)}</td>
-    <td data-interview-cell>${closed ? '' : renderInterviewControl(application)}</td>
+    <td data-interview-cell>${closed ? '' : renderInterviewControl(application, processSummary)}</td>
     <td class="action-col">
       <div class="row-actions">
         <a class="icon-button row-open-btn" href="/applications/${application.id}" target="_blank" rel="noopener" aria-label="Open ${escapeHtml(application.company_name)} in new tab" title="Open in new tab">
@@ -1056,12 +1056,16 @@ function renderProcessRowSummary(summary) {
   return `<span class="process-row-summary process-row-count" title="${escapeAttribute(next)}">${total} ${total === 1 ? 'step' : 'steps'}</span>`;
 }
 
-function renderNextAction(application) {
-  const action = application.next_action || recommendedNextAction(application);
+function renderNextAction(application, processSummary = null) {
+  const processStep = processSummary?.next_scheduled_name
+    ? `${processSummary.next_scheduled_name}`
+    : '';
+  const action = processStep || application.next_action || recommendedNextAction(application);
+  const dueDate = processStep ? processSummary.next_scheduled_date : application.next_action_due_date;
   return `
     <div class="next-action-cell">
       <strong title="${escapeAttribute(action)}">${escapeHtml(action)}</strong>
-      ${application.next_action_due_date ? `<span>${formatDate(application.next_action_due_date)}</span>` : ''}
+      ${dueDate ? `<span>${formatDate(dueDate)}</span>` : ''}
     </div>
   `;
 }
@@ -1131,7 +1135,7 @@ export function renderNotifications(els, notifications, expanded = false) {
             </div>
             <div class="notification-meta">
               <span>${item.due_date ? formatDate(item.due_date) : 'No due date'}</span>
-              ${item.type === 'interview'
+              ${item.type === 'interview' || item.type === 'process_step'
                 ? renderDays(item.days_remaining)
                 : item.type === 'todo'
                   ? renderDays(item.days_remaining)
@@ -1688,8 +1692,11 @@ export function renderApplicationPage(els, payload, statusLabels, viewState) {
   const closed = !application.archived_at && isClosedStatus(application.status);
   const locationLine = application.location || 'Not set';
   const peopleLine = [application.recruiter, application.contact_person].filter(Boolean).join(' • ') || 'Not set';
-  const nextStep = application.next_action || recommendedNextAction(application);
-  const nextStepLine = [nextStep, formatDate(application.next_action_due_date)].filter(Boolean).join(' • ');
+  const nextProcessStep = nextScheduledProcessStep(processSteps);
+  const nextStep = nextProcessStep?.step_name || application.next_action || recommendedNextAction(application);
+  const nextStepDate = nextProcessStep?.event_date || application.next_action_due_date;
+  const nextStepLine = [nextStep, formatDate(nextStepDate)].filter(Boolean).join(' • ');
+  const displayDate = nextProcessStep?.event_date || application.interview_date;
 
   els.workspaceRoot.innerHTML = `
     <section class="workspace-view workspace-view-application${closed ? ' is-closed' : ''}" data-workspace-view="application">
@@ -1700,7 +1707,7 @@ export function renderApplicationPage(els, payload, statusLabels, viewState) {
             <div class="hero-badge-row">
               <span class="state ${application.archived_at ? 'archived-state' : closed ? 'closed-state' : 'active-state'}">${application.archived_at ? 'Archived' : statusLabels[application.status] || application.status}</span>
               ${closed ? '<span class="state closed-state">Closed</span>' : ''}
-              ${application.interview_date && !closed ? `<span class="days-badge">${escapeHtml(formatDate(application.interview_date))}</span>` : ''}
+              ${displayDate && !closed ? `<span class="days-badge">${escapeHtml(formatDate(displayDate))}</span>` : ''}
             </div>
             <h1>${escapeHtml(application.role_title || 'Application Detail')}</h1>
             <p class="hero-company-line">
@@ -1730,7 +1737,7 @@ export function renderApplicationPage(els, payload, statusLabels, viewState) {
           ${renderInlineMeta('Applied', formatDate(application.applied_date) || 'Not set')}
           ${renderInlineMeta('Salary', application.salary || 'Not set', !application.salary)}
           ${renderInlineMeta('People', peopleLine, peopleLine === 'Not set')}
-          ${renderInlineMeta('Next Step', nextStepLine, !application.next_action && !application.next_action_due_date)}
+          ${renderInlineMeta('Next Step', nextStepLine, !nextProcessStep && !application.next_action && !application.next_action_due_date)}
         </div>
       </section>
       <nav class="detail-tabbar" aria-label="Application sections">
@@ -1891,6 +1898,16 @@ function renderWorkflowSnapshot({ application, preparation, recruiterQuestions, 
       </article>
     </div>
   `;
+}
+
+function nextScheduledProcessStep(processSteps = []) {
+  return [...processSteps]
+    .filter((step) => step.step_state === 'scheduled' && step.tracking_state === 'open')
+    .sort((left, right) => {
+      const dateComparison = String(left.event_date || '').localeCompare(String(right.event_date || ''));
+      if (dateComparison) return dateComparison;
+      return Number(left.position || 0) - Number(right.position || 0) || Number(left.id || 0) - Number(right.id || 0);
+    })[0] || null;
 }
 
 function recommendedNextAction(application) {
@@ -2980,7 +2997,7 @@ export function renderCalendar(els, calendarDate, reminders) {
     if (type === 'applied') return { css: 'badge-app', label: 'APP' };
     if (type === 'interview') return { css: 'badge-int', label: 'INT' };
     if (type === 'next_action') return { css: 'badge-act', label: 'ACT' };
-    if (type === 'process_step') return { css: 'badge-int', label: 'STEP' };
+    if (type === 'process_step') return { css: 'badge-proc', label: 'HP' };
     if (type === 'process_follow_up') return { css: 'badge-act', label: 'FUP' };
     if (type.startsWith('status_change_')) {
       const status = type.replace('status_change_', '');
@@ -3096,13 +3113,13 @@ export function renderCalendar(els, calendarDate, reminders) {
           <span class="badge badge-app">APP</span> Applied date
         </div>
         <div class="legend-item">
-          <span class="badge badge-int">INT</span> Interview
+          <span class="badge badge-proc">HP</span> Hiring
         </div>
         <div class="legend-item">
-          <span class="badge badge-act">ACT</span> Next action due
+          <span class="badge badge-act">ACT</span> Action
         </div>
         <div class="legend-item">
-          <span class="badge badge-cls">CLS</span> Rejected / Withdrawn
+          <span class="badge badge-cls">CLS</span> Closed
         </div>
       </div>
     </div>
