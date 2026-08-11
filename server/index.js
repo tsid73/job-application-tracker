@@ -700,7 +700,7 @@ async function exportCalendar(req, res) {
         to_char(interview_date, 'YYYYMMDD') AS interview_day,
         to_char(next_action_due_date, 'YYYYMMDD') AS due_day
       FROM applications
-      WHERE archived_at IS NULL
+      WHERE ${liveApplicationCondition('applications')}
         AND (interview_date IS NOT NULL OR next_action_due_date IS NOT NULL)
         ${hasIds && ids.length > 0 ? 'AND id = ANY($1::int[])' : ''}
       ORDER BY id
@@ -710,7 +710,7 @@ async function exportCalendar(req, res) {
         to_char(ps.event_date, 'YYYYMMDD') AS event_day
       FROM application_process_steps ps
       JOIN applications a ON a.id = ps.application_id
-      WHERE a.archived_at IS NULL
+      WHERE ${liveApplicationCondition('a')}
         AND ps.source = 'manual'
         AND ps.step_state = 'scheduled'
         AND ps.tracking_state = 'open'
@@ -969,6 +969,10 @@ function interviewEvidenceCondition(applicationAlias) {
         AND ps.step_state <> 'cancelled'
     )
   )`;
+}
+
+function liveApplicationCondition(applicationAlias) {
+  return `${applicationAlias}.archived_at IS NULL AND ${applicationAlias}.status NOT IN ('rejected', 'withdrawn', 'ghosted')`;
 }
 
 function buildInsightsScope(url) {

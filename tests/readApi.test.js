@@ -165,3 +165,43 @@ test('getReminders returns completed and scheduled manual process steps as timel
     ],
   );
 });
+
+test('closed applications stop active reminders but keep process and closure history', async () => {
+  const db = await createDatabase();
+  await db.query('DELETE FROM application_process_steps');
+  const readApi = createReadApi({ pool: db, audit: {} });
+
+  const created = await db.query(
+    `INSERT INTO applications (company_name, job_link, status, applied_date)
+     VALUES ('Closed Process Co', 'https://example.com/closed-process', 'withdrawn', CURRENT_DATE - INTERVAL '5 days')
+     RETURNING id`,
+  );
+  const applicationId = created.rows[0].id;
+  await db.query(
+    `INSERT INTO status_history (application_id, from_status, to_status, changed_at)
+     VALUES ($1, 'interview_scheduled', 'withdrawn', NOW())`,
+    [applicationId],
+  );
+  await db.query(
+    `INSERT INTO application_process_steps (
+       application_id, position, step_group, step_name, step_state, event_date,
+       response_state, tracking_state, source
+     )
+     VALUES
+       ($1, 1, 'assessment', 'Closed AI Test', 'completed', CURRENT_DATE - INTERVAL '2 days',
+        'advanced', 'open', 'manual'),
+       ($1, 2, 'discussion', 'Closed HR Call', 'scheduled', CURRENT_DATE + INTERVAL '2 days',
+        'not_applicable', 'open', 'manual')`,
+    [applicationId],
+  );
+
+  const [notifications, timeline] = await Promise.all([
+    readApi.getNotifications(),
+    readApi.getReminders(),
+  ]);
+
+  assert.deepEqual(notifications.notifications, []);
+  assert.equal(timeline.reminders.some((reminder) => reminder.details === 'Closed HR Call (Scheduled)'), false);
+  assert.equal(timeline.reminders.some((reminder) => reminder.details === 'Closed AI Test (Completed)'), true);
+  assert.equal(timeline.reminders.some((reminder) => reminder.type === 'status_change_withdrawn'), true);
+});

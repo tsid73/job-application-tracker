@@ -4,6 +4,10 @@ const RESPONSE_STATES = new Set(['not_applicable', 'awaiting_response', 'advance
 const TRACKING_STATES = new Set(['open', 'closed']);
 const CLOSURE_REASONS = new Set(['advanced', 'not_advanced', 'no_response', 'cancelled', 'withdrew', 'other']);
 
+function liveApplicationCondition(alias = 'a') {
+  return `${alias}.archived_at IS NULL AND ${alias}.status NOT IN ('rejected', 'withdrawn', 'ghosted')`;
+}
+
 function selectedStepColumns(alias = '') {
   const column = (name) => `${alias}${name}`;
   return `
@@ -347,7 +351,7 @@ export function createProcessStepsService({ pool, audit, logActivity }) {
                 'scheduled_step' AS reminder_type, to_char(ps.event_date, 'YYYY-MM-DD') AS reminder_date
          FROM application_process_steps ps
          JOIN applications a ON a.id = ps.application_id
-         WHERE a.archived_at IS NULL
+         WHERE ${liveApplicationCondition('a')}
            AND ps.source = 'manual'
            AND ps.step_state = 'scheduled'
            AND ps.tracking_state = 'open'
@@ -356,7 +360,7 @@ export function createProcessStepsService({ pool, audit, logActivity }) {
                 'follow_up' AS reminder_type, to_char(ps.follow_up_due_date, 'YYYY-MM-DD') AS reminder_date
          FROM application_process_steps ps
          JOIN applications a ON a.id = ps.application_id
-         WHERE a.archived_at IS NULL
+         WHERE ${liveApplicationCondition('a')}
            AND ps.tracking_state = 'open'
            AND ps.follow_up_due_date IS NOT NULL
        ) reminders

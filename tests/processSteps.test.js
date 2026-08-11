@@ -217,6 +217,35 @@ test('service insights uses the first terminal status transition as the outcome 
   assert.deepEqual(result.outcomes.offer, { applications: 1, average_completed_steps: 1 });
 });
 
+test('upcoming process reminders exclude closed applications', async (t) => {
+  const db = await createDatabase();
+  t.after(() => db.close());
+  await db.query(`
+    INSERT INTO applications (company_name, job_link, status, applied_date)
+    VALUES
+      ('Active Upcoming Co', 'https://example.com/active-upcoming', 'interview_scheduled', CURRENT_DATE),
+      ('Closed Upcoming Co', 'https://example.com/closed-upcoming', 'withdrawn', CURRENT_DATE)
+  `);
+  await db.query(`
+    INSERT INTO application_process_steps (
+      application_id, position, step_group, step_name, step_state, event_date,
+      response_state, tracking_state, source, follow_up_due_date
+    )
+    VALUES
+      (1, 1, 'interview', 'Active L1', 'scheduled', CURRENT_DATE + INTERVAL '1 day',
+       'not_applicable', 'open', 'manual', NULL),
+      (2, 1, 'interview', 'Closed L1', 'scheduled', CURRENT_DATE + INTERVAL '1 day',
+       'not_applicable', 'open', 'manual', NULL),
+      (2, 2, 'assessment', 'Closed AI Test', 'completed', CURRENT_DATE - INTERVAL '1 day',
+       'awaiting_response', 'open', 'manual', CURRENT_DATE + INTERVAL '1 day')
+  `);
+  const service = createProcessStepsService({ pool: db, audit: null, logActivity: async () => {} });
+
+  const reminders = await service.upcoming();
+
+  assert.deepEqual(reminders.map((reminder) => reminder.step_name), ['Active L1']);
+});
+
 test('normalizeProcessStepInput rejects invalid group, name, date, and closure combinations', () => {
   const invalidInputs = [
     { step_group: 'phone', step_name: 'Screen', step_state: 'scheduled', event_date: '2026-08-10' },

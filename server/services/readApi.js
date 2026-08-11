@@ -41,6 +41,10 @@ function manualProcessStepExistsForInterviewDate(applicationAlias = 'a') {
   )`;
 }
 
+function liveApplicationCondition(alias = 'a') {
+  return `${alias}.archived_at IS NULL AND ${alias}.status NOT IN ('rejected', 'withdrawn', 'ghosted')`;
+}
+
 export function createReadApi({ pool, audit }) {
   return {
     async getReminders() {
@@ -57,7 +61,7 @@ export function createReadApi({ pool, audit }) {
             NULL::text AS details,
             NULL::bigint AS process_step_id
           FROM applications
-          WHERE archived_at IS NULL
+          WHERE ${liveApplicationCondition('applications')}
             AND interview_date IS NOT NULL
             AND NOT ${manualProcessStepExistsForInterviewDate('applications')}
           UNION ALL
@@ -71,7 +75,7 @@ export function createReadApi({ pool, audit }) {
             next_action AS details,
             NULL::bigint AS process_step_id
           FROM applications
-          WHERE archived_at IS NULL AND next_action_due_date IS NOT NULL
+          WHERE ${liveApplicationCondition('applications')} AND next_action_due_date IS NOT NULL
           UNION ALL
           SELECT
             a.id,
@@ -92,6 +96,10 @@ export function createReadApi({ pool, audit }) {
           JOIN applications a ON a.id = ps.application_id
           WHERE a.archived_at IS NULL
             AND ps.source = 'manual'
+            AND (
+              ps.step_state IN ('completed', 'cancelled')
+              OR (${liveApplicationCondition('a')} AND ps.step_state = 'scheduled' AND ps.tracking_state = 'open')
+            )
           UNION ALL
           SELECT
             id,
@@ -163,7 +171,7 @@ export function createReadApi({ pool, audit }) {
               ps.id AS process_step_id
             FROM application_process_steps ps
             JOIN applications a ON a.id = ps.application_id
-            WHERE a.archived_at IS NULL
+            WHERE ${liveApplicationCondition('a')}
               AND ps.source = 'manual'
               AND ps.step_state = 'scheduled'
               AND ps.tracking_state = 'open'
